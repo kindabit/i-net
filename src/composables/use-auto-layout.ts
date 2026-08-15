@@ -42,6 +42,14 @@ export interface AutoLayoutOptions {
   getEdges: () => AutoLayoutEdge[];
   /** 持久化回调：动画结束后以最终坐标调用（对应后端批量移动 API）。 */
   persist: (items: MoveNodeVO[]) => Promise<void>;
+  /**
+   * 可选：动画结束、persist 之前的同步回调。
+   * 用于把布局结果同步回父组件的 nodes 数组（整体替换每个被影响节点的 position 对象），
+   * 避免后续节点增删时被 vue-flow 的 parseNode 用 props 中的旧 position 覆盖 store。
+   * 在 persist 之前调用，保证持久化完成时 props 与 store 已经同源。
+   * 失败的回滚语义与 persist 保持一致：不回滚。
+   */
+  onNodesMoved?: (items: MoveNodeVO[]) => void;
   /** vue-flow 的 snapGrid 配置，布局结果对齐到该网格。 */
   snapGrid: [number, number];
   /** 读取不到 node.dimensions 时的兜底尺寸。 */
@@ -234,6 +242,9 @@ export function useAutoLayout(options: AutoLayoutOptions): {
       for (const [id, pos] of targetPositions) {
         items.push({ id, x: pos.x, y: pos.y });
       }
+      // 先同步父组件 nodes，再调 persist：保证持久化发起时 props 与 store 同源，
+      // 避免 persist 异步完成期间 props 仍持有旧坐标导致被 parseNode 回滚。
+      options.onNodesMoved?.(items);
       await options.persist(items);
     } catch (e) {
       snackbarErrorCode(e);

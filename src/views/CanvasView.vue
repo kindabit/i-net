@@ -69,6 +69,16 @@ const { isLayouting, applyAutoLayout } = useAutoLayout({
   persist: userDatabaseNodeMoveNodes,
   snapGrid,
   fallbackSize: { width: 160, height: 80 },
+  // 自动布局动画结束、persist 之前把新坐标整体替换回父组件 nodes.position，
+  // 避免后续增删节点时被 vue-flow 的 parseNode 用 props 中的旧坐标回滚 store。
+  onNodesMoved: (items) => {
+    const map = new Map(items.map((i) => [i.id, i]));
+    for (const node of nodes.value) {
+      const m = map.get(node.id);
+      if (!m) continue;
+      node.position = { x: m.x, y: m.y };
+    }
+  },
 });
 
 // 状态
@@ -163,10 +173,30 @@ async function onNodeLogicalDelete(id: string) {
   nodes.value = nodes.value.filter((n) => n.id !== id);
 }
 
-function onNodeDragStop({ node }: { node: VFNode }) {
-  userDatabaseNodeMoveNode(node.id, node.position.x, node.position.y).catch(
-    snackbarErrorCode,
-  );
+/**
+ * 节点拖拽停止回调（含多选拖拽）。
+ *
+ * vue-flow store 已持有每个被拖动节点的最终 position（含 snap、clamp、parentNode 修正）；
+ * 此处把每个新 position 整体替换回父组件 nodes.value 中对应节点，避免后续 filter / push
+ * 操作触发 parseNode 把 store 中已拖动位置覆盖回 props 的初始坐标。
+ * 持久化：单节点走单条 API；多节点走批量 API（userDatabaseNodeMoveNodes）。
+ * @param event vue-flow NodeDragEvent（event / node / nodes）
+ * @returns 无返回值
+ */
+function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; nodes: VFNode[] }) {
+  const moved = event.nodes.length > 0 ? event.nodes : [event.node];
+  const movedMap = new Map(moved.map((n) => [n.id, n]));
+  for (const node of nodes.value) {
+    const m = movedMap.get(node.id);
+    if (!m) continue;
+    node.position = { x: m.position.x, y: m.position.y };
+  }
+  const items = moved.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
+  if (items.length === 1) {
+    userDatabaseNodeMoveNode(items[0].id, items[0].x, items[0].y).catch(snackbarErrorCode);
+  } else if (items.length > 1) {
+    userDatabaseNodeMoveNodes(items).catch(snackbarErrorCode);
+  }
 }
 
 /**
