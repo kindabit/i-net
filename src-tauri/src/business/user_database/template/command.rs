@@ -1,0 +1,9 @@
+pub mod user_database_template_create;
+pub mod user_database_template_create_from_node;
+pub mod user_database_template_delete;
+pub mod user_database_template_export;
+pub mod user_database_template_get_fields;
+pub mod user_database_template_import;
+pub mod user_database_template_list;
+pub mod user_database_template_rename;
+pub mod user_database_template_set_fields;

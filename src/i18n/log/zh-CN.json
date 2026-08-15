@@ -1,0 +1,130 @@
+{
+  "log": {
+    "action": {
+      "CanvasCreate": {
+        "name": "创建画布",
+        "detail": "新建画布\u201c{name}\u201d"
+      },
+      "CanvasMove": {
+        "name": "移动画布",
+        "detail": "将画布\u201c{name}\u201d从 ({old_x}, {old_y}) 移动到 ({new_x}, {new_y})"
+      },
+      "CanvasLogicalDelete": {
+        "name": "删除画布",
+        "detail": "删除画布\u201c{name}\u201d"
+      },
+      "CanvasRestore": {
+        "name": "恢复画布",
+        "detail": "恢复画布\u201c{name}\u201d至 ({new_x}, {new_y})"
+      },
+      "CanvasPhysicalDelete": {
+        "name": "永久删除画布",
+        "detail": "永久删除画布\u201c{name}\u201d"
+      },
+      "CanvasRename": {
+        "name": "重命名画布",
+        "detail": "将画布\u201c{old_name}\u201d重命名为\u201c{new_name}\u201d"
+      },
+      "NodeCreate": {
+        "name": "创建节点",
+        "detail": "新建节点\u201c{title}\u201d"
+      },
+      "NodeMove": {
+        "name": "移动节点",
+        "detail": "将节点\u201c{title}\u201d从 ({old_x}, {old_y}) 移动到 ({new_x}, {new_y})"
+      },
+      "NodeModify": {
+        "name": "修改节点",
+        "detail": "修改节点\u201c{old_title}\u201d"
+      },
+      "NodeLogicalDelete": {
+        "name": "删除节点",
+        "detail": "删除节点\u201c{title}\u201d"
+      },
+      "NodeRestore": {
+        "name": "恢复节点",
+        "detail": "恢复节点\u201c{title}\u201d至 ({new_x}, {new_y})"
+      },
+      "NodePhysicalDelete": {
+        "name": "永久删除节点",
+        "detail": "永久删除节点\u201c{title}\u201d"
+      },
+      "NodeFieldsModify": {
+        "name": "编辑节点字段",
+        "detail": "编辑了节点\u201c{node_title}\u201d的字段"
+      },
+      "AttachmentImport": {
+        "name": "导入附件",
+        "detail": "向节点\u201c{node_title}\u201d导入了附件\u201c{file_name}\u201d"
+      },
+      "AttachmentExport": {
+        "name": "导出附件",
+        "detail": "从节点\u201c{node_title}\u201d导出了附件\u201c{file_name}\u201d"
+      },
+      "AttachmentLogicalDelete": {
+        "name": "删除附件",
+        "detail": "删除了节点\u201c{node_title}\u201d的附件\u201c{file_name}\u201d"
+      },
+      "AttachmentRestore": {
+        "name": "恢复附件",
+        "detail": "恢复了节点\u201c{node_title}\u201d的附件\u201c{file_name}\u201d"
+      },
+      "AttachmentPhysicalDelete": {
+        "name": "永久删除附件",
+        "detail": "永久删除了节点\u201c{node_title}\u201d的附件\u201c{file_name}\u201d"
+      },
+      "EdgeCreate": {
+        "name": "连接节点",
+        "detail": "连接\u201c{source_title}\u201d\u2192\u201c{target_title}\u201d"
+      },
+      "EdgePhysicalDelete": {
+        "name": "断开连接",
+        "detail": "断开\u201c{source_title}\u201d与\u201c{target_title}\u201d的连接"
+      },
+      "EdgeUpdate": {
+        "name": "编辑边",
+        "detail": "编辑了边\u201c{source_title}\u201d\u2192\u201c{target_title}\u201d"
+      },
+      "DictionarySet": {
+        "name": "更新字典",
+        "detail": "更新了字典（{entry_count} 个条目）"
+      },
+      "TemplateCreate": {
+        "name": "创建模板",
+        "detail": "创建了模板\u201c{name}\u201d"
+      },
+      "TemplateCreateFromNode": {
+        "name": "从节点创建模板",
+        "detail": "从节点\u201c{node_title}\u201d创建了模板\u201c{template_name}\u201d"
+      },
+      "TemplateDelete": {
+        "name": "删除模板",
+        "detail": "删除了模板\u201c{name}\u201d"
+      },
+      "TemplateFieldsSet": {
+        "name": "更新模板字段",
+        "detail": "更新了模板\u201c{template_name}\u201d的字段"
+      },
+      "TemplateRename": {
+        "name": "重命名模板",
+        "detail": "将模板\u201c{old_name}\u201d重命名为\u201c{new_name}\u201d"
+      },
+      "AutoLayoutDataNodes": {
+        "name": "自动布局节点",
+        "detail": "对画布内节点执行自动布局，移动了 {node_count} 个节点"
+      },
+      "AutoLayoutCanvasNodes": {
+        "name": "自动布局画布",
+        "detail": "对画布宇宙执行自动布局，移动了 {canvas_count} 个画布"
+      }
+    },
+    "node-fields-change-added": "新增字段\u201c{name}\u201d（{type}）：{value}",
+    "node-fields-change-modified": "修改字段\u201c{name}\u201d（{oldType} \u2192 {newType}）：{oldValue} \u2192 {newValue}",
+    "node-fields-change-removed": "删除字段\u201c{name}\u201d（{type}）：{oldValue}",
+    "empty-value": "（无值）",
+    "show-sensitive-values": "显示敏感值",
+    "dialog-title": "日志",
+    "total": "共 {total} 条",
+    "empty": "暂无日志"
+  }
+}

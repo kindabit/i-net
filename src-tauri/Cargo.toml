@@ -1,0 +1,52 @@
+[package]
+name = "i_net"
+version = "0.1.0"
+description = "A visualized personal sensitive data manager"
+authors = ["Saya"]
+edition = "2021"
+default-run = "i_net"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "i_net_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = ["isolation"] }
+
+[dependencies]
+tauri = { version = "2", features = ["isolation"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+directories = "6"
+sys-locale = "0.3"
+tokio = { version = "1", features = ["fs"] }
+aes-gcm-siv = "0.12.0-rc.3"
+sha2 = "0.11"
+sysinfo = "0.39.2"
+rusqlite = { version = "0.40.1", features = ["bundled", "serialize"] }
+rand = "0.10.1"
+regex = "1"
+tauri-plugin-dialog = "2"
+uuid = { version = "1", features = ["v4"] }
+arboard = "3"
+bigdecimal = "0.4"
+clap = { version = "4", features = ["derive"] }
+parking_lot = "0.12"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+infer = "0.22"
+brotli = "8"
+zstd = "0.13"
+lzma-rust = "0.1.7"
+flacenc = "0.5"
+claxon = "0.4"
+
+[dev-dependencies]

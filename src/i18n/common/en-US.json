@@ -1,0 +1,15 @@
+{
+  "common": {
+    "locale-label": "English",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "auto-complete": {
+      "no-matches": "No matches"
+    },
+    "tree-select": {
+      "no-data": "No options available"
+    }
+  }
+}

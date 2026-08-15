@@ -1,0 +1,19 @@
+.theme-controls {
+  border-radius: 0.5rem;
+  overflow: hidden;
+
+  .vue-flow__controls-button {
+    background: transparent;
+    border-bottom-color: rgba(var(--v-theme-on-surface), 0.08);
+    color: rgb(var(--v-theme-on-surface));
+    fill: rgb(var(--v-theme-on-surface));
+
+    &:hover {
+      background: rgba(var(--v-theme-on-surface), 0.06);
+    }
+
+    svg {
+      fill: rgb(var(--v-theme-on-surface));
+    }
+  }
+}

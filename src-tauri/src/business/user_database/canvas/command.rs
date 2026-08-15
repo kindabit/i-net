@@ -1,0 +1,10 @@
+pub mod user_database_canvas_color_list;
+pub mod user_database_canvas_create;
+pub mod user_database_canvas_list;
+pub mod user_database_canvas_logical_delete;
+pub mod user_database_canvas_move_canvas;
+pub mod user_database_canvas_move_canvases;
+pub mod user_database_canvas_physical_delete;
+pub mod user_database_canvas_rename;
+pub mod user_database_canvas_restore;
+pub mod user_database_canvas_set_color;

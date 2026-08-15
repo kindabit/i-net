@@ -1,0 +1,247 @@
+{
+  "error-code": {
+    "DatabaseError": {
+      "title": "数据库错误",
+      "text": "{detail}"
+    },
+    "DatabaseNameAlreadyExists": {
+      "title": "数据库名称已存在",
+      "text": "名为\u201c{name}\u201d的数据库已存在，请更换名称"
+    },
+    "DatabaseMustBeArchivedBeforeDelete": {
+      "title": "删除前需归档",
+      "text": "数据库必须先归档才能删除"
+    },
+    "DataVersionMismatch": {
+      "title": "数据版本不匹配",
+      "text": "数据库的数据版本与当前应用程序不兼容"
+    },
+    "EmptyPreferenceName": {
+      "title": "偏好项名称为空",
+      "text": "偏好项名称不能为空"
+    },
+    "EmptyRegistryName": {
+      "title": "registry 变量名称为空",
+      "text": "registry 变量名称不能为空"
+    },
+    "EmptyPassword": {
+      "title": "密码为空",
+      "text": "密码不能为空"
+    },
+    "EmptyUserDatabaseName": {
+      "title": "数据库名称为空",
+      "text": "数据库名称不能为空"
+    },
+    "FailToDeserializeAction": {
+      "title": "反序列化日志行为失败"
+    },
+    "FailToDeserializeDatabase": {
+      "title": "反序列化数据库失败",
+      "text": "{detail}"
+    },
+    "FailToOpenConnection": {
+      "title": "打开数据库连接失败",
+      "text": "{detail}"
+    },
+    "FailToSerializeAction": {
+      "title": "序列化日志行为失败"
+    },
+    "FailToSerializeDatabase": {
+      "title": "序列化数据库失败",
+      "text": "{detail}"
+    },
+    "FailToCreateDirectory": {
+      "title": "创建目录失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "FailToEncrypt": {
+      "title": "加密失败",
+      "text": "{detail}"
+    },
+    "FailToDecrypt": {
+      "title": "解密失败",
+      "text": "{detail}"
+    },
+    "FailToReadDirectory": {
+      "title": "读取目录失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "FailToReadFile": {
+      "title": "读取文件失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "FailToRemoveFile": {
+      "title": "删除文件失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "FailToRemoveDirectory": {
+      "title": "删除目录失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "FailToTryExists": {
+      "title": "检查路径存在性失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "InvalidUserDatabaseId": {
+      "title": "无效的数据库 ID",
+      "text": "无效的数据库 ID：{id}"
+    },
+    "FailToWriteFile": {
+      "title": "写入文件失败",
+      "text": "{detail}\uff08路径：{path}\uff09"
+    },
+    "InvalidCiphertext": {
+      "title": "无效的密文",
+      "text": "解密失败，密文无效"
+    },
+    "MultipleDataVersion": {
+      "title": "存在多个数据版本",
+      "text": "数据版本表内存在多行数据"
+    },
+    "NoDatabaseWithSuchId": {
+      "title": "未找到数据库",
+      "text": "未找到 ID 为 {id} 的数据库"
+    },
+    "NoDataVersion": {
+      "title": "未找到数据版本",
+      "text": "数据库中没有数据版本"
+    },
+    "CanvasNameAlreadyExists": {
+      "title": "画布名称已存在",
+      "text": "名为\u201c{name}\u201d的画布已存在，请更换名称"
+    },
+    "NoCanvasWithSuchId": {
+      "title": "未找到画布",
+      "text": "未找到 ID 为 {id} 的画布"
+    },
+    "InvalidCanvasId": {
+      "title": "无效的画布 ID",
+      "text": "无效的画布 ID：{id}"
+    },
+    "EmptyCanvasName": {
+      "title": "画布名称为空",
+      "text": "画布名称不能为空"
+    },
+    "NoNodeWithSuchId": {
+      "title": "未找到节点",
+      "text": "未找到 ID 为 {id} 的节点"
+    },
+    "InvalidNodeId": {
+      "title": "无效的节点 ID",
+      "text": "无效的节点 ID：{id}"
+    },
+    "NoEdgeWithSuchId": {
+      "title": "未找到边",
+      "text": "未找到 ID 为 {id} 的边"
+    },
+    "InvalidEdgeId": {
+      "title": "无效的边 ID",
+      "text": "无效的边 ID：{id}"
+    },
+    "EdgeAlreadyExists": {
+      "title": "边已存在",
+      "text": "两个节点之间已存在边"
+    },
+    "EdgeWouldFormCycle": {
+      "title": "边会形成环",
+      "text": "新建此边会在画布内形成环"
+    },
+    "InvalidNodePort": {
+      "title": "无效的节点连接桩",
+      "text": "无效的节点连接桩：{port}"
+    },
+    "RootCanvasCannotBeDeleted": {
+      "title": "根画布不可删除",
+      "text": "根画布是画布的入口，不可删除"
+    },
+    "UserDatabaseNotOpen": {
+      "title": "用户数据库未打开",
+      "text": "请先打开用户数据库"
+    },
+    "DuplicateDictionaryId": {
+      "title": "字典条目 id 重复",
+      "text": "id：{id}"
+    },
+    "DuplicateNodeFieldName": {
+      "title": "字段名称重复",
+      "text": "字段：{name}"
+    },
+    "EmptyDictionaryValue": {
+      "title": "字典条目的值为空"
+    },
+    "EmptyNodeFieldName": {
+      "title": "字段名称为空"
+    },
+    "EmptyTemplateName": {
+      "title": "模板名称为空"
+    },
+    "FailToDeserializeNodeFieldValue": {
+      "title": "读取节点字段数据失败",
+      "text": "{detail}"
+    },
+    "FieldTypeNotSupportDictionary": {
+      "title": "该字段类型不支持字典",
+      "text": "类型：{field_type}"
+    },
+    "InvalidDictionaryId": {
+      "title": "无效的字典条目 id",
+      "text": "id：{id}"
+    },
+    "InvalidNodeFieldType": {
+      "title": "未知的字段类型",
+      "text": "类型：{field_type}"
+    },
+    "InvalidNodeFieldTypeConfig": {
+      "title": "字段类型配置无效",
+      "text": "{detail}"
+    },
+    "InvalidTemplateId": {
+      "title": "无效的模板 id",
+      "text": "id：{id}"
+    },
+    "NodeFieldValueKindMismatch": {
+      "title": "字段值的数据类型不匹配",
+      "text": "期望 {expected}，实际 {actual}"
+    },
+    "NodeFieldValueValidationFailed": {
+      "title": "字段值未通过校验",
+      "text": "字段：{name}"
+    },
+    "NoDictionaryEntryWithSuchId": {
+      "title": "字典条目不存在",
+      "text": "id：{id}"
+    },
+    "NoTemplateWithSuchId": {
+      "title": "模板不存在",
+      "text": "id：{id}"
+    },
+    "TemplateNameAlreadyExists": {
+      "title": "模板名称已存在",
+      "text": "名称：{name}"
+    },
+    "AttachmentTooLarge": {
+      "title": "附件过大",
+      "text": "单个附件大小不能超过 {max} MB"
+    },
+    "InvalidAttachmentId": {
+      "title": "无效的附件 id",
+      "text": "id：{id}"
+    },
+    "InvalidExportTargetPath": {
+      "title": "导出目标路径无效",
+      "text": "导出目标路径无效：不能写入软件的数据目录（{path}）"
+    },
+    "InvalidExportMode": {
+      "title": "导出模式无效",
+      "text": "导出模式无效：{mode}"
+    },
+    "NoAttachmentWithSuchId": {
+      "title": "附件不存在",
+      "text": "id：{id}"
+    },
+    "EmptyFilePath": {
+      "title": "文件路径为空",
+      "text": "文件路径不能为空"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+/* 磨砂玻璃浮层：半透明背景 + 背景模糊 + 柔和阴影。
+   用于全局悬浮 UI（菜单、按钮组、面板等）；定位、尺寸、间距等布局属性由使用方自行定义。 */
+.frosted-glass {
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(0.75rem);
+  -webkit-backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.12);
+}

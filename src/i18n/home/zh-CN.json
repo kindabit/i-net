@@ -1,0 +1,38 @@
+{
+  "home": {
+    "database-name": "数据库名称",
+    "password": "密码",
+    "password-create": "创建密码",
+    "password-confirm": "确认密码",
+    "back": "返回",
+    "archive-management-tooltip": "数据库归档与删除",
+    "validation": {
+      "name-empty": "数据库名称不能为空",
+      "password-empty": "密码不能为空",
+      "password-too-short": "密码长度不能少于 6 位",
+      "password-mismatch": "两次输入的密码不一致"
+    },
+    "archive-management": {
+      "title": "归档管理",
+      "archive": "归档",
+      "unarchive": "还原",
+      "delete": "删除",
+      "status-archived": "已归档",
+      "status-not-archived": "未归档",
+      "empty": "暂无数据库",
+      "close": "关闭",
+      "archive-success": "数据库“{name}”已归档",
+      "unarchive-success": "数据库“{name}”已还原",
+      "delete-success": "数据库“{name}”已删除",
+      "wrong-password": "密码错误"
+    },
+    "delete-confirm": {
+      "title": "删除数据库",
+      "body": "此操作将永久删除数据库“{name}”及其全部数据，且无法恢复。",
+      "name-label": "请输入数据库名称以确认",
+      "password-label": "数据库密码",
+      "cancel": "取消",
+      "confirm": "确认删除"
+    }
+  }
+}

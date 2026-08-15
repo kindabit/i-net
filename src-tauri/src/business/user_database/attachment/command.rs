@@ -1,0 +1,11 @@
+pub mod user_database_attachment_export;
+pub mod user_database_attachment_import;
+pub mod user_database_attachment_list;
+pub mod user_database_attachment_list_orphan_files;
+pub mod user_database_attachment_load;
+pub mod user_database_attachment_logical_delete;
+pub mod user_database_attachment_physical_delete;
+pub mod user_database_attachment_remove_orphan_file;
+pub mod user_database_attachment_restore;
+pub mod user_database_attachment_swap_sort_order;
+pub mod user_database_attachment_update_file;

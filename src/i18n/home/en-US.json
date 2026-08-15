@@ -1,0 +1,38 @@
+{
+  "home": {
+    "database-name": "Database Name",
+    "password": "Password",
+    "password-create": "Create password",
+    "password-confirm": "Confirm password",
+    "back": "Back",
+    "archive-management-tooltip": "Archive/Delete Database",
+    "validation": {
+      "name-empty": "Database name cannot be empty",
+      "password-empty": "Password cannot be empty",
+      "password-too-short": "Password must be at least 6 characters",
+      "password-mismatch": "Passwords do not match"
+    },
+    "archive-management": {
+      "title": "Archive Management",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "delete": "Delete",
+      "status-archived": "Archived",
+      "status-not-archived": "Not Archived",
+      "empty": "No databases",
+      "close": "Close",
+      "archive-success": "Database \"{name}\" has been archived",
+      "unarchive-success": "Database \"{name}\" has been unarchived",
+      "delete-success": "Database \"{name}\" has been deleted",
+      "wrong-password": "Incorrect password"
+    },
+    "delete-confirm": {
+      "title": "Delete Database",
+      "body": "This will permanently delete database \"{name}\" and all its data. This action cannot be undone.",
+      "name-label": "Type the database name to confirm",
+      "password-label": "Database password",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    }
+  }
+}

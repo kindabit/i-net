@@ -1,0 +1,130 @@
+{
+  "log": {
+    "action": {
+      "CanvasCreate": {
+        "name": "Create Canvas",
+        "detail": "Created canvas \"{name}\""
+      },
+      "CanvasMove": {
+        "name": "Move Canvas",
+        "detail": "Moved canvas \"{name}\" from ({old_x}, {old_y}) to ({new_x}, {new_y})"
+      },
+      "CanvasLogicalDelete": {
+        "name": "Delete Canvas",
+        "detail": "Deleted canvas \"{name}\""
+      },
+      "CanvasRestore": {
+        "name": "Restore Canvas",
+        "detail": "Restored canvas \"{name}\" to ({new_x}, {new_y})"
+      },
+      "CanvasPhysicalDelete": {
+        "name": "Permanently Delete Canvas",
+        "detail": "Permanently deleted canvas \"{name}\""
+      },
+      "CanvasRename": {
+        "name": "Rename Canvas",
+        "detail": "Renamed canvas \"{old_name}\" to \"{new_name}\""
+      },
+      "NodeCreate": {
+        "name": "Create Node",
+        "detail": "Created node \"{title}\""
+      },
+      "NodeMove": {
+        "name": "Move Node",
+        "detail": "Moved node \"{title}\" from ({old_x}, {old_y}) to ({new_x}, {new_y})"
+      },
+      "NodeModify": {
+        "name": "Modify Node",
+        "detail": "Modified node \"{old_title}\""
+      },
+      "NodeLogicalDelete": {
+        "name": "Delete Node",
+        "detail": "Deleted node \"{title}\""
+      },
+      "NodeRestore": {
+        "name": "Restore Node",
+        "detail": "Restored node \"{title}\" to ({new_x}, {new_y})"
+      },
+      "NodePhysicalDelete": {
+        "name": "Permanently Delete Node",
+        "detail": "Permanently deleted node \"{title}\""
+      },
+      "NodeFieldsModify": {
+        "name": "Edit Node Fields",
+        "detail": "Edited fields of node \"{node_title}\""
+      },
+      "AttachmentImport": {
+        "name": "Import Attachment",
+        "detail": "Imported attachment \"{file_name}\" to node \"{node_title}\""
+      },
+      "AttachmentExport": {
+        "name": "Export Attachment",
+        "detail": "Exported attachment \"{file_name}\" from node \"{node_title}\""
+      },
+      "AttachmentLogicalDelete": {
+        "name": "Delete Attachment",
+        "detail": "Deleted attachment \"{file_name}\" of node \"{node_title}\""
+      },
+      "AttachmentRestore": {
+        "name": "Restore Attachment",
+        "detail": "Restored attachment \"{file_name}\" of node \"{node_title}\""
+      },
+      "AttachmentPhysicalDelete": {
+        "name": "Permanently Delete Attachment",
+        "detail": "Permanently deleted attachment \"{file_name}\" of node \"{node_title}\""
+      },
+      "EdgeCreate": {
+        "name": "Connect Nodes",
+        "detail": "Connected \"{source_title}\" \u2192 \"{target_title}\""
+      },
+      "EdgePhysicalDelete": {
+        "name": "Disconnect Nodes",
+        "detail": "Disconnected \"{source_title}\" from \"{target_title}\""
+      },
+      "EdgeUpdate": {
+        "name": "Edit Edge",
+        "detail": "Edited edge \u201c{source_title}\u201d \u2192 \u201c{target_title}\u201d"
+      },
+      "DictionarySet": {
+        "name": "Update Dictionary",
+        "detail": "Updated the dictionary ({entry_count} entries)"
+      },
+      "TemplateCreate": {
+        "name": "Create Template",
+        "detail": "Created template \"{name}\""
+      },
+      "TemplateCreateFromNode": {
+        "name": "Create Template from Node",
+        "detail": "Created template \"{template_name}\" from node \"{node_title}\""
+      },
+      "TemplateDelete": {
+        "name": "Delete Template",
+        "detail": "Deleted template \"{name}\""
+      },
+      "TemplateFieldsSet": {
+        "name": "Update Template Fields",
+        "detail": "Updated fields of template \"{template_name}\""
+      },
+      "TemplateRename": {
+        "name": "Rename Template",
+        "detail": "Renamed template \"{old_name}\" to \"{new_name}\""
+      },
+      "AutoLayoutDataNodes": {
+        "name": "Auto Layout Nodes",
+        "detail": "Auto layout performed on data nodes, moved {node_count} nodes"
+      },
+      "AutoLayoutCanvasNodes": {
+        "name": "Auto Layout Canvases",
+        "detail": "Auto layout performed on canvases, moved {canvas_count} canvases"
+      }
+    },
+    "node-fields-change-added": "Added field \"{name}\" ({type}): {value}",
+    "node-fields-change-modified": "Modified field \"{name}\" ({oldType} \u2192 {newType}): {oldValue} \u2192 {newValue}",
+    "node-fields-change-removed": "Removed field \"{name}\" ({type}): {oldValue}",
+    "empty-value": "(empty)",
+    "show-sensitive-values": "Show sensitive values",
+    "dialog-title": "Logs",
+    "total": "{total} entries",
+    "empty": "No logs yet"
+  }
+}

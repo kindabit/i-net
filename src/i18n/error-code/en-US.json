@@ -1,0 +1,247 @@
+{
+  "error-code": {
+    "DatabaseError": {
+      "title": "Database Error",
+      "text": "{detail}"
+    },
+    "DatabaseNameAlreadyExists": {
+      "title": "Database Name Exists",
+      "text": "A database named \"{name}\" already exists, please use a different name"
+    },
+    "DatabaseMustBeArchivedBeforeDelete": {
+      "title": "Archive Required Before Delete",
+      "text": "The database must be archived before it can be deleted"
+    },
+    "DataVersionMismatch": {
+      "title": "Data Version Mismatch",
+      "text": "The database data version is incompatible with this application"
+    },
+    "EmptyPreferenceName": {
+      "title": "Preference Name Empty",
+      "text": "Preference name cannot be empty"
+    },
+    "EmptyRegistryName": {
+      "title": "Registry Name Empty",
+      "text": "Registry variable name cannot be empty"
+    },
+    "EmptyPassword": {
+      "title": "Password Empty",
+      "text": "Password cannot be empty"
+    },
+    "EmptyUserDatabaseName": {
+      "title": "Database Name Empty",
+      "text": "Database name cannot be empty"
+    },
+    "FailToDeserializeAction": {
+      "title": "Failed to Deserialize Log Action"
+    },
+    "FailToDeserializeDatabase": {
+      "title": "Failed to Deserialize Database",
+      "text": "{detail}"
+    },
+    "FailToOpenConnection": {
+      "title": "Failed to Open Database Connection",
+      "text": "{detail}"
+    },
+    "FailToSerializeAction": {
+      "title": "Failed to Serialize Log Action"
+    },
+    "FailToSerializeDatabase": {
+      "title": "Failed to Serialize Database",
+      "text": "{detail}"
+    },
+    "FailToCreateDirectory": {
+      "title": "Failed to Create Directory",
+      "text": "{detail} (Path: {path})"
+    },
+    "FailToEncrypt": {
+      "title": "Encryption Failed",
+      "text": "{detail}"
+    },
+    "FailToDecrypt": {
+      "title": "Decryption Failed",
+      "text": "{detail}"
+    },
+    "FailToReadDirectory": {
+      "title": "Failed to Read Directory",
+      "text": "{detail} (Path: {path})"
+    },
+    "FailToReadFile": {
+      "title": "Failed to Read File",
+      "text": "{detail} (Path: {path})"
+    },
+    "FailToRemoveFile": {
+      "title": "Failed to Remove File",
+      "text": "{detail} (Path: {path})"
+    },
+    "FailToRemoveDirectory": {
+      "title": "Failed to Remove Directory",
+      "text": "{detail} (Path: {path})"
+    },
+    "FailToTryExists": {
+      "title": "Path Existence Check Failed",
+      "text": "{detail} (Path: {path})"
+    },
+    "InvalidUserDatabaseId": {
+      "title": "Invalid Database ID",
+      "text": "Invalid database ID: {id}"
+    },
+    "FailToWriteFile": {
+      "title": "Failed to Write File",
+      "text": "{detail} (Path: {path})"
+    },
+    "InvalidCiphertext": {
+      "title": "Invalid Ciphertext",
+      "text": "Decryption failed, ciphertext is invalid"
+    },
+    "MultipleDataVersion": {
+      "title": "Multiple Data Versions Found",
+      "text": "The data version table contains multiple rows"
+    },
+    "NoDatabaseWithSuchId": {
+      "title": "Database Not Found",
+      "text": "No database found with ID {id}"
+    },
+    "NoDataVersion": {
+      "title": "No Data Version Found",
+      "text": "No data version found in the database"
+    },
+    "CanvasNameAlreadyExists": {
+      "title": "Canvas Name Exists",
+      "text": "A canvas named \"{name}\" already exists, please use a different name"
+    },
+    "NoCanvasWithSuchId": {
+      "title": "Canvas Not Found",
+      "text": "No canvas found with ID {id}"
+    },
+    "InvalidCanvasId": {
+      "title": "Invalid Canvas ID",
+      "text": "Invalid canvas ID: {id}"
+    },
+    "EmptyCanvasName": {
+      "title": "Canvas Name Empty",
+      "text": "Canvas name cannot be empty"
+    },
+    "NoNodeWithSuchId": {
+      "title": "Node Not Found",
+      "text": "No node found with ID {id}"
+    },
+    "InvalidNodeId": {
+      "title": "Invalid Node ID",
+      "text": "Invalid node ID: {id}"
+    },
+    "NoEdgeWithSuchId": {
+      "title": "Edge Not Found",
+      "text": "No edge found with ID {id}"
+    },
+    "InvalidEdgeId": {
+      "title": "Invalid Edge ID",
+      "text": "Invalid edge ID: {id}"
+    },
+    "EdgeAlreadyExists": {
+      "title": "Edge Already Exists",
+      "text": "An edge already exists between the two nodes"
+    },
+    "EdgeWouldFormCycle": {
+      "title": "Edge Would Form Cycle",
+      "text": "Creating this edge would form a cycle in the canvas"
+    },
+    "InvalidNodePort": {
+      "title": "Invalid Node Port",
+      "text": "Invalid node port: {port}"
+    },
+    "RootCanvasCannotBeDeleted": {
+      "title": "Root Canvas Cannot Be Deleted",
+      "text": "The root canvas is the entry point of canvases and cannot be deleted"
+    },
+    "UserDatabaseNotOpen": {
+      "title": "User Database Not Open",
+      "text": "Please open a user database first"
+    },
+    "DuplicateDictionaryId": {
+      "title": "Duplicate dictionary entry id",
+      "text": "id: {id}"
+    },
+    "DuplicateNodeFieldName": {
+      "title": "Duplicate field name",
+      "text": "Field: {name}"
+    },
+    "EmptyDictionaryValue": {
+      "title": "Empty dictionary entry value"
+    },
+    "EmptyNodeFieldName": {
+      "title": "Empty field name"
+    },
+    "EmptyTemplateName": {
+      "title": "Empty template name"
+    },
+    "FailToDeserializeNodeFieldValue": {
+      "title": "Failed to read node field data",
+      "text": "{detail}"
+    },
+    "FieldTypeNotSupportDictionary": {
+      "title": "This field type does not support dictionaries",
+      "text": "Type: {field_type}"
+    },
+    "InvalidDictionaryId": {
+      "title": "Invalid dictionary entry id",
+      "text": "id: {id}"
+    },
+    "InvalidNodeFieldType": {
+      "title": "Unknown field type",
+      "text": "Type: {field_type}"
+    },
+    "InvalidNodeFieldTypeConfig": {
+      "title": "Invalid field type config",
+      "text": "{detail}"
+    },
+    "InvalidTemplateId": {
+      "title": "Invalid template id",
+      "text": "id: {id}"
+    },
+    "NodeFieldValueKindMismatch": {
+      "title": "Field value kind mismatch",
+      "text": "Expected {expected}, got {actual}"
+    },
+    "NodeFieldValueValidationFailed": {
+      "title": "Field value validation failed",
+      "text": "Field: {name}"
+    },
+    "NoDictionaryEntryWithSuchId": {
+      "title": "Dictionary entry not found",
+      "text": "id: {id}"
+    },
+    "NoTemplateWithSuchId": {
+      "title": "Template not found",
+      "text": "id: {id}"
+    },
+    "TemplateNameAlreadyExists": {
+      "title": "Template name already exists",
+      "text": "Name: {name}"
+    },
+    "AttachmentTooLarge": {
+      "title": "Attachment Too Large",
+      "text": "A single attachment must not exceed {max} MB"
+    },
+    "InvalidAttachmentId": {
+      "title": "Invalid attachment id",
+      "text": "id: {id}"
+    },
+    "InvalidExportTargetPath": {
+      "title": "Invalid export target path",
+      "text": "Invalid export target path: writing into the application's data directory is not allowed ({path})"
+    },
+    "InvalidExportMode": {
+      "title": "Invalid export mode",
+      "text": "Invalid export mode: {mode}"
+    },
+    "NoAttachmentWithSuchId": {
+      "title": "Attachment not found",
+      "text": "id: {id}"
+    },
+    "EmptyFilePath": {
+      "title": "Empty file path",
+      "text": "File path cannot be empty"
+    }
+  }
+}

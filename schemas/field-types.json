@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "defaultFieldType": "TextSingleLine",
+  "valueKinds": [
+    { "key": "string" },
+    { "key": "decimal" },
+    { "key": "instant" },
+    { "key": "instantRange" }
+  ],
+  "fieldTypes": [
+    {
+      "key": "TextSingleLine",
+      "valueKind": "string",
+      "i18nKey": "text-single-line",
+      "editor": "single-line-text",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": true,
+      "multiRow": false,
+      "validation": null,
+      "typeConfig": null
+    },
+    {
+      "key": "Email",
+      "valueKind": "string",
+      "i18nKey": "email",
+      "editor": "single-line-text",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": { "regex": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", "errorI18nKey": "invalid-email" },
+      "typeConfig": null
+    },
+    {
+      "key": "Url",
+      "valueKind": "string",
+      "i18nKey": "url",
+      "editor": "single-line-text",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": { "regex": "^https?://\\S+$", "errorI18nKey": "invalid-url" },
+      "typeConfig": null
+    },
+    {
+      "key": "TextMultiLine",
+      "valueKind": "string",
+      "i18nKey": "text-multi-line",
+      "editor": "multi-line-text",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": true,
+      "validation": null,
+      "typeConfig": null
+    },
+    {
+      "key": "Password",
+      "valueKind": "string",
+      "i18nKey": "password",
+      "editor": "single-line-text",
+      "masked": true,
+      "passwordGenerator": true,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": null,
+      "typeConfig": null
+    },
+    {
+      "key": "SecretSingleLine",
+      "valueKind": "string",
+      "i18nKey": "secret-single-line",
+      "editor": "single-line-text",
+      "masked": true,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": null,
+      "typeConfig": null
+    },
+    {
+      "key": "Number",
+      "valueKind": "decimal",
+      "i18nKey": "number",
+      "editor": "number",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": { "regex": "^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$", "errorI18nKey": "invalid-number" },
+      "typeConfig": null
+    },
+    {
+      "key": "Date",
+      "valueKind": "instant",
+      "i18nKey": "date",
+      "editor": "date",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": false,
+      "validation": null,
+      "typeConfig": {
+        "precision": {
+          "options": ["year", "month", "day", "hour", "minute", "second"],
+          "default": "day"
+        }
+      }
+    },
+    {
+      "key": "DateRange",
+      "valueKind": "instantRange",
+      "i18nKey": "date-range",
+      "editor": "date-range",
+      "masked": false,
+      "passwordGenerator": false,
+      "supportsDictionary": false,
+      "multiRow": true,
+      "validation": null,
+      "typeConfig": {
+        "precision": {
+          "options": ["year", "month", "day", "hour", "minute", "second"],
+          "default": "day"
+        }
+      }
+    }
+  ]
+}
