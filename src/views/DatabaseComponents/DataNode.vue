@@ -10,13 +10,16 @@
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { Handle, Position } from "@vue-flow/core";
+import { Handle, Position, useNode } from "@vue-flow/core";
 import { useRouter } from "vue-router";
 import { t } from "@/i18n";
 import type { DataNodeData } from "@/vf-convert";
 import { setCanvasNavIntent } from "./canvas-route-transition";
 import { deserializeNodeColor } from "@/node-colors";
 import { currentThemeIsDark } from "@/themes";
+// #if [DEBUG]
+import NodeDebugOverlay from "./NodeDebugOverlay.vue";
+// #endif
 
 const router = useRouter();
 
@@ -27,6 +30,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ delete: [id: string]; edit: [id: string]; attachment: [id: string]; color: [id: string] }>();
+
+/** 当前节点对象（响应式，含 position）。替代已 deprecated 的 slot position 属性。DEBUG 关闭时模板不引用，无副作用。 */
+const { node } = useNode();
 
 // 控制 hover 时操作按钮排的显隐
 const actionsVisible = ref(false);
@@ -125,6 +131,9 @@ function onDblClick() {
     <Handle type="source" :position="Position.Bottom" id="bottom" :style="handleStyle" />
     <Handle type="source" :position="Position.Left" id="left" :style="handleStyle" />
     <Handle type="source" :position="Position.Right" id="right" :style="handleStyle" />
+    <!-- #if [DEBUG] -->
+    <NodeDebugOverlay v-if="actionsVisible" :x="node.position.x" :y="node.position.y" />
+    <!-- #endif -->
     <div v-if="data.canvasId" class="data-node-title-row">
       <VIcon icon="mdi-vector-square" size="18" class="data-node-icon" :style="{ color: colors.icon }" />
       <div class="data-node-title">{{ data.title }}</div>

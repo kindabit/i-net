@@ -43,6 +43,9 @@ import NodeTemplatePanel from "./DatabaseComponents/NodeTemplatePanel.vue";
 import TemplateManagerDialog from "./DatabaseComponents/TemplateManagerDialog.vue";
 import DictionaryManagerDialog from "./DatabaseComponents/DictionaryManagerDialog.vue";
 import AttachmentDialog from "./DatabaseComponents/attachment/AttachmentDialog.vue";
+// #if [DEBUG]
+import ViewportDebugOverlay from "./DatabaseComponents/ViewportDebugOverlay.vue";
+// #endif
 
 // 不变量
 
@@ -59,7 +62,7 @@ const templateManagerDialogRef = ref<InstanceType<typeof TemplateManagerDialog>>
 const dictionaryManagerDialogRef = ref<InstanceType<typeof DictionaryManagerDialog>>();
 const attachmentDialogRef = ref<InstanceType<typeof AttachmentDialog>>();
 const recycleBinBtnRef = ref<any>(null);
-const { screenToFlowCoordinate, updateNodeInternals, updateEdgeData, getNodes: getVFNodes, getEdges: getVFEdges } = useVueFlow();
+const { screenToFlowCoordinate, updateNodeInternals, updateEdgeData, getNodes: getVFNodes, getEdges: getVFEdges, viewport: vfViewport } = useVueFlow();
 const snapGrid: [number, number] = [20, 20];
 const { isLayouting, applyAutoLayout } = useAutoLayout({
   // 节点/边必须取自 vue-flow store（GraphNode 的 position 是响应式活数据）：
@@ -472,6 +475,9 @@ async function onEdgeEdit(id: string): Promise<void> {
       @physical-delete="recycleBin.physicalDelete"
       @empty="recycleBin.empty"
     />
+    <!-- #if [DEBUG] -->
+    <ViewportDebugOverlay :viewport="vfViewport" />
+    <!-- #endif -->
   </div>
 </template>
 

@@ -30,6 +30,9 @@ import CanvasNode from "./DatabaseComponents/CanvasNode.vue";
 import CanvasRecycleBinPanel from "./DatabaseComponents/CanvasRecycleBinPanel.vue";
 import NameInputDialog from "@/components/NameInputDialog.vue";
 import EditCanvasNodeColorDialog from "@/node-colors/EditCanvasNodeColorDialog.vue";
+// #if [DEBUG]
+import ViewportDebugOverlay from "./DatabaseComponents/ViewportDebugOverlay.vue";
+// #endif
 
 const nodes: Ref<VFNode[]> = ref([]);
 const edges: Ref<VFEdge[]> = ref([]);
@@ -42,7 +45,7 @@ const recycleBinPanelRef = ref<InstanceType<typeof CanvasRecycleBinPanel>>();
 const recycleBinBtnRef = ref<any>(null);
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
 const nodeColorDialogRef = ref<InstanceType<typeof EditCanvasNodeColorDialog>>();
-const { screenToFlowCoordinate, updateNodeInternals, getNodes: getVFNodes, getEdges: getVFEdges } = useVueFlow();
+const { screenToFlowCoordinate, updateNodeInternals, getNodes: getVFNodes, getEdges: getVFEdges, viewport: vfViewport } = useVueFlow();
 const snapGrid: [number, number] = [20, 20];
 const { isLayouting, applyAutoLayout } = useAutoLayout({
   // 节点/边必须取自 vue-flow store（GraphNode 的 position 是响应式活数据）：
@@ -301,6 +304,9 @@ function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; n
     />
     <NameInputDialog ref="nameInputDialogRef" />
     <EditCanvasNodeColorDialog ref="nodeColorDialogRef" />
+    <!-- #if [DEBUG] -->
+    <ViewportDebugOverlay :viewport="vfViewport" />
+    <!-- #endif -->
   </div>
 </template>
 
