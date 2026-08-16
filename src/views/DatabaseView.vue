@@ -253,6 +253,9 @@ async function doClose() {
 }
 
 // 路由切换过渡：drill-in 钻入 / drill-out 浮出 / drill-swap 淡换
+// 用 filter: blur() 而不是 transform: scale() 实现"焦点拉近/失焦"的入场离场效果：
+// filter 是 painted 属性、不进入 layout 流水线，不会改变子元素 getBoundingClientRect，
+// 避免 vue-flow 在 transition 起始帧读错 handle.bounds（详见 CanvasView 边渲染偏移问题）。
 .drill-in-enter-active,
 .drill-in-leave-active,
 .drill-out-enter-active,
@@ -261,7 +264,7 @@ async function doClose() {
 .drill-swap-leave-active {
   transition:
     opacity 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    filter 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 // 并发过渡期间，离场视图脱离文档流，避免与入场视图互相挤压
@@ -280,31 +283,31 @@ async function doClose() {
   background-color: rgb(var(--v-theme-background));
 }
 
-// 钻入：新视图在上层从小放大淡入，旧视图放大淡出
+// 钻入：新视图在上层从模糊到清晰淡入，旧视图失焦淡出
 .drill-in-enter-active {
   position: relative;
   z-index: 2;
 }
 .drill-in-enter-from {
   opacity: 0;
-  transform: scale(0.92);
+  filter: blur(12px);
 }
 .drill-in-leave-to {
   opacity: 0;
-  transform: scale(1.06);
+  filter: blur(12px);
 }
 
-// 浮出：旧视图在上层缩小淡出，逐渐露出下层的新视图
+// 浮出：旧视图在上层失焦淡出，逐渐露出下层的新视图
 .drill-out-leave-active {
   z-index: 2;
 }
 .drill-out-leave-to {
   opacity: 0;
-  transform: scale(0.92);
+  filter: blur(12px);
 }
 .drill-out-enter-from {
   opacity: 0;
-  transform: scale(1.04);
+  filter: blur(12px);
 }
 
 // 淡换：仅淡入淡出
