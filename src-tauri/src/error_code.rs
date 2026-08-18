@@ -109,6 +109,8 @@ pub enum ErrorCode {
     InvalidNodeFieldTypeConfig { field_type: String, detail: String },
     /// 节点连接桩无效，包含连接桩。
     InvalidNodePort { port: String },
+    /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
+    InvalidPath { detail: String },
     /// 模板 id 无效，包含模板 id。
     InvalidTemplateId { id: String },
     /// 用户数据库 id 无效，包含数据库 id。
@@ -143,4 +145,14 @@ pub enum ErrorCode {
     UserDatabaseNotOpen,
     /// 剪贴板操作失败，包含详细错误信息。
     ClipboardError { detail: String },
+    /// 备份文件格式无效（magic 不匹配、版本不支持、Header 损坏等），包含详细错误信息。
+    InvalidBackupFile { detail: String },
+    /// 备份文件版本不兼容，包含读取到的版本号。
+    UnsupportedBackupVersion { version: u16 },
+    /// 备份文件中损坏的 shard 数超过可恢复上限，包含丢失数与可恢复上限。
+    BackupTooManyShardsLost { lost: usize, recoverable: usize },
+    /// 备份打包失败，包含详细错误信息。
+    FailToPackBackup { detail: String },
+    /// 备份解包失败，包含详细错误信息。
+    FailToUnpackBackup { detail: String },
 }

@@ -12,15 +12,16 @@ mod util;
 ///
 /// # 参数
 /// - `data_directory_override`：可选的数据目录覆盖值。如果提供，则使用该目录；
-///   否则使用系统默认的应用数据目录。
+///   否则使用 [`directories::ProjectDirs`] 计算的默认路径。
 ///
 /// # 返回值
 /// 返回包含数据目录、日志目录、用户数据库集合目录、偏好数据库文件和元数据数据库文件的路径结构体。
 fn initialize_data_directory(data_directory_override: Option<std::path::PathBuf>) -> state::Path {
     let data_directory = data_directory_override.unwrap_or_else(|| {
-        let project_dirs = directories::ProjectDirs::from("pw.saya", "saya", "i-net")
-            .expect("failed to determine project directories");
-        project_dirs.data_dir().to_path_buf()
+        directories::ProjectDirs::from("pw.saya", "saya", "i-net")
+            .expect("failed to determine project directories")
+            .data_dir()
+            .to_path_buf()
     });
 
     let log_directory = data_directory.join("logs");
@@ -107,6 +108,13 @@ pub fn run(argv: argv::ArgV) {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            business::backup::command::backup::backup_backup,
+            business::backup::command::restore::backup_restore,
+            business::backup::command::restore_probe::backup_restore_probe,
+            business::backup::command::data_directory_size::backup_data_directory_size,
+            business::reclaim::command::metadata::reclaim_metadata,
+            business::reclaim::command::preference::reclaim_preference,
+            business::reclaim::command::user_database::reclaim_user_database,
             business::metadata::command::metadata_archive::metadata_archive,
             business::metadata::command::metadata_list::metadata_list,
             business::metadata::command::metadata_physical_delete::metadata_physical_delete,

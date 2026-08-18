@@ -235,6 +235,10 @@
       "title": "导出模式无效",
       "text": "导出模式无效：{mode}"
     },
+    "InvalidPath": {
+      "title": "路径无效",
+      "text": "路径无效：{detail}"
+    },
     "NoAttachmentWithSuchId": {
       "title": "附件不存在",
       "text": "id：{id}"

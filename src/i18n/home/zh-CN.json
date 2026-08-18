@@ -6,6 +6,8 @@
     "password-confirm": "确认密码",
     "back": "返回",
     "archive-management-tooltip": "数据库归档与删除",
+    "backup-tooltip": "备份数据目录",
+    "restore-tooltip": "还原数据目录",
     "validation": {
       "name-empty": "数据库名称不能为空",
       "password-empty": "密码不能为空",
@@ -33,6 +35,44 @@
       "password-label": "数据库密码",
       "cancel": "取消",
       "confirm": "确认删除"
+    },
+    "backup": {
+      "title": "备份数据目录",
+      "data-size": "当前数据目录大小：{size}",
+      "ratio-label": "冗余比例",
+      "ratio-hint": "校验块数 = 数据块数 × 该比例；比例越高能抵抗的损坏越多，备份体积也越大。",
+      "estimated-size": "预计备份大小：{size}",
+      "volume-structure": "备份文件由 Reed-Solomon 编码块与校验块组成，体积约为原始数据的 (1 + 冗余比例) 倍。",
+      "start": "开始备份",
+      "cancel": "取消",
+      "in-progress": "正在备份…",
+      "phase-backup-pack": "正在打包数据目录",
+      "phase-backup-encode": "正在生成校验数据",
+      "phase-backup-write": "正在写入备份文件",
+      "success": "备份已保存",
+      "cancelled": "已取消保存"
+    },
+    "restore": {
+      "title": "还原数据目录",
+      "warning-text": "还原将覆盖所有用户数据，且无法恢复。",
+      "select-file": "选择备份文件",
+      "verify-result-recoverable": "备份文件校验通过，可以还原",
+      "verify-result-recoverable-with-loss": "备份文件存在 {lost} 个损坏块，仍可还原",
+      "verify-result-irrecoverable": "备份文件损坏过多，无法还原",
+      "confirm-button": "确认还原",
+      "cancel": "取消",
+      "in-progress": "正在还原…",
+      "phase-restore-read-header": "正在读取文件头",
+      "phase-restore-verify": "正在校验完整性",
+      "phase-restore-decode": "正在纠错解码",
+      "phase-restore-unpack": "正在解压文件",
+      "phase-restore-clear": "正在清空当前数据",
+      "phase-restore-move": "正在写入新数据"
+    },
+    "restore-success": {
+      "title": "还原成功",
+      "text": "点击下方按钮刷新页面以查看还原后的数据。",
+      "button": "完成"
     }
   }
 }

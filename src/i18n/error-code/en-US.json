@@ -235,6 +235,10 @@
       "title": "Invalid export mode",
       "text": "Invalid export mode: {mode}"
     },
+    "InvalidPath": {
+      "title": "Invalid path",
+      "text": "Invalid path: {detail}"
+    },
     "NoAttachmentWithSuchId": {
       "title": "Attachment not found",
       "text": "id: {id}"

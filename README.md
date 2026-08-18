@@ -24,6 +24,7 @@
 - 🎨 **自定义主题**：内置亮色 / 暗色主题，支持新建、编辑、导入、导出自定义主题。
 - 🧭 **多语言**：支持简体中文（zh-CN）与英语（en-US）。
 - 📤 **数据库导出**：支持将数据库导出为**明文**可读格式。
+- 📦 **数据目录级备份与还原**：以 Reed-Solomon 纠删码格式备份整个数据目录，可在传输过程中承受一定程度的损坏、污染或尾部数据缺失。
 - 📜 **操作日志**：精确到字段新旧值的操作日志。
 
 ---
@@ -43,6 +44,7 @@
 | 后端 | Rust |
 | 本地数据库 | SQLite（rusqlite） |
 | 加密 | AES-GCM-SIV |
+| 容错编码 | Reed-Solomon（reed-solomon-erasure）+ tar 流 |
 
 ---
 
@@ -59,7 +61,7 @@
 │   ├── App.vue / main.ts            # 根组件与前端入口
 │   ├── components/                  # 可复用 Vue 组件
 │   │   └── field-editors/           # 按字段类型自动选择的值编辑器
-│   ├── composables/                 # 组合式逻辑（自动布局、视口、回收站、剪贴板清除等）
+│   ├── composables/                 # 组合式逻辑（自动布局、视口、回收站、剪贴板清除、备份进度等）
 │   ├── dictionary/                  # 字典状态管理
 │   ├── field-types/                 # 字段类型系统
 │   ├── i18n/                        # 国际化（<模块>/<locale>.json）
@@ -69,7 +71,7 @@
 │   ├── utils/                       # 工具函数
 │   └── views/                       # 页面与页面级组件
 │       ├── Home.vue                 # 首页（注册 / 打开数据库）
-│       ├── HomeComponents/          # 首页专用组件（归档管理、删除数据库对话框）
+│       ├── HomeComponents/          # 首页专用组件（归档管理、备份与还原对话框、删除数据库对话框）
 │       ├── DatabaseView.vue         # 数据库页面基座
 │       ├── CanvasUniverseView.vue   # 画布宇宙页面
 │       ├── CanvasView.vue           # 画布页面
@@ -86,6 +88,8 @@
 │   │   │   ├── preference/          # 用户偏好
 │   │   │   ├── metadata/            # 用户数据库元数据
 │   │   │   ├── clipboard/           # 剪贴板
+│   │   │   ├── backup/              # 数据目录级备份与还原（Reed-Solomon + tar 流）
+│   │   │   ├── reclaim/             # 还原后刷新各业务模块的内存 connection（避免被旧数据覆盖还原结果）
 │   │   │   └── user_database/       # 用户数据库（canvas / node / edge / node_field /
 │   │   │                            # template / dictionary / attachment / viewport /
 │   │   │                            # log / export / field_type / lifecycle / registry）
@@ -118,6 +122,40 @@
     ├── user_database.sqlite               # 加密的用户数据库
     └── attachment/<attachment_uuid>.bin   # 加密的附件文件
 ```
+
+整个数据目录（除 `logs/` 外）可被打包为一个 `.ibackup` 文件用于备份与还原，详见下节。
+
+---
+
+## 数据备份与还原
+
+### 备份文件格式
+
+`.ibackup` 文件采用自定义二进制格式，由三段拼接而成：
+
+```text
++--------------------+--------------------------+--------------------+
+| Header (64B)       | Shard 校验和表（变长） | Shard 区（变长）   |
++--------------------+--------------------------+--------------------+
+```
+
+- **Header**：固定 64 字节，前 8 字节 magic `"IBACKUP\0"` 防误识别，再依次记录格式版本（当前 v1）、原始字节长度、shard 划分参数、冗余比例与原始字节流 SHA-256。
+- **Shard 校验和表**：N+M 条 32 字节 SHA-256，用于还原时定位坏块并触发 RS 重建。校验和表前置使备份文件尾部仅含 shard 数据：写入中断造成的尾部缺失只损失 shard，校验和表始终完整可读。
+- **Shard 区**：原始数据经 Reed-Solomon（GF(2^8)）编码后产生的 N 个数据 shard 与 M 个校验 shard，等长排列；任意至多 M 个 shard 损坏或缺失都能被恢复。
+
+### 备份流程
+
+1. 触发 `preference_save` 与 `metadata_save`，避免漏写最近修改。
+2. 递归遍历数据目录（跳过 `logs/` 与符号链接），按 tar 格式生成字节流。
+3. 按用户设定的冗余比例（默认 5%）自适应决定 (N, M, shard_size) 并完成 Reed-Solomon 编码。
+4. 按 `Header | Shard 校验和表 | Shard 区` 组装写入用户选定的目标文件；后端会强制要求目标路径位于数据目录之外，避免覆盖自身数据。
+
+### 还原流程
+
+1. **校验探测（probe）**：仅校验 Header 与 shard SHA-256，返回是否可还原、损坏 shard 数等结构化结论，不修改任何数据；尾部截断的备份按缺失 shard 计入损坏数，缺失不超过冗余容量时仍判定为可还原。
+2. **确认还原（restore）**：执行完整还原 —— 读 Header → 校验 shard（shard 区容错读取，尾部截断的 shard 按缺失处理，交给 RS 重建）→ 必要时 RS 重建 → 解压到系统 temp 目录下的 `inet-restore-<pid>-<ts>/` → 清空数据目录（保留 `logs/`）→ 移动临时目录到数据目录（跨设备时 fallback 到 copy+remove）。临时目录由 RAII 守卫清理，任何错误路径（含解压失败、panic）都不残留。
+3. **内存连接刷新（reclaim）**：触发 `reclaim_preference` / `reclaim_metadata` / `reclaim_user_database` 让各业务模块重新持有磁盘文件所有权，避免关闭应用时旧内存覆盖还原结果。
+4. 还原完成后用户在首页对话框中点击「完成」按钮即可刷新页面。
 
 ---
 

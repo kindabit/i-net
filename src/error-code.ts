@@ -54,6 +54,7 @@ export type ErrorCodeVariant =
   | "InvalidNodeFieldType"
   | "InvalidNodeId"
   | "InvalidNodePort"
+  | "InvalidPath"
   | "InvalidTemplateId"
   | "InvalidUserDatabaseId"
   | "MultipleDataVersion"

@@ -6,6 +6,8 @@
     "password-confirm": "Confirm password",
     "back": "Back",
     "archive-management-tooltip": "Archive/Delete Database",
+    "backup-tooltip": "Backup Data Directory",
+    "restore-tooltip": "Restore Data Directory",
     "validation": {
       "name-empty": "Database name cannot be empty",
       "password-empty": "Password cannot be empty",
@@ -33,6 +35,44 @@
       "password-label": "Database password",
       "cancel": "Cancel",
       "confirm": "Delete"
+    },
+    "backup": {
+      "title": "Backup Data Directory",
+      "data-size": "Current data directory size: {size}",
+      "ratio-label": "Redundancy Ratio",
+      "ratio-hint": "Parity shards = data shards × this ratio. Higher ratio tolerates more corruption at the cost of a larger backup file.",
+      "estimated-size": "Estimated backup size: {size}",
+      "volume-structure": "The backup file consists of Reed-Solomon data and parity shards; its size is about (1 + redundancy ratio) times the source data.",
+      "start": "Start Backup",
+      "cancel": "Cancel",
+      "in-progress": "Backing up…",
+      "phase-backup-pack": "Packing data directory",
+      "phase-backup-encode": "Generating parity data",
+      "phase-backup-write": "Writing backup file",
+      "success": "Backup saved",
+      "cancelled": "Save cancelled"
+    },
+    "restore": {
+      "title": "Restore Data Directory",
+      "warning-text": "Restoring will overwrite all user data and cannot be undone.",
+      "select-file": "Select Backup File",
+      "verify-result-recoverable": "Backup file passed verification, ready to restore",
+      "verify-result-recoverable-with-loss": "Backup file has {lost} corrupted block(s), still recoverable",
+      "verify-result-irrecoverable": "Backup file is too damaged to restore",
+      "confirm-button": "Confirm Restore",
+      "cancel": "Cancel",
+      "in-progress": "Restoring…",
+      "phase-restore-read-header": "Reading file header",
+      "phase-restore-verify": "Verifying integrity",
+      "phase-restore-decode": "Decoding with error correction",
+      "phase-restore-unpack": "Extracting files",
+      "phase-restore-clear": "Clearing current data",
+      "phase-restore-move": "Writing new data"
+    },
+    "restore-success": {
+      "title": "Restore Successful",
+      "text": "Click the button below to refresh the page and view your restored data.",
+      "button": "Done"
     }
   }
 }

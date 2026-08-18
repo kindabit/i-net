@@ -851,4 +851,78 @@ export async function userDatabaseExport(
   });
 }
 
+// ==================== backup ====================
+
+/**
+ * 全量备份数据目录（除日志外）；由后端弹出系统保存对话框，用户在系统保存对话框中取消时返回 false。
+ * 备份过程中会通过 Tauri Event 上报进度（事件名 "backup-progress"）。
+ * @param redundancyRatio 冗余比例，范围 (0, 1)，如 0.05 表示增加 5% 体积
+ * @returns 备份完成返回 true，用户取消系统对话框返回 false
+ */
+export async function backupBackup(redundancyRatio: number): Promise<boolean> {
+  return invoke<boolean>("backup_backup", { redundancyRatio });
+}
+
+/**
+ * 全量还原数据目录；由后端执行完整还原流程。
+ * 路径必选（由 `restoreProbe` 选定），不再有"后端弹对话框"的路径。
+ * 还原过程中通过 Tauri Event 上报进度（事件名 "restore-progress"）。
+ * @param sourcePath 备份文件绝对路径（必选，由 restoreProbe 选定）
+ * @returns 还原完成即返回；失败抛 ErrorCode
+ */
+export async function backupRestore(sourcePath: string): Promise<void> {
+  return invoke<void>("backup_restore", { sourcePath });
+}
+
+/** 后端探测备份文件的返回结构。 */
+export interface RestoreProbeResult {
+  /** 是否可还原（损坏 shard 数 ≤ parity）。 */
+  recoverable: boolean;
+  /** 损坏 shard 数。 */
+  lost: number;
+  /** 可恢复上限（parity shard 数）。 */
+  limit: number;
+  /** 探测通过的文件路径，可继续用于 restoreDataDirectory。 */
+  source_path: string;
+}
+
+/**
+ * 探测备份文件：弹文件对话框、校验 Header 与 shard SHA-256，但不替换数据。
+ * @returns 用户取消返回 null；否则返回探测结果（含可继续使用的源路径）
+ */
+export async function backupRestoreProbe(): Promise<RestoreProbeResult | null> {
+  return invoke<RestoreProbeResult | null>("backup_restore_probe");
+}
+
+/**
+ * 查询当前数据目录（除日志外）的总字节数，用于前端预估备份体积。
+ * @returns 数据目录总字节数
+ */
+export async function backupDataDirectorySize(): Promise<number> {
+  return invoke<number>("backup_data_directory_size");
+}
+
+/**
+ * 还原后刷新 preference 模块的内存 connection，让它重新持有磁盘文件的所有权。
+ * 必须与 reclaimMetadata / reclaimUserDatabase 一起调用，否则 exit-save 会用陈旧内存覆盖还原结果。
+ */
+export async function reclaimPreference(): Promise<void> {
+  return invoke<void>("reclaim_preference");
+}
+
+/**
+ * 还原后刷新 metadata 模块的内存 connection，让它重新持有磁盘文件的所有权。
+ */
+export async function reclaimMetadata(): Promise<void> {
+  return invoke<void>("reclaim_metadata");
+}
+
+/**
+ * 还原后刷新 user_database 状态：若当前有 user_database 处于打开状态则强制关闭。
+ * Home.vue 路径下通常无 user_database 打开，属于防御性兜底。
+ */
+export async function reclaimUserDatabase(): Promise<void> {
+  return invoke<void>("reclaim_user_database");
+}
+
 

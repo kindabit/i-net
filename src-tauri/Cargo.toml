@@ -48,5 +48,8 @@ zstd = "0.13"
 lzma-rust = "0.1.7"
 flacenc = "0.5"
 claxon = "0.4"
+reed-solomon-erasure = "6"
+tar = "0.4"
+walkdir = "2"
 
 [dev-dependencies]

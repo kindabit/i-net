@@ -17,6 +17,9 @@ import {
   metadataList,
   metadataRegister,
   metadataSave,
+  reclaimMetadata,
+  reclaimPreference,
+  reclaimUserDatabase,
   userDatabaseCanvasList,
   userDatabaseLifecycleInitialize,
   userDatabaseRegistryGet,
@@ -26,6 +29,9 @@ import type { Metadata } from "@/api-types";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import AutoCompleteField from "@/components/AutoCompleteField.vue";
 import ArchiveManagementDialog from "@/views/HomeComponents/ArchiveManagementDialog.vue";
+import BackupDialog from "@/views/HomeComponents/BackupDialog.vue";
+import RestoreDialog from "@/views/HomeComponents/RestoreDialog.vue";
+import RestoreSuccessDialog from "@/views/HomeComponents/RestoreSuccessDialog.vue";
 
 const router = useRouter();
 
@@ -60,6 +66,15 @@ const passwordInputRef = useTemplateRef<{ focus: () => void }>(
 const archiveDialogRef = useTemplateRef<
   InstanceType<typeof ArchiveManagementDialog>
 >("archiveDialogRef");
+const backupDialogRef = useTemplateRef<InstanceType<typeof BackupDialog>>(
+  "backupDialogRef",
+);
+const restoreDialogRef = useTemplateRef<InstanceType<typeof RestoreDialog>>(
+  "restoreDialogRef",
+);
+const restoreSuccessDialogRef = useTemplateRef<
+  InstanceType<typeof RestoreSuccessDialog>
+>("restoreSuccessDialogRef");
 
 onMounted(async () => {
   void refreshMetadatas();
@@ -79,6 +94,23 @@ onMounted(async () => {
 async function refreshMetadatas() {
   try {
     metadatas.value = await metadataList(false);
+  } catch (error) {
+    snackbarErrorCode(error);
+  }
+}
+
+/**
+ * 还原成功后刷新三个模块的内存 connection，然后让用户在 success dialog
+ * 中点击「重启」销毁窗口以彻底重置后端状态。
+ * 任一 reclaim 失败则弹错误，不显示成功对话框、不销毁窗口。
+ * @returns 无返回值
+ */
+async function onRestoreSuccess() {
+  try {
+    await reclaimPreference();
+    await reclaimMetadata();
+    await reclaimUserDatabase();
+    restoreSuccessDialogRef.value?.open();
   } catch (error) {
     snackbarErrorCode(error);
   }
@@ -256,22 +288,53 @@ async function submitPassword() {
             </div>
           </Transition>
         </div>
-        <VTooltip :text="t('home.archive-management-tooltip')" location="top">
-          <template #activator="{ props }">
-            <VBtn
-              v-bind="props"
-              class="archive-btn"
-              icon="mdi-delete-outline"
-              color="error"
-              variant="text"
-              :aria-label="t('home.archive-management-tooltip')"
-              @click="archiveDialogRef?.open()"
-            />
-          </template>
-        </VTooltip>
+        <div class="bottom-actions">
+          <div class="frosted-btns frosted-glass">
+            <!-- 归档管理：保留原有功能入口 -->
+            <VTooltip :text="t('home.archive-management-tooltip')" location="top">
+              <template #activator="{ props }">
+                <VIconBtn
+                  v-bind="props"
+                  icon="mdi-delete-outline"
+                  color="error"
+                  variant="text"
+                  :aria-label="t('home.archive-management-tooltip')"
+                  @click="archiveDialogRef?.open()"
+                />
+              </template>
+            </VTooltip>
+            <!-- 备份：全量备份数据目录 -->
+            <VTooltip :text="t('home.backup-tooltip')" location="top">
+              <template #activator="{ props }">
+                <VIconBtn
+                  v-bind="props"
+                  icon="mdi-content-save-outline"
+                  variant="text"
+                  :aria-label="t('home.backup-tooltip')"
+                  @click="backupDialogRef?.open()"
+                />
+              </template>
+            </VTooltip>
+            <!-- 还原：从备份恢复数据目录 -->
+            <VTooltip :text="t('home.restore-tooltip')" location="top">
+              <template #activator="{ props }">
+                <VIconBtn
+                  v-bind="props"
+                  icon="mdi-restore"
+                  variant="text"
+                  :aria-label="t('home.restore-tooltip')"
+                  @click="restoreDialogRef?.open()"
+                />
+              </template>
+            </VTooltip>
+          </div>
+        </div>
       </div>
     </Transition>
     <ArchiveManagementDialog ref="archiveDialogRef" @update="refreshMetadatas" />
+    <BackupDialog ref="backupDialogRef" />
+    <RestoreDialog ref="restoreDialogRef" @success="onRestoreSuccess" />
+    <RestoreSuccessDialog ref="restoreSuccessDialogRef" />
   </div>
 </template>
 
@@ -328,10 +391,18 @@ async function submitPassword() {
   }
 }
 
-.archive-btn {
+.bottom-actions {
   position: absolute;
   bottom: 1rem;
   right: 1rem;
+  z-index: 10;
+}
+
+.frosted-btns {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
 }
 
 // 入场动画：轻微上浮淡入
