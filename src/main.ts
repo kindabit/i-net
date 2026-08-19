@@ -13,6 +13,7 @@ import "@vue-flow/core/dist/theme-default.css";
 import "@vue-flow/controls/dist/style.css";
 import "@/styles/vue-flow.scss";
 import "@/styles/frosted-glass.scss";
+import "@/styles/global.scss";
 
 import { createApp } from "vue";
 

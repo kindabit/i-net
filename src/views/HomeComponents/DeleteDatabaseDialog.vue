@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { t } from "@/i18n";
+import PasswordField from "@/components/PasswordField.vue";
 
 const emit = defineEmits<{
   /** 确认删除 */
@@ -73,12 +74,9 @@ defineExpose({ open, close });
           variant="outlined"
           hide-details="auto"
         />
-        <VTextField
+        <PasswordField
           v-model="passwordInput"
           :label="t('home.delete-confirm.password-label')"
-          type="password"
-          variant="outlined"
-          hide-details="auto"
           class="password-field"
           @keydown.enter.prevent="canConfirm && onConfirm()"
         />

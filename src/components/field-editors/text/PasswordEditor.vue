@@ -1,5 +1,12 @@
+<!--
+  密码字段值编辑器。
+
+  基于 PasswordField 提供常驻的可见性切换图标，并通过其 append-inner
+  插槽追加密码生成器入口图标。
+-->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
+import PasswordField from "@/components/PasswordField.vue";
 import PasswordGeneratorDialog from "./PasswordGeneratorDialog.vue";
 
 const props = defineProps<{
@@ -13,8 +20,6 @@ const emit = defineEmits<{
 
 const text = ref<string>(props.modelValue ?? "");
 
-const visible = ref(false);
-
 watch(
   () => props.modelValue,
   (v) => {
@@ -25,14 +30,6 @@ watch(
 function onInput() {
   emit("update:modelValue", text.value === "" ? null : text.value);
 }
-
-const inputType = computed<string>(() =>
-  visible.value ? "text" : "password"
-);
-
-const eyeIcon = computed<string>(() =>
-  visible.value ? "mdi-eye-off" : "mdi-eye"
-);
 
 const pgDialogRef = ref<InstanceType<typeof PasswordGeneratorDialog> | null>(null);
 
@@ -46,29 +43,21 @@ async function openPasswordGenerator() {
 </script>
 
 <template>
-  <VTextField
+  <PasswordField
     v-model="text"
-    :type="inputType"
     :readonly="readonly"
-    variant="outlined"
     density="compact"
-    hide-details="auto"
     @update:model-value="onInput()"
   >
     <template #append-inner>
       <VIcon
-        :icon="eyeIcon"
-        class="cursor-pointer me-1"
-        @click="visible = !visible"
-      />
-      <VIcon
         v-if="!readonly"
         icon="mdi-auto-fix"
-        class="cursor-pointer"
+        class="cursor-pointer ms-1"
         @click="openPasswordGenerator()"
       />
     </template>
-  </VTextField>
+  </PasswordField>
   <PasswordGeneratorDialog ref="pgDialogRef" />
 </template>
 
@@ -77,7 +66,7 @@ async function openPasswordGenerator() {
   cursor: pointer;
 }
 
-.me-1 {
-  margin-inline-end: 0.25rem;
+.ms-1 {
+  margin-inline-start: 0.25rem;
 }
 </style>

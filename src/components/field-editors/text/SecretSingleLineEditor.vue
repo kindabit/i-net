@@ -1,5 +1,11 @@
+<!--
+  单行密文字段值编辑器。
+
+  基于 PasswordField 提供常驻的可见性切换图标。
+-->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
+import PasswordField from "@/components/PasswordField.vue";
 
 const props = defineProps<{
   modelValue: string | null;
@@ -12,8 +18,6 @@ const emit = defineEmits<{
 
 const text = ref<string>(props.modelValue ?? "");
 
-const visible = ref(false);
-
 watch(
   () => props.modelValue,
   (v) => {
@@ -24,26 +28,13 @@ watch(
 function onInput() {
   emit("update:modelValue", text.value === "" ? null : text.value);
 }
-
-const inputType = computed<string>(() =>
-  visible.value ? "text" : "password"
-);
-
-const eyeIcon = computed<string>(() =>
-  visible.value ? "mdi-eye-off" : "mdi-eye"
-);
 </script>
 
 <template>
-  <VTextField
+  <PasswordField
     v-model="text"
-    :type="inputType"
-    :append-inner-icon="eyeIcon"
     :readonly="readonly"
-    variant="outlined"
     density="compact"
-    hide-details="auto"
     @update:model-value="onInput()"
-    @click:append-inner="visible = !visible"
   />
 </template>

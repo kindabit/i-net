@@ -28,6 +28,7 @@ import {
 import type { Metadata } from "@/api-types";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import AutoCompleteField from "@/components/AutoCompleteField.vue";
+import PasswordField from "@/components/PasswordField.vue";
 import ArchiveManagementDialog from "@/views/HomeComponents/ArchiveManagementDialog.vue";
 import BackupDialog from "@/views/HomeComponents/BackupDialog.vue";
 import RestoreDialog from "@/views/HomeComponents/RestoreDialog.vue";
@@ -62,6 +63,9 @@ const nameInputRef = useTemplateRef<InstanceType<typeof AutoCompleteField>>(
 );
 const passwordInputRef = useTemplateRef<{ focus: () => void }>(
   "passwordInputRef",
+);
+const passwordConfirmInputRef = useTemplateRef<{ focus: () => void }>(
+  "passwordConfirmInputRef",
 );
 const archiveDialogRef = useTemplateRef<
   InstanceType<typeof ArchiveManagementDialog>
@@ -205,6 +209,18 @@ async function submitPassword() {
     submitting.value = false;
   }
 }
+
+/**
+ * 第一个密码框的回车处理：新建数据库且确认密码框为空时，聚焦确认密码框而非直接提交。
+ * @returns 无返回值
+ */
+function onPasswordEnter() {
+  if (!isExistingDatabase.value && passwordConfirm.value === "") {
+    passwordConfirmInputRef.value?.focus();
+    return;
+  }
+  void submitPassword();
+}
 </script>
 
 <template>
@@ -243,28 +259,23 @@ async function submitPassword() {
             <div v-else key="password" class="panel">
               <div class="input-row">
                 <div class="input-fields">
-                  <VTextField
+                  <PasswordField
                     ref="passwordInputRef"
                     v-model="password"
-                    type="password"
                     :label="
                       isExistingDatabase
                         ? t('home.password')
                         : t('home.password-create')
                     "
                     :error-messages="passwordError"
-                    variant="outlined"
-                    hide-details="auto"
                     class="input-field"
-                    @keydown.enter.prevent="submitPassword"
+                    @keydown.enter.prevent="onPasswordEnter"
                   />
-                  <VTextField
+                  <PasswordField
                     v-if="!isExistingDatabase"
+                    ref="passwordConfirmInputRef"
                     v-model="passwordConfirm"
-                    type="password"
                     :label="t('home.password-confirm')"
-                    variant="outlined"
-                    hide-details="auto"
                     class="input-field"
                     @keydown.enter.prevent="submitPassword"
                   />

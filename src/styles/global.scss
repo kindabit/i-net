@@ -1,0 +1,4 @@
+// 隐藏 WebView2 原生的密码显示按钮，应用内统一使用 PasswordField 的可见性切换图标
+input[type="password"]::-ms-reveal {
+  display: none;
+}
