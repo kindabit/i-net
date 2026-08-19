@@ -10,6 +10,7 @@ mod physical_delete;
 mod restore;
 mod search;
 mod set_color;
+mod shadow_direction;
 
 pub use color_list::color_list;
 pub use create::create;
@@ -23,3 +24,4 @@ pub use physical_delete::physical_delete;
 pub use restore::restore;
 pub use search::search;
 pub use set_color::set_color;
+pub use shadow_direction::shadow_direction;

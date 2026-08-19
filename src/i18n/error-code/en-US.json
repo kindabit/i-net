@@ -246,6 +246,18 @@
     "EmptyFilePath": {
       "title": "Empty file path",
       "text": "File path cannot be empty"
+    },
+    "EdgeDeleteDisconnectsNodes": {
+      "title": "Deleting edge will disconnect nodes",
+      "text": "The following nodes will lose connection: {nodes}"
+    },
+    "InvalidShadowEdge": {
+      "title": "Invalid shadow node connection",
+      "text": "An inflow shadow can only be the source of a connection, an outflow shadow can only be the target, and a shadow node cannot connect to a canvas node"
+    },
+    "NodeIsShadow": {
+      "title": "Operation not allowed on shadow node",
+      "text": "A shadow node is a reference display of a node from another canvas and does not support this operation"
     }
   }
 }

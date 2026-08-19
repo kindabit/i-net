@@ -14,12 +14,16 @@ use crate::util::file_system_util;
 /// - `id`: 节点 id。
 ///
 /// # 返回值
-/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，影子节点时返回 `ErrorCode::NodeIsShadow`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn physical_delete(id: &str) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
+    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
+    if node.shadow_id.is_some() {
+        return Err(ErrorCode::NodeIsShadow);
+    }
     // 清理附件磁盘文件：先删文件再删节点行，附件元数据由外键随节点行级联删除。
     let attachments = attachment::dao::select_by_node_ids(&connection, &[id.to_string()])?;
     let path = crate::state::path();

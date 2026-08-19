@@ -142,14 +142,25 @@ function onFlowInit(instance: VueFlowStore) {
 
 // 节点
 
+/**
+ * 打开指定节点的编辑对话框。
+ *
+ * 普通节点以编辑模式打开；影子节点（data.shadowId 非 null）以只读模式打开原始节点的对话框，
+ * 字段数据通过传入的原始节点 id 从 userDatabaseNodeFieldGet 加载。只读模式不会
+ * resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
+ * @param id 节点 id（影子节点是画布中的虚拟节点 id，原始节点 id 通过 data.shadowId 获取）
+ * @returns 无返回值
+ */
 async function onNodeEdit(id: string) {
   const node = nodes.value.find((n) => n.id === id);
   if (!node) return;
-  const result = await editNodeDialogRef.value?.open({
-    id,
-    title: node.data.title,
-    subTitle: node.data.subTitle,
-  });
+  // 影子节点以只读形式打开原始节点的编辑对话框：传入原始节点 id，字段从原始节点加载；
+  // 只读模式不会 resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
+  const shadowId = node.data.shadowId as string | null;
+  const result = await editNodeDialogRef.value?.open(
+    { id: shadowId ?? id, title: node.data.title, subTitle: node.data.subTitle },
+    { readonly: !!shadowId },
+  );
   if (!result) return;
   node.data.title = result.title;
   node.data.subTitle = result.subTitle;
@@ -363,6 +374,29 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
+ * 连接合法性校验：不允许自环；出向影子只能作为目标（只有入度），入向影子只能作为源（只有出度）；
+ * 影子节点不允许与画布节点相连（避免产生影子的影子；后端有 InvalidShadowEdge 兜底）。
+ * @param connection vue-flow 连接对象
+ * @returns 是否允许建立该连接
+ */
+function isValidConnection(connection: Connection): boolean {
+  if (connection.source === connection.target) return false;
+  const source = nodes.value.find((n) => n.id === connection.source);
+  const target = nodes.value.find((n) => n.id === connection.target);
+  if (!source || !target) return false;
+  if (source.data.shadowDirection === "outflow") return false;
+  if (target.data.shadowDirection === "inflow") return false;
+  // "画布节点"判定须排除影子节点：影子节点的 canvasId 是后端从原始节点合并来的，
+  // 它自身的 canvas_ref_id 为 null，后端语义上不是画布节点。
+  const sourceIsShadow = !!source.data.shadowId;
+  const targetIsShadow = !!target.data.shadowId;
+  const sourceIsCanvasNode = !sourceIsShadow && !!source.data.canvasId;
+  const targetIsCanvasNode = !targetIsShadow && !!target.data.canvasId;
+  if ((sourceIsShadow && targetIsCanvasNode) || (targetIsShadow && sourceIsCanvasNode)) return false;
+  return true;
+}
+
+/**
  * 编辑边：打开编辑对话框，用户确认后调用 API 更新边的标题和详情。
  * 使用 Vue Flow 的 updateEdgeData 更新边数据并触发重新渲染。
  * @param id 边 id
@@ -440,7 +474,8 @@ async function onEdgeEdit(id: string): Promise<void> {
       :min-zoom="0.1"
       :snap-to-grid="true"
       :snap-grid="snapGrid"
-      :is-valid-connection="connection => connection.source !== connection.target"
+      :delete-key-code="null"
+      :is-valid-connection="isValidConnection"
       @node-drag-stop="onNodeDragStop"
       @viewport-change="viewport.save"
       @init="onFlowInit"

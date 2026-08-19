@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ function onInput() {
 <template>
   <VTextField
     v-model="text"
+    :readonly="readonly"
     placeholder="0"
     variant="outlined"
     density="compact"

@@ -21,4 +21,7 @@ pub struct Node {
     pub deleted: bool,
     /// 存储前端序列化的自定义颜色，空串表示使用默认色，后端不理解其内容。
     pub color: String,
+    /// 影子节点指向的原始节点 id；None 表示普通节点，Some 表示该节点是影子节点。
+    /// 影子节点只有位置和 shadow_id 有意义，展示数据（标题、副标题、颜色等）均从原始节点拉取。
+    pub shadow_id: Option<String>,
 }

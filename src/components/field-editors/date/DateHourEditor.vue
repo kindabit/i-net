@@ -20,6 +20,7 @@ function partsToMs(parts: DateTimeParts, unit: string): number {
 
 const props = defineProps<{
   modelValue: number | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -133,7 +134,8 @@ function onTimeClear() {
       <template #activator="{ props: menuProps }">
         <VTextField
           :model-value="dateDisplay"
-          readonly
+          :readonly="!readonly"
+          :disabled="readonly"
           clearable
           prepend-inner-icon="mdi-calendar"
           variant="outlined"
@@ -156,7 +158,8 @@ function onTimeClear() {
       <template #activator="{ props: menuTimeProps }">
         <VTextField
           :model-value="timePart ?? ''"
-          readonly
+          :readonly="!readonly"
+          :disabled="readonly"
           clearable
           prepend-inner-icon="mdi-clock-outline"
           variant="outlined"

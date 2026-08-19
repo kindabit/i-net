@@ -5,14 +5,24 @@
   显示节点标题和副标题，canvasId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
   四个方向均为出口（source）。
   节点为固定宽高（160×80，背景网格 20px 的整数倍），标题/副标题过长时显示省略号。
-  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格），包含编辑、附件、自定义颜色与逻辑删除按钮。
+  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、附件、自定义颜色与逻辑删除四个按钮，
+  影子节点只显示编辑按钮。
   支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
+
+  影子节点（data.shadowId 非 null）的渲染差异：
+  - 边框使用虚线，整体略降透明度，提示其为对画布外原始节点的引用。
+  - 当 data.shadowDirection 非 null 时，在节点对应外侧渲染一条带行进动画的虚拟边，
+    表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
+    点击该虚拟边可快捷跳转至父画布并尽量定位原始节点。
+  - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { Handle, Position, useNode } from "@vue-flow/core";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { t } from "@/i18n";
+import { userDatabaseCanvasList } from "@/api";
+import { snackbarErrorCode } from "@/composables/use-snackbar";
 import type { DataNodeData } from "@/vf-convert";
 import { setCanvasNavIntent } from "./canvas-route-transition";
 import { deserializeNodeColor } from "@/node-colors";
@@ -22,6 +32,7 @@ import NodeDebugOverlay from "./NodeDebugOverlay.vue";
 // #endif
 
 const router = useRouter();
+const route = useRoute();
 
 const props = defineProps<{
   id: string;
@@ -51,6 +62,7 @@ const handleStyle = computed(() => {
 
 function onDblClick() {
   // 普通节点双击打开编辑对话框，画布节点双击进入子画布
+  // 影子节点的 canvasId 由后端合并自原始节点，画布节点原始 → 进入子画布，普通节点原始 → 打开编辑对话框
   if (props.data.canvasId === null) {
     emit("edit", props.id);
     return;
@@ -58,12 +70,41 @@ function onDblClick() {
   setCanvasNavIntent("drill-in");
   router.push({ name: "canvas", params: { canvasId: props.data.canvasId } });
 }
+
+/**
+ * 点击影子节点虚拟边：跳转至当前画布的父画布，并尽量通过 nodeId 定位影子对应的原始节点。
+ * 原始节点已逻辑删除或父画布不存在（数据不一致）时仅完成可确定的跳转或静默不跳转。
+ * 输入：无。
+ * 返回：无返回值。
+ */
+async function onShadowVirtualEdgeClick() {
+  if (!props.data.shadowId || !props.data.shadowDirection) return;
+  const canvasId = route.params.canvasId;
+  if (typeof canvasId !== "string" || canvasId === "") return;
+  try {
+    const canvases = await userDatabaseCanvasList(false);
+    const current = canvases.find((c) => c.id === canvasId);
+    if (!current || current.parent_id === null) return;
+    setCanvasNavIntent("drill-out");
+    await router.push({
+      name: "canvas",
+      params: { canvasId: current.parent_id },
+      query: { nodeId: props.data.shadowId },
+    });
+  } catch (e) {
+    snackbarErrorCode(e);
+  }
+}
 </script>
 
 <template>
   <div
     class="data-node-card"
-    :class="{ 'data-node-card--selected': selected }"
+    :class="{
+      'data-node-card--selected': selected,
+      'data-node-card--shadow': !!data.shadowId,
+      'data-node-card--origin-deleted': !!data.shadowOriginDeleted,
+    }"
     :style="{
       backgroundColor: colors.background,
       color: colors.title,
@@ -90,6 +131,7 @@ function onDblClick() {
           @dblclick.stop
         />
         <VBtn
+          v-if="!data.shadowId"
           icon="mdi-paperclip"
           size="x-small"
           variant="text"
@@ -102,6 +144,7 @@ function onDblClick() {
           @dblclick.stop
         />
         <VBtn
+          v-if="!data.shadowId"
           icon="mdi-palette-outline"
           size="x-small"
           variant="text"
@@ -114,6 +157,7 @@ function onDblClick() {
           @dblclick.stop
         />
         <VBtn
+          v-if="!data.shadowId"
           icon="mdi-delete-outline"
           size="x-small"
           variant="text"
@@ -127,6 +171,28 @@ function onDblClick() {
         />
       </div>
     </Transition>
+    <div
+      v-if="data.shadowDirection"
+      class="shadow-virtual-edge"
+      :class="`shadow-virtual-edge--${data.shadowDirection}`"
+      :title="t(`database.canvas.shadow-${data.shadowDirection}-hint`)"
+      @click.stop="onShadowVirtualEdgeClick"
+      @pointerdown.stop
+      @mousedown.stop
+      @dblclick.stop
+    >
+      <svg viewBox="0 0 40 10" width="2.5rem" height="0.625rem">
+        <line x1="0" y1="5" x2="32" y2="5" class="shadow-virtual-edge-line" />
+        <path d="M32 1 L40 5 L32 9 Z" class="shadow-virtual-edge-arrow" />
+      </svg>
+    </div>
+    <VIcon
+      v-if="data.shadowOriginDeleted"
+      icon="mdi-delete-outline"
+      size="x-small"
+      class="shadow-origin-deleted-badge"
+      :title="t('database.canvas.shadow-origin-deleted')"
+    />
     <Handle type="source" :position="Position.Top" id="top" :style="handleStyle" />
     <Handle type="source" :position="Position.Bottom" id="bottom" :style="handleStyle" />
     <Handle type="source" :position="Position.Left" id="left" :style="handleStyle" />
@@ -180,6 +246,18 @@ function onDblClick() {
   &--selected {
     border-color: rgb(var(--v-theme-primary));
     box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+  }
+
+  // 影子节点：虚线边框 + 略降透明度，dashed 与选中边框色正交
+  &--shadow {
+    border-style: dashed;
+    opacity: 0.8;
+  }
+
+  // 影子节点的原始节点已被逻辑删除：灰化 + 进一步降透明度
+  &--origin-deleted {
+    filter: grayscale(1);
+    opacity: 0.55;
   }
 }
 
@@ -238,6 +316,73 @@ function onDblClick() {
 .node-actions-leave-to {
   opacity: 0;
   transform: translateY(-0.25rem);
+}
+
+/** 影子节点的虚拟边：表示指向画布之外的度数；可点击跳转父画布，位置在卡片外侧且不覆盖 Handle */
+.shadow-virtual-edge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+  color: rgb(var(--v-theme-on-surface));
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  // inflow：入向影子，入度来自画布之外，渲染在节点左侧（right: 100%），箭头朝右进入节点
+  &--inflow {
+    right: 100%;
+    margin-right: 0.125rem;
+  }
+
+  // outflow：出向影子，出度指向画布之外，渲染在节点右侧（left: 100%），箭头自然朝右离开节点
+  &--outflow {
+    left: 100%;
+    margin-left: 0.125rem;
+  }
+}
+
+/** 虚拟边线段：虚线 + 行进动画 */
+.shadow-virtual-edge-line {
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 0.25rem 0.125rem;
+  fill: none;
+  animation: shadow-virtual-edge-flow 0.6s linear infinite;
+}
+
+/** 虚拟边箭头 */
+.shadow-virtual-edge-arrow {
+  stroke: currentColor;
+  stroke-width: 0.5;
+  stroke-linejoin: round;
+  fill: currentColor;
+  fill-opacity: 0.8;
+}
+
+@keyframes shadow-virtual-edge-flow {
+  from {
+    stroke-dashoffset: 0.375rem;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/** 影子节点原始节点已删除的角标：右上角绝对定位，不参与交互 */
+.shadow-origin-deleted-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.25rem;
+  color: rgb(var(--v-theme-error));
+  opacity: 0.85;
+  pointer-events: none;
 }
 </style>
 

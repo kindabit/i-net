@@ -14,12 +14,16 @@ use crate::error_code::ErrorCode;
 /// - `y`: 新 y 坐标。
 ///
 /// # 返回值
-/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，影子节点时返回 `ErrorCode::NodeIsShadow`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
+    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
+    if node.shadow_id.is_some() {
+        return Err(ErrorCode::NodeIsShadow);
+    }
     let old_x = node.x;
     let old_y = node.y;
     node.deleted = false;

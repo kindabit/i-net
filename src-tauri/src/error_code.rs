@@ -31,6 +31,8 @@ pub enum ErrorCode {
     DuplicateNodeFieldName { name: String },
     /// 相同源节点和目标节点的边已经存在。
     EdgeAlreadyExists,
+    /// 删除该边会物理删除影子节点并使所列节点失去连接，包含受影响节点的标题列表。
+    EdgeDeleteDisconnectsNodes { nodes: Vec<String> },
     /// 新建该边会在画布内形成环。
     EdgeWouldFormCycle,
     /// 画布名称为空。
@@ -111,6 +113,8 @@ pub enum ErrorCode {
     InvalidNodePort { port: String },
     /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
     InvalidPath { detail: String },
+    /// 影子节点的连线方向不合法或影子节点不允许与画布节点相连。
+    InvalidShadowEdge,
     /// 模板 id 无效，包含模板 id。
     InvalidTemplateId { id: String },
     /// 用户数据库 id 无效，包含数据库 id。
@@ -137,6 +141,8 @@ pub enum ErrorCode {
     NodeFieldValueKindMismatch { field_type: String, expected: String, actual: String },
     /// 节点字段值未通过校验，包含字段名称。
     NodeFieldValueValidationFailed { name: String },
+    /// 该操作不允许作用于影子节点。
+    NodeIsShadow,
     /// 根画布不可删除。
     RootCanvasCannotBeDeleted,
     /// 模板名称已经存在，包含重复的模板名称。

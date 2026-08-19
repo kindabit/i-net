@@ -40,6 +40,9 @@
       "new-node-subtitle": "New Node",
       "new-canvas-name": "New Canvas",
       "delete-edge": "Delete Edge",
+      "delete-edge-disconnect-title": "Deleting this edge will disconnect nodes",
+      "delete-edge-disconnect-text": "Deleting this edge also deletes the shadow node. The following nodes will lose connection: {nodes}",
+      "delete-edge-disconnect-separator": ", ",
       "edit-edge": "Edit Edge",
       "edit-edge-title-label": "Title",
       "edit-edge-description-label": "Description",
@@ -120,7 +123,11 @@
         "text-unsaved-confirm-text": "This attachment has unsaved changes. They will be lost if you close now. Close anyway?",
         "drag-to-reorder": "Drag to reorder"
       },
-      "auto-layout": "Auto layout"
+      "auto-layout": "Auto layout",
+      "shadow-origin-deleted": "The original node has been logically deleted (in the recycle bin)",
+      "shadow-inflow-hint": "In-degree comes from outside this canvas; click to jump to the parent canvas",
+      "shadow-outflow-hint": "Out-degree points outside this canvas; click to jump to the parent canvas",
+      "view-node-readonly": "View node (read-only)"
     },
     "search": {
       "open": "Search",

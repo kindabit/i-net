@@ -434,7 +434,7 @@ fn test_user_database_service_all_functions() {
         .iter()
         .all(|n| n.id != c2_node_id));
     assert!(matches!(
-        edge::service::delete(&c2_edge_id),
+        edge::service::delete(&c2_edge_id, false),
         Err(ErrorCode::NoEdgeWithSuchId { .. })
     ));
     assert!(canvas::service::list(false)
@@ -625,7 +625,7 @@ fn test_user_database_service_all_functions() {
         .iter()
         .all(|node| node.id != node_2.id));
     assert!(matches!(
-        edge::service::delete(&edge_1.id),
+        edge::service::delete(&edge_1.id, false),
         Err(ErrorCode::NoEdgeWithSuchId { .. })
     ));
 
@@ -648,11 +648,11 @@ fn test_user_database_service_all_functions() {
         "top".to_string(),
     )
     .unwrap();
-    edge::service::delete(&edge_2.id).unwrap();
+    edge::service::delete(&edge_2.id, false).unwrap();
 
     // edge::delete 失败路径：重复删除同一条边报 NoEdgeWithSuchId。
     assert!(matches!(
-        edge::service::delete(&edge_2.id),
+        edge::service::delete(&edge_2.id, false),
         Err(ErrorCode::NoEdgeWithSuchId { .. })
     ));
 
@@ -2498,5 +2498,435 @@ fn test_user_database_service_all_functions() {
     lifecycle::service::close().unwrap();
     }
 
+    test::cleanup(&path);
+}
+
+/// 影子节点 service 行为：list 合并展示数据与方向推导、原始节点逻辑删除状态透传、
+/// 各 service 的影子守卫（失败路径）、影子可移动与参与边（成功路径）、导出过滤影子节点。
+#[test]
+fn test_shadow_node_service() {
+    let _guard = test::acquire_test_lock();
+
+    // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered = metadata::service::register("shadow-test-db".to_string()).unwrap();
+    lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+    let canvases = canvas::service::list(false).unwrap();
+    let root = canvases[0].clone();
+
+    // 准备父画布（根画布）内的节点：普通节点 X、画布节点 B（引用画布 b）、普通节点 Z、
+    // 画布节点 Y（引用画布 d）、以及与 B 无边相连的普通节点 W（用于方向推导不一致的兜底路径）。
+    let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
+    let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
+    let node_z = node::service::create(&root.id, "origin-z".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
+    let node_y = node::service::create(&root.id, "canvas-y".to_string(), String::new(), 600.0, 0.0, None, true).unwrap();
+    let node_w = node::service::create(&root.id, "origin-w".to_string(), String::new(), 800.0, 0.0, None, false).unwrap();
+    let canvas_b = node_b.canvas_ref_id.clone().unwrap();
+    let canvas_d = node_y.canvas_ref_id.clone().unwrap();
+
+    // 父画布内的边直接通过 dao 插入：方向推导只依赖边行本身；
+    // 后续阶段起 service 层建边会自动创建影子，此处走 dao 以保持本测试行为稳定。
+    // 边的拓扑：X→B（X 是 b 的父）、B→Z（Z 是 b 的子）、Y→B（Y 是 b 的父）。
+    {
+        let connection = state::lock_connection();
+        let make_edge = |source_id: &str, target_id: &str| entity::Edge {
+            id: uuid::Uuid::new_v4().to_string(),
+            canvas_id: root.id.clone(),
+            source_id: source_id.to_string(),
+            source_port: "right".to_string(),
+            target_id: target_id.to_string(),
+            target_port: "left".to_string(),
+            title: String::new(),
+            description: String::new(),
+        };
+        edge::dao::insert(&connection, &make_edge(&node_x.id, &node_b.id)).unwrap();
+        edge::dao::insert(&connection, &make_edge(&node_b.id, &node_z.id)).unwrap();
+        edge::dao::insert(&connection, &make_edge(&node_y.id, &node_b.id)).unwrap();
+    }
+
+    // 影子行同样直接通过 dao 插入画布 b：title/sub_title/color 均为空串（展示数据从原始节点拉取）。
+    {
+        let connection = state::lock_connection();
+        let make_shadow = |origin_id: &str| entity::Node {
+            id: uuid::Uuid::new_v4().to_string(),
+            canvas_id: canvas_b.clone(),
+            x: 0.0,
+            y: 0.0,
+            title: String::new(),
+            sub_title: String::new(),
+            canvas_ref_id: None,
+            deleted: false,
+            color: String::new(),
+            shadow_id: Some(origin_id.to_string()),
+        };
+        for origin in [&node_x, &node_z, &node_y, &node_w] {
+            node::dao::insert(&connection, &make_shadow(&origin.id)).unwrap();
+        }
+    }
+    // 取回四个影子节点本体，后续断言使用。
+    let shadow_x = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_id.as_deref() == Some(node_x.id.as_str()))
+        .unwrap();
+    let shadow_z = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_id.as_deref() == Some(node_z.id.as_str()))
+        .unwrap();
+    let shadow_y = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_id.as_deref() == Some(node_y.id.as_str()))
+        .unwrap();
+    let shadow_w = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_id.as_deref() == Some(node_w.id.as_str()))
+        .unwrap();
+
+    // list 合并成功路径：影子的 title 合并自原始节点，方向按父画布内边的方向推导。
+    assert_eq!(shadow_x.title, "origin-x");
+    assert_eq!(shadow_x.shadow_origin_deleted, Some(false));
+    assert_eq!(shadow_x.shadow_direction, Some(node::vo::ShadowDirection::Inflow));
+    // 原始节点 X 是普通节点，影子的 canvas_ref_id 保持 None。
+    assert!(shadow_x.canvas_ref_id.is_none());
+    assert_eq!(shadow_z.shadow_direction, Some(node::vo::ShadowDirection::Outflow));
+    // 原始节点 Y 是画布节点：影子的 canvas_ref_id 合并为 Y 引用的画布 d（供双击跳转）。
+    assert_eq!(shadow_y.canvas_ref_id.as_deref(), Some(canvas_d.as_str()));
+    assert_eq!(shadow_y.shadow_direction, Some(node::vo::ShadowDirection::Inflow));
+    // 方向推导不一致兜底：W 与 B 之间没有边，shadow_direction 为 None，但展示数据仍正常合并。
+    assert_eq!(shadow_w.title, "origin-w");
+    assert_eq!(shadow_w.shadow_direction, None);
+
+    // 原始节点逻辑删除状态透传：逻辑删除 X 后影子保留且 shadow_origin_deleted 变为 true，恢复后回到 false。
+    node::service::logical_delete(&node_x.id).unwrap();
+    let merged_x = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == shadow_x.id)
+        .unwrap();
+    assert_eq!(merged_x.shadow_origin_deleted, Some(true));
+    node::service::restore(&node_x.id, 0.0, 0.0).unwrap();
+    let merged_x = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == shadow_x.id)
+        .unwrap();
+    assert_eq!(merged_x.shadow_origin_deleted, Some(false));
+
+    // 影子守卫失败路径：修改、逻辑删除、恢复、设置颜色、物理删除、写字段、导入附件
+    // 作用于影子节点时均报 NodeIsShadow。
+    assert!(matches!(
+        node::service::modify(&shadow_x.id, "t".to_string(), "s".to_string()),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node::service::logical_delete(&shadow_x.id),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node::service::restore(&shadow_x.id, 0.0, 0.0),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node::service::set_color(&shadow_x.id, "color".to_string()),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node::service::physical_delete(&shadow_x.id),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node_field::service::set(&shadow_x.id, &[]),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        attachment::service::import(&shadow_x.id, "no-such-file"),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+
+    // 移动成功路径：位置是影子的自有数据，允许移动。
+    node::service::move_node(&shadow_x.id, 10.0, 20.0).unwrap();
+    let moved = node::service::list(&canvas_b, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == shadow_x.id)
+        .unwrap();
+    assert_eq!((moved.x, moved.y), (10.0, 20.0));
+
+    // 导出过滤准备：在画布 b 内创建普通节点 N，并建边 shadow_x→N（影子在子画布内可以参与边）。
+    let node_n = node::service::create(&canvas_b, "internal-n".to_string(), String::new(), 500.0, 0.0, None, false).unwrap();
+    edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_n.id, "left".to_string()).unwrap();
+
+    // 导出过滤成功路径：影子不作为独立节点导出，与影子相连的边也不出现在关系小节。
+    let export_dir = path.data_directory.parent().unwrap().join("shadow-export-test");
+    file_system_util::create_dir_all(&export_dir).unwrap();
+    let export_path = export_dir.join("shadow.md");
+    export::service::export(
+        export::service::ExportMode::ExcludeFields,
+        "zh-CN",
+        &export_path.to_string_lossy(),
+    )
+    .unwrap();
+    let content = String::from_utf8(file_system_util::read(&export_path).unwrap()).unwrap();
+    // 全部非影子节点共 6 个（根画布 X/B/Z/Y/W + 画布 b 内的 N）；若影子未被过滤，会多出空标题的节点小节。
+    assert_eq!(content.matches("### 节点：").count(), 6);
+    // 关系行共 3 条（根画布内 X→B、B→Z、Y→B）；画布 b 内唯一的边 shadow_x→N 因影子被过滤而不出现。
+    assert_eq!(content.matches("--[]-->").count(), 3);
+    // 画布 b 小节正常导出其中的真实节点。
+    assert!(content.contains("## 画布：canvas-b"));
+    assert!(content.contains("### 节点：internal-n"));
+
+    // 清理导出产物、保存并关闭数据库，最后清理测试数据目录。
+    let _ = std::fs::remove_dir_all(&export_dir);
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
+    test::cleanup(&path);
+}
+
+/// 边创建的影子节点联动：双向创建影子、两端皆画布节点时建两个影子、影子初始位置车道算法、
+/// 影子连线的方向守卫与画布节点守卫，以及普通建边行为不回归。
+#[test]
+fn test_shadow_node_edge_create() {
+    let _guard = test::acquire_test_lock();
+
+    // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered = metadata::service::register("shadow-edge-test-db".to_string()).unwrap();
+    lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+    let canvases = canvas::service::list(false).unwrap();
+    let root = canvases[0].clone();
+
+    // 影子行查询辅助：按原始节点 id 与所在画布 id 取影子节点本体。
+    let shadow_of = |origin_id: &str, canvas_id: &str| {
+        let connection = state::lock_connection();
+        node::dao::select_by_shadow_id_and_canvas_id(&connection, origin_id, canvas_id).unwrap()
+    };
+
+    // 准备父画布（根画布）内的普通节点 X 与画布节点 B（引用画布 b）。
+    let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
+    let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
+    let canvas_b = node_b.canvas_ref_id.clone().unwrap();
+
+    // 入向影子创建成功路径：建边 X→B 后在画布 b 内创建 X 的入向影子。
+    // 画布 b 内还没有非影子节点，入向车道取默认 x=0，首个影子 y=0。
+    edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    let shadow_x = shadow_of(&node_x.id, &canvas_b).unwrap();
+    // 影子行本体只有位置与 shadow_id 有意义：title/sub_title/color 为空串，deleted 为 false。
+    assert_eq!(shadow_x.canvas_id, canvas_b);
+    assert_eq!(shadow_x.shadow_id.as_deref(), Some(node_x.id.as_str()));
+    assert!(shadow_x.title.is_empty() && shadow_x.sub_title.is_empty() && shadow_x.color.is_empty());
+    assert!(!shadow_x.deleted);
+    assert!(shadow_x.canvas_ref_id.is_none());
+    assert_eq!((shadow_x.x, shadow_x.y), (0.0, 0.0));
+
+    // 出向影子创建成功路径：建边 B→Z 后在画布 b 内创建 Z 的出向影子。
+    // 无非影子节点时出向车道取默认 x=400，首个出向影子 y=0。
+    let node_z = node::service::create(&root.id, "origin-z".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
+    edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string()).unwrap();
+    let shadow_z = shadow_of(&node_z.id, &canvas_b).unwrap();
+    assert_eq!((shadow_z.x, shadow_z.y), (400.0, 0.0));
+
+    // 同向影子垂直堆叠：第二个入向影子（X2→B）落在第一个入向影子下方 y+120。
+    let node_x2 = node::service::create(&root.id, "origin-x2".to_string(), String::new(), 0.0, 200.0, None, false).unwrap();
+    edge::service::create(&root.id, &node_x2.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    let shadow_x2 = shadow_of(&node_x2.id, &canvas_b).unwrap();
+    assert_eq!((shadow_x2.x, shadow_x2.y), (0.0, 120.0));
+
+    // 车道参考非影子内容：画布 b 内新建普通节点 N(1000, 500) 后，
+    // 入向影子（X3→B）车道 x = 1000-400 = 600，堆叠 y = 240；出向影子（B→Z2）车道 x = 1000+400 = 1400，堆叠 y = 120。
+    let node_n = node::service::create(&canvas_b, "internal-n".to_string(), String::new(), 1000.0, 500.0, None, false).unwrap();
+    let node_x3 = node::service::create(&root.id, "origin-x3".to_string(), String::new(), 0.0, 400.0, None, false).unwrap();
+    edge::service::create(&root.id, &node_x3.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    let shadow_x3 = shadow_of(&node_x3.id, &canvas_b).unwrap();
+    assert_eq!((shadow_x3.x, shadow_x3.y), (600.0, 240.0));
+    let node_z2 = node::service::create(&root.id, "origin-z2".to_string(), String::new(), 800.0, 0.0, None, false).unwrap();
+    edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z2.id, "left".to_string()).unwrap();
+    let shadow_z2 = shadow_of(&node_z2.id, &canvas_b).unwrap();
+    assert_eq!((shadow_z2.x, shadow_z2.y), (1400.0, 120.0));
+
+    // 两端皆画布节点：建边 Y→B（Y 引用画布 d）后，画布 b 内创建 Y 的入向影子，画布 d 内创建 B 的出向影子。
+    let node_y = node::service::create(&root.id, "canvas-y".to_string(), String::new(), 600.0, 0.0, None, true).unwrap();
+    let canvas_d = node_y.canvas_ref_id.clone().unwrap();
+    edge::service::create(&root.id, &node_y.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    let shadow_y = shadow_of(&node_y.id, &canvas_b).unwrap();
+    // Y 的入向影子：车道 x=600，堆叠在 X3 的影子下方 y=360。
+    assert_eq!((shadow_y.x, shadow_y.y), (600.0, 360.0));
+    let shadow_b_in_d = shadow_of(&node_b.id, &canvas_d).unwrap();
+    // 画布 d 内没有非影子节点，出向车道取默认 x=400，y=0。
+    assert_eq!((shadow_b_in_d.x, shadow_b_in_d.y), (400.0, 0.0));
+
+    // list 视图断言：影子展示数据合并自原始节点且方向正确。
+    let nodes_b = node::service::list(&canvas_b, false).unwrap();
+    let vo_y = nodes_b.iter().find(|n| n.id == shadow_y.id).unwrap();
+    assert_eq!(vo_y.title, "canvas-y");
+    assert_eq!(vo_y.canvas_ref_id.as_deref(), Some(canvas_d.as_str()));
+    assert_eq!(vo_y.shadow_direction, Some(node::vo::ShadowDirection::Inflow));
+    let vo_z = nodes_b.iter().find(|n| n.id == shadow_z.id).unwrap();
+    assert_eq!(vo_z.shadow_direction, Some(node::vo::ShadowDirection::Outflow));
+
+    // 方向守卫失败路径：出向影子不允许作为源。
+    assert!(matches!(
+        edge::service::create(&canvas_b, &shadow_z.id, "right".to_string(), &node_n.id, "left".to_string()),
+        Err(ErrorCode::InvalidShadowEdge)
+    ));
+    // 方向守卫失败路径：入向影子不允许作为目标。
+    assert!(matches!(
+        edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &shadow_x.id, "left".to_string()),
+        Err(ErrorCode::InvalidShadowEdge)
+    ));
+    // 画布节点守卫失败路径：影子不允许与画布节点相连（避免影子的影子）。
+    let node_c2 = node::service::create(&canvas_b, "canvas-c2".to_string(), String::new(), 1200.0, 600.0, None, true).unwrap();
+    let canvas_c2 = node_c2.canvas_ref_id.clone().unwrap();
+    assert!(matches!(
+        edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_c2.id, "left".to_string()),
+        Err(ErrorCode::InvalidShadowEdge)
+    ));
+    assert!(matches!(
+        edge::service::create(&canvas_b, &node_c2.id, "right".to_string(), &shadow_z.id, "left".to_string()),
+        Err(ErrorCode::InvalidShadowEdge)
+    ));
+
+    // 影子参与连线成功路径：入向影子作为源连接普通节点、普通节点连接出向影子。
+    edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_n.id, "left".to_string()).unwrap();
+    edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &shadow_z.id, "left".to_string()).unwrap();
+    // 普通节点连接画布节点成功路径：N→C2 在画布 c2 内创建 N 的入向影子（c2 无非影子节点，取默认位置 (0,0)）。
+    edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &node_c2.id, "left".to_string()).unwrap();
+    let shadow_n = shadow_of(&node_n.id, &canvas_c2).unwrap();
+    assert_eq!((shadow_n.x, shadow_n.y), (0.0, 0.0));
+
+    // 既有行为不回归：根画布内普通节点之间建边成功，且不产生任何影子（各画布影子数不变）。
+    edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_x2.id, "left".to_string()).unwrap();
+    let count_shadows = |canvas_id: &str| {
+        node::service::list(canvas_id, false)
+            .unwrap()
+            .into_iter()
+            .filter(|n| n.shadow_id.is_some())
+            .count()
+    };
+    assert_eq!(count_shadows(&canvas_b), 6);
+    assert_eq!(count_shadows(&canvas_d), 1);
+    assert_eq!(count_shadows(&canvas_c2), 1);
+    // 既有校验不回归：重复边仍报 EdgeAlreadyExists，成环仍报 EdgeWouldFormCycle。
+    assert!(matches!(
+        edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_x2.id, "left".to_string()),
+        Err(ErrorCode::EdgeAlreadyExists)
+    ));
+    assert!(matches!(
+        edge::service::create(&root.id, &node_x2.id, "right".to_string(), &node_x.id, "left".to_string()),
+        Err(ErrorCode::EdgeWouldFormCycle)
+    ));
+
+    // 保存并关闭数据库，清理测试数据目录。
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
+    test::cleanup(&path);
+}
+
+/// 边删除的影子节点联动：有连接未确认时拒绝删除并给出受影响节点标题、确认后影子随边物理删除、
+/// 无连接时直接删除、出向影子的入边同样触发确认、原始节点物理删除时影子随外键级联删除、
+/// 两端皆画布节点时两个影子一并删除。
+#[test]
+fn test_shadow_node_edge_delete() {
+    let _guard = test::acquire_test_lock();
+
+    // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered = metadata::service::register("shadow-edge-del-test-db".to_string()).unwrap();
+    lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+    let canvases = canvas::service::list(false).unwrap();
+    let root = canvases[0].clone();
+
+    // 影子行查询辅助：按原始节点 id 与所在画布 id 取影子节点本体。
+    let shadow_of = |origin_id: &str, canvas_id: &str| {
+        let connection = state::lock_connection();
+        node::dao::select_by_shadow_id_and_canvas_id(&connection, origin_id, canvas_id).unwrap()
+    };
+
+    // 准备：根画布内普通节点 X 与画布节点 B（引用画布 b），建边 X→B 自动创建入向影子。
+    let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
+    let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
+    let canvas_b = node_b.canvas_ref_id.clone().unwrap();
+    let edge_xb = edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    let shadow_x = shadow_of(&node_x.id, &canvas_b).unwrap();
+
+    // 画布 b 内建普通节点 M1、M2，并建边 shadow_x→M1、shadow_x→M2（入向影子有出边）。
+    let node_m1 = node::service::create(&canvas_b, "internal-m1".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
+    let node_m2 = node::service::create(&canvas_b, "internal-m2".to_string(), String::new(), 400.0, 200.0, None, false).unwrap();
+    edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_m1.id, "left".to_string()).unwrap();
+    edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_m2.id, "left".to_string()).unwrap();
+
+    // 失败路径：入向影子有出边且未确认时，删除边报 EdgeDeleteDisconnectsNodes，
+    // 载荷为受影响节点标题列表；边与影子均保持存在。
+    let Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected }) =
+        edge::service::delete(&edge_xb.id, false)
+    else {
+        panic!("expected EdgeDeleteDisconnectsNodes");
+    };
+    assert_eq!(affected.len(), 2);
+    assert!(affected.contains(&"internal-m1".to_string()));
+    assert!(affected.contains(&"internal-m2".to_string()));
+    assert!(edge::service::list(&root.id).unwrap().iter().any(|e| e.id == edge_xb.id));
+    assert!(shadow_of(&node_x.id, &canvas_b).is_some());
+
+    // 成功路径（确认后）：边被删除，影子节点随边物理删除，影子在子画布内的出边由外键级联删除，
+    // 子画布内的普通节点 M1/M2 本身保留。
+    edge::service::delete(&edge_xb.id, true).unwrap();
+    assert!(!edge::service::list(&root.id).unwrap().iter().any(|e| e.id == edge_xb.id));
+    assert!(shadow_of(&node_x.id, &canvas_b).is_none());
+    assert!(edge::service::list(&canvas_b).unwrap().is_empty());
+    assert!(node::service::list(&canvas_b, false).unwrap().iter().any(|n| n.id == node_m1.id));
+    assert!(node::service::list(&canvas_b, false).unwrap().iter().any(|n| n.id == node_m2.id));
+
+    // 无连接快速路径：出向影子（B→Z）在子画布内没有任何关联边时，未确认也直接删除成功。
+    let node_z = node::service::create(&root.id, "origin-z".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
+    let edge_bz = edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string()).unwrap();
+    assert!(shadow_of(&node_z.id, &canvas_b).is_some());
+    edge::service::delete(&edge_bz.id, false).unwrap();
+    assert!(shadow_of(&node_z.id, &canvas_b).is_none());
+
+    // 出向影子有入边同样触发确认：重建 B→Z（重新产生出向影子），建边 M1→shadow_z（影子有入边）。
+    let edge_bz2 = edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string()).unwrap();
+    let shadow_z = shadow_of(&node_z.id, &canvas_b).unwrap();
+    edge::service::create(&canvas_b, &node_m1.id, "right".to_string(), &shadow_z.id, "left".to_string()).unwrap();
+    let Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected }) =
+        edge::service::delete(&edge_bz2.id, false)
+    else {
+        panic!("expected EdgeDeleteDisconnectsNodes");
+    };
+    assert_eq!(affected, vec!["internal-m1".to_string()]);
+    // 确认后删除：影子与它的入边一并消失。
+    edge::service::delete(&edge_bz2.id, true).unwrap();
+    assert!(shadow_of(&node_z.id, &canvas_b).is_none());
+    assert!(edge::service::list(&canvas_b).unwrap().is_empty());
+
+    // 物理删除联动（端到端）：物理删除原始节点 X2 时，其入向影子与父画布内的边随外键级联一并消失。
+    let node_x2 = node::service::create(&root.id, "origin-x2".to_string(), String::new(), 0.0, 200.0, None, false).unwrap();
+    let edge_x2b = edge::service::create(&root.id, &node_x2.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    assert!(shadow_of(&node_x2.id, &canvas_b).is_some());
+    node::service::physical_delete(&node_x2.id).unwrap();
+    assert!(shadow_of(&node_x2.id, &canvas_b).is_none());
+    assert!(!edge::service::list(&root.id).unwrap().iter().any(|e| e.id == edge_x2b.id));
+
+    // 两端皆画布节点：建边 Y→B 会在画布 b 与画布 d 各创建一个影子，删除该边时两个影子一并删除。
+    let node_y = node::service::create(&root.id, "canvas-y".to_string(), String::new(), 600.0, 0.0, None, true).unwrap();
+    let canvas_d = node_y.canvas_ref_id.clone().unwrap();
+    let edge_yb = edge::service::create(&root.id, &node_y.id, "right".to_string(), &node_b.id, "left".to_string()).unwrap();
+    assert!(shadow_of(&node_y.id, &canvas_b).is_some());
+    assert!(shadow_of(&node_b.id, &canvas_d).is_some());
+    edge::service::delete(&edge_yb.id, false).unwrap();
+    assert!(shadow_of(&node_y.id, &canvas_b).is_none());
+    assert!(shadow_of(&node_b.id, &canvas_d).is_none());
+
+    // 保存并关闭数据库，清理测试数据目录。
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
     test::cleanup(&path);
 }

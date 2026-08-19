@@ -246,6 +246,18 @@
     "EmptyFilePath": {
       "title": "文件路径为空",
       "text": "文件路径不能为空"
+    },
+    "EdgeDeleteDisconnectsNodes": {
+      "title": "删除边将断开连接",
+      "text": "以下节点将失去连接：{nodes}"
+    },
+    "InvalidShadowEdge": {
+      "title": "影子节点连线无效",
+      "text": "入向影子只能作为连线的起点，出向影子只能作为连线的终点，且影子节点不能与画布节点相连"
+    },
+    "NodeIsShadow": {
+      "title": "不允许操作影子节点",
+      "text": "影子节点是其它画布中节点的引用展示，不支持此操作"
     }
   }
 }

@@ -17,7 +17,7 @@ use crate::error_code::ErrorCode;
 /// - `fields`: 要设置的字段列表，顺序即存储顺序。
 ///
 /// # 返回值
-/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，影子节点时返回 `ErrorCode::NodeIsShadow`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn set(node_id: &str, fields: &[NodeFieldVO]) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
@@ -26,6 +26,10 @@ pub fn set(node_id: &str, fields: &[NodeFieldVO]) -> Result<(), ErrorCode> {
             id: node_id.to_string(),
         }
     })?;
+    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
+    if node.shadow_id.is_some() {
+        return Err(ErrorCode::NodeIsShadow);
+    }
     let node_title = node.title.clone();
 
     let mut seen = HashSet::new();

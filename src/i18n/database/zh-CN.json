@@ -40,6 +40,9 @@
       "new-node-subtitle": "新节点",
       "new-canvas-name": "新画布",
       "delete-edge": "删除边",
+      "delete-edge-disconnect-title": "删除边将断开连接",
+      "delete-edge-disconnect-text": "删除此边会同时删除影子节点，以下节点将失去连接：{nodes}",
+      "delete-edge-disconnect-separator": "、",
       "edit-edge": "编辑边",
       "edit-edge-title-label": "标题",
       "edit-edge-description-label": "详情",
@@ -120,7 +123,11 @@
         "text-unsaved-confirm-text": "当前附件有未保存的修改，关闭后将丢失，确定要关闭吗？",
         "drag-to-reorder": "拖拽调整顺序"
       },
-      "auto-layout": "自动布局"
+      "auto-layout": "自动布局",
+      "shadow-origin-deleted": "原始节点已被逻辑删除（在回收站中）",
+      "shadow-inflow-hint": "入度来自画布之外，点击跳转至父画布",
+      "shadow-outflow-hint": "出度指向画布之外，点击跳转至父画布",
+      "view-node-readonly": "查看节点（只读）"
     },
     "search": {
       "open": "搜索",

@@ -16,6 +16,7 @@ import type {
   Node,
   NodeColorEntry,
   NodeFieldVO,
+  NodeVO,
   Template,
   TemplateFieldVO,
   Viewport,
@@ -396,6 +397,8 @@ export async function userDatabaseNodePhysicalDelete(
 
 /**
  * 查询指定画布内的节点列表。
+ * 影子节点（返回项中 `shadow_id` 非 null 的项）的 title / sub_title / color /
+ * canvas_ref_id 已被后端合并为原始节点的值；调用方无需另行解析原始节点。
  * @param canvasId 画布 id
  * @param deleted false 查询正常节点，true 查询已逻辑删除的节点
  * @returns 节点列表
@@ -403,8 +406,8 @@ export async function userDatabaseNodePhysicalDelete(
 export async function userDatabaseNodeList(
   canvasId: string,
   deleted: boolean,
-): Promise<Node[]> {
-  return invoke<Node[]>("user_database_node_list", { canvasId, deleted });
+): Promise<NodeVO[]> {
+  return invoke<NodeVO[]>("user_database_node_list", { canvasId, deleted });
 }
 
 /**
@@ -481,11 +484,18 @@ export async function userDatabaseEdgeCreate(
 
 /**
  * 物理删除边（边没有逻辑删除状态）。
+ * 删除边会级联删除被引用子画布内的影子节点；若影子在子画布内有关联节点且
+ * `confirmed` 为 false，后端返回 ErrorCode `EdgeDeleteDisconnectsNodes`，
+ * 其 data 为 `{ nodes: string[] }`，列出将失去连接的节点标题。
  * @param id 边 id
+ * @param confirmed 是否确认级联断开节点连接
  * @returns 无返回值
  */
-export async function userDatabaseEdgeDelete(id: string): Promise<void> {
-  return invoke("user_database_edge_delete", { id });
+export async function userDatabaseEdgeDelete(
+  id: string,
+  confirmed: boolean,
+): Promise<void> {
+  return invoke("user_database_edge_delete", { id, confirmed });
 }
 
 /**

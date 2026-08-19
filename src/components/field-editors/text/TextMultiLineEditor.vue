@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -26,6 +27,7 @@ function onInput() {
 <template>
   <VTextarea
     v-model="text"
+    :readonly="readonly"
     rows="3"
     auto-grow
     variant="outlined"

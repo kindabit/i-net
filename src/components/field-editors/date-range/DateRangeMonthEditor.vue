@@ -22,6 +22,7 @@ function partsToMs(parts: DateTimeParts, unit: string): number {
 
 const props = defineProps<{
   modelValue: [number, number] | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -141,7 +142,8 @@ watch(() => props.modelValue, (pair) => {
       <template #activator="{ props: menuProps }">
         <VTextField
           :model-value="startDisplay"
-          readonly
+          :readonly="!readonly"
+          :disabled="readonly"
           clearable
           prepend-inner-icon="mdi-calendar"
           :label="t('database.field-editor.range-start-label')"
@@ -164,7 +166,8 @@ watch(() => props.modelValue, (pair) => {
       <template #activator="{ props: menuProps }">
         <VTextField
           :model-value="endDisplay"
-          readonly
+          :readonly="!readonly"
+          :disabled="readonly"
           clearable
           prepend-inner-icon="mdi-calendar"
           :label="t('database.field-editor.range-end-label')"

@@ -17,6 +17,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Node> {
         canvas_ref_id: row.get(6)?,
         deleted: row.get::<_, i64>(7)? != 0,
         color: row.get(8)?,
+        shadow_id: row.get(9)?,
     })
 }
 
@@ -39,7 +40,9 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 sub_title TEXT NOT NULL,
                 canvas_ref_id TEXT UNIQUE REFERENCES canvas(id) ON DELETE CASCADE,
                 deleted INTEGER NOT NULL,
-                color TEXT NOT NULL
+                color TEXT NOT NULL,
+                shadow_id TEXT REFERENCES node(id) ON DELETE CASCADE,
+                UNIQUE (canvas_id, shadow_id)
             ) STRICT",
             [],
         )
@@ -60,8 +63,8 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
     connection
         .execute(
-            "INSERT INTO node (id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color)
-            VALUES (:id, :canvas_id, :x, :y, :title, :sub_title, :canvas_ref_id, :deleted, :color)",
+            "INSERT INTO node (id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id)
+            VALUES (:id, :canvas_id, :x, :y, :title, :sub_title, :canvas_ref_id, :deleted, :color, :shadow_id)",
             rusqlite::named_params! {
                 ":id": node.id,
                 ":canvas_id": node.canvas_id,
@@ -72,6 +75,7 @@ pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
                 ":canvas_ref_id": node.canvas_ref_id,
                 ":deleted": node.deleted as i64,
                 ":color": node.color,
+                ":shadow_id": node.shadow_id,
             },
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -91,7 +95,7 @@ pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Node>, ErrorCode> {
     connection
         .query_row(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color
+            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
             FROM node
             WHERE id = :id",
             rusqlite::named_params! {":id": id},
@@ -119,7 +123,7 @@ pub fn select_by_canvas_id_and_deleted(
 ) -> Result<Vec<Node>, ErrorCode> {
     let mut statement = connection
         .prepare(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color
+            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
             FROM node
             WHERE canvas_id = :canvas_id AND deleted = :deleted",
         )
@@ -162,7 +166,8 @@ pub fn update(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
                 sub_title = :sub_title,
                 canvas_ref_id = :canvas_ref_id,
                 deleted = :deleted,
-                color = :color
+                color = :color,
+                shadow_id = :shadow_id
             WHERE id = :id",
             rusqlite::named_params! {
                 ":id": node.id,
@@ -174,6 +179,7 @@ pub fn update(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
                 ":canvas_ref_id": node.canvas_ref_id,
                 ":deleted": node.deleted as i64,
                 ":color": node.color,
+                ":shadow_id": node.shadow_id,
             },
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -217,10 +223,38 @@ pub fn select_by_canvas_ref_id(
 ) -> Result<Option<Node>, ErrorCode> {
     connection
         .query_row(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color
+            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
             FROM node
             WHERE canvas_ref_id = :canvas_ref_id",
             rusqlite::named_params! {":canvas_ref_id": canvas_ref_id},
+            map_row,
+        )
+        .optional()
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })
+}
+
+/// 按原始节点 id 和所在画布 id 查询影子节点。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `shadow_id`: 原始节点 id（即影子节点 shadow_id 列的值）。
+/// - `canvas_id`: 影子节点所在画布的 id。
+///
+/// # 返回值
+/// 返回查询到的影子节点，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_by_shadow_id_and_canvas_id(
+    connection: &Connection,
+    shadow_id: &str,
+    canvas_id: &str,
+) -> Result<Option<Node>, ErrorCode> {
+    connection
+        .query_row(
+            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
+            FROM node
+            WHERE shadow_id = :shadow_id AND canvas_id = :canvas_id",
+            rusqlite::named_params! {":shadow_id": shadow_id, ":canvas_id": canvas_id},
             map_row,
         )
         .optional()
@@ -252,6 +286,7 @@ fn escape_like_pattern(pattern: &str) -> String {
 ///
 /// 每个关键词独立匹配节点标题、节点副标题或所在画布名称（OR），关键词之间为 AND 关系。
 /// 逻辑删除的节点与逻辑删除的画布内的节点均被排除。
+/// 影子节点（`shadow_id IS NOT NULL`）不参与全局搜索。
 /// 结果按画布名称、节点标题排序，最多返回 50 条。
 ///
 /// # 参数
@@ -268,7 +303,7 @@ pub fn search_by_keywords(
         "SELECT node.id, node.canvas_id, node.x, node.y, node.title, node.sub_title, node.canvas_ref_id, canvas.name
          FROM node
          JOIN canvas ON node.canvas_id = canvas.id
-         WHERE node.deleted = 0 AND canvas.deleted = 0",
+         WHERE node.deleted = 0 AND canvas.deleted = 0 AND node.shadow_id IS NULL",
     );
     let mut params: Vec<String> = Vec::new();
     for keyword in keywords {
@@ -375,6 +410,7 @@ mod tests {
             canvas_ref_id: None,
             deleted: false,
             color: String::new(),
+            shadow_id: None,
         }
     }
 
@@ -694,5 +730,137 @@ mod tests {
         assert_eq!(colored_entries.len(), 1);
         assert_eq!(colored_entries[0].title, "Colored Node");
         assert_eq!(colored_entries[0].color, "{\"fill\":\"#ff0000\"}");
+
+        // ===== shadow_id 读写与约束测试 =====
+        // 复用上文中已建的 node 表；本段关闭外键以聚焦本表约束，避免依赖父表数据。
+
+        // shadow_id 读写往返成功路径：插入 shadow_id 为 Some 的节点，select_by_id 读回 shadow_id 一致。
+        let mut origin_node = node("shadow-origin-1", "canvas-shadow-1");
+        origin_node.title = "Shadow Origin".to_string();
+        origin_node.sub_title = "origin-sub".to_string();
+        insert(&connection, &origin_node).unwrap();
+        let mut shadow_node = node("shadow-node-1", "canvas-shadow-1");
+        shadow_node.title = "Shadow Node".to_string();
+        shadow_node.sub_title = "shadow-sub".to_string();
+        shadow_node.shadow_id = Some("shadow-origin-1".to_string());
+        shadow_node.x = 100.0;
+        shadow_node.y = 200.0;
+        insert(&connection, &shadow_node).unwrap();
+        let read_shadow = select_by_id(&connection, "shadow-node-1").unwrap().unwrap();
+        assert_eq!(read_shadow.shadow_id.as_deref(), Some("shadow-origin-1"));
+        assert_eq!(read_shadow.x, 100.0);
+        assert_eq!(read_shadow.y, 200.0);
+        assert_eq!(read_shadow.title, "Shadow Node");
+
+        // UNIQUE (canvas_id, shadow_id) 冲突路径：同一画布内两个节点指向同一原始节点 id 时报 DatabaseError。
+        let mut shadow_node_2 = node("shadow-node-2", "canvas-shadow-1");
+        shadow_node_2.shadow_id = Some("shadow-origin-1".to_string());
+        assert!(matches!(
+            insert(&connection, &shadow_node_2),
+            Err(ErrorCode::DatabaseError { .. })
+        ));
+
+        // UNIQUE (canvas_id, shadow_id) 不同画布下不触发：不同画布内指向同一原始节点成功。
+        let mut shadow_node_other = node("shadow-node-other", "canvas-shadow-2");
+        shadow_node_other.shadow_id = Some("shadow-origin-1".to_string());
+        insert(&connection, &shadow_node_other).unwrap();
+
+        // 多个 NULL shadow_id 共存（普通节点不互相冲突）：上文 insert 未指定 shadow_id 的多个节点已成功插入，
+        // 此处显式追加一条验证再次插入 shadow_id 为 None 的节点仍能成功。
+        let mut normal_node = node("shadow-normal-1", "canvas-shadow-1");
+        normal_node.shadow_id = None;
+        insert(&connection, &normal_node).unwrap();
+
+        // select_by_shadow_id_and_canvas_id 命中：正确 canvas_id 时能查到对应影子节点。
+        let found = select_by_shadow_id_and_canvas_id(
+            &connection,
+            "shadow-origin-1",
+            "canvas-shadow-1",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(found.id, "shadow-node-1");
+        assert_eq!(found.shadow_id.as_deref(), Some("shadow-origin-1"));
+
+        // select_by_shadow_id_and_canvas_id 未命中：错误 canvas_id 时返回 None。
+        assert!(
+            select_by_shadow_id_and_canvas_id(&connection, "shadow-origin-1", "no-such-canvas")
+                .unwrap()
+                .is_none()
+        );
+        // select_by_shadow_id_and_canvas_id 未命中：错误 shadow_id 时返回 None。
+        assert!(
+            select_by_shadow_id_and_canvas_id(&connection, "no-such-origin", "canvas-shadow-1")
+                .unwrap()
+                .is_none()
+        );
+
+        // search_by_keywords 排除影子：插入一个 title 含搜索关键词且 shadow_id 为 Some 的节点，断言搜索结果不包含它。
+        // 该影子节点需要自己的原始节点以避免与前面的 shadow-node-1 触发 UNIQUE (canvas_id, shadow_id) 约束。
+        let mut searchable_origin = node("shadow-searchable-origin", "canvas-shadow-1");
+        searchable_origin.title = "Searchable Origin".to_string();
+        insert(&connection, &searchable_origin).unwrap();
+        let mut searchable_shadow = node("shadow-searchable", "canvas-shadow-1");
+        searchable_shadow.title = "Rust Shadow Findable".to_string();
+        searchable_shadow.shadow_id = Some("shadow-searchable-origin".to_string());
+        insert(&connection, &searchable_shadow).unwrap();
+        // canvas-shadow-1 是新画布，需要先插入对应 canvas 行让 INNER JOIN 命中以验证过滤逻辑。
+        let canvas_shadow = crate::business::user_database::entity::Canvas {
+            id: "canvas-shadow-1".to_string(),
+            parent_id: None,
+            name: "Shadow Canvas".to_string(),
+            x: 0.0,
+            y: 0.0,
+            deleted: false,
+            color: String::new(),
+        };
+        crate::business::user_database::canvas::dao::insert(&connection, &canvas_shadow).unwrap();
+        let results = search_by_keywords(&connection, &["Findable".to_string()]).unwrap();
+        assert!(!results.iter().any(|n| n.id == "shadow-searchable"));
+    }
+
+    /// 独立测试：影子节点通过 ON DELETE CASCADE 跟随原始节点被物理删除。
+    ///
+    /// 与 `test_node_dao_all_functions` 不同，本测试开启外键约束以验证级联删除行为。
+    #[test]
+    fn test_node_shadow_cascade_delete() {
+        let connection = Connection::open_in_memory().unwrap();
+        // 开启外键约束以触发 ON DELETE CASCADE。
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
+
+        // 先建 canvas 表（node 表通过 canvas_id / shadow_id 外键依赖 canvas 表与 node 表自身）。
+        crate::business::user_database::canvas::dao::create_table(&connection).unwrap();
+        let canvas = crate::business::user_database::entity::Canvas {
+            id: "cascade-canvas-1".to_string(),
+            parent_id: None,
+            name: "Cascade Canvas".to_string(),
+            x: 0.0,
+            y: 0.0,
+            deleted: false,
+            color: String::new(),
+        };
+        crate::business::user_database::canvas::dao::insert(&connection, &canvas).unwrap();
+
+        // 建 node 表。
+        create_table(&connection).unwrap();
+
+        // 插入原始节点与指向它的影子节点。
+        let mut origin = node("cascade-origin", "cascade-canvas-1");
+        origin.title = "Cascade Origin".to_string();
+        insert(&connection, &origin).unwrap();
+        let mut shadow = node("cascade-shadow", "cascade-canvas-1");
+        shadow.shadow_id = Some("cascade-origin".to_string());
+        insert(&connection, &shadow).unwrap();
+
+        // 确认两者都已落库。
+        assert!(select_by_id(&connection, "cascade-origin").unwrap().is_some());
+        assert!(select_by_id(&connection, "cascade-shadow").unwrap().is_some());
+
+        // 删除原始节点，影子节点应被级联删除。
+        delete_by_id(&connection, "cascade-origin").unwrap();
+        assert!(select_by_id(&connection, "cascade-origin").unwrap().is_none());
+        assert!(select_by_id(&connection, "cascade-shadow").unwrap().is_none());
     }
 }

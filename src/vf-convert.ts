@@ -4,7 +4,7 @@
  */
 import { MarkerType } from "@vue-flow/core";
 import type { Node as VFNode, Edge as VFEdge } from "@vue-flow/core";
-import type { Node, Edge } from "@/api-types";
+import type { Node, NodeVO, Edge } from "@/api-types";
 
 /** DataNode 组件的 data 载荷 */
 export interface DataNodeData {
@@ -12,14 +12,29 @@ export interface DataNodeData {
   title: string;
   /** 节点副标题 */
   subTitle: string;
-  /** 引用的子画布 id，仅画布节点有值 */
+  /** 引用的子画布 id，仅画布节点有值；影子节点的值来自后端合并的原始节点 */
   canvasId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;
+  /** 原始节点 id；null 表示普通节点 */
+  shadowId: string | null;
+  /** 影子节点的原始节点是否已被逻辑删除（普通节点恒为 false） */
+  shadowOriginDeleted: boolean;
+  /** 影子节点的方向（inflow=入向，只有出度；outflow=出向，只有入度）；普通节点为 null */
+  shadowDirection: "inflow" | "outflow" | null;
 }
 
-/** 后端 Node 转 VFNode（data-node 类型）。position 可覆盖原坐标（如拖拽恢复到落点）。 */
+/**
+ * 后端 Node 转 VFNode（data-node 类型）。position 可覆盖原坐标（如拖拽恢复到落点）。
+ *
+ * 入参 `node` 的实际类型由调用方决定：
+ * - `user_database_node_list` 返回 `NodeVO`，携带影子扩展字段；
+ * - `create` / `restore` 等返回普通 `Node`，不带扩展字段。
+ * 这里按 `Partial<NodeVO>` 兜底，影子相关字段不存在时按默认值处理（普通节点）。
+ */
 export function toVFNode(node: Node, position?: { x: number; y: number }): VFNode {
+  // node_list 返回的 NodeVO 带有影子扩展字段；create 等返回的普通 Node 没有，按默认值兜底。
+  const vo = node as Partial<NodeVO>;
   return {
     id: node.id,
     type: "data-node",
@@ -29,6 +44,9 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
       subTitle: node.sub_title,
       canvasId: node.canvas_ref_id,
       color: node.color,
+      shadowId: node.shadow_id,
+      shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
+      shadowDirection: vo.shadow_direction ?? null,
     } satisfies DataNodeData,
   };
 }

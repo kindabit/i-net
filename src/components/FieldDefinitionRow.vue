@@ -3,6 +3,7 @@
 
   以卡片形式编辑单个字段的定义：字段名、字段类型、按类型动态渲染的
   类型配置项与值编辑器、字典绑定，并支持拖拽排序。
+  readonly 模式（影子节点只读查看）下隐藏删除按钮与拖拽手柄，所有输入控件只读。
 -->
 <script lang="ts">
 import { computed } from "vue";
@@ -60,6 +61,8 @@ const props = defineProps<{
   nameError?: string;
   /** 值错误文本，无错误为 undefined。 */
   valueError?: string;
+  /** 只读模式：禁用编辑、删除与拖拽。 */
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -79,6 +82,10 @@ const multiRow = computed(
 );
 
 function onDragStart(event: DragEvent) {
+  if (props.readonly) {
+    event.preventDefault();
+    return;
+  }
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(props.row.uid));
@@ -87,6 +94,7 @@ function onDragStart(event: DragEvent) {
 }
 
 function onDrop() {
+  if (props.readonly) return;
   emit("dropOn", props.row.uid);
 }
 
@@ -134,17 +142,18 @@ function onPrecisionChange(val: unknown) {
 <template>
   <div
     class="field-def-card"
-    draggable="true"
+    :draggable="!readonly"
     @dragstart="onDragStart"
     @dragover.prevent
     @drop="onDrop"
   >
     <div class="field-def-main-row">
-      <VIcon class="drag-handle" icon="mdi-drag-vertical" />
+      <VIcon v-if="!readonly" class="drag-handle" icon="mdi-drag-vertical" />
       <VTextField
         v-model="row.name"
         :label="t('database.field.name-label')"
         :error-messages="nameError"
+        :readonly="readonly"
         variant="outlined"
         density="compact"
         hide-details="auto"
@@ -154,6 +163,7 @@ function onPrecisionChange(val: unknown) {
       <VSelect
         :model-value="row.fieldType"
         :items="typeItems"
+        :readonly="readonly"
         @update:model-value="(val: unknown) => onFieldTypeChange(val as string)"
         density="compact"
         variant="outlined"
@@ -168,6 +178,7 @@ function onPrecisionChange(val: unknown) {
           :field-type="row.fieldType"
           :type-config="row.typeConfig"
           :dictionary-id="row.dictionaryId"
+          :readonly="readonly"
         />
       </div>
       <VBtn
@@ -177,6 +188,7 @@ function onPrecisionChange(val: unknown) {
         @click="row.expanded = !row.expanded"
       />
       <VBtn
+        v-if="!readonly"
         icon="mdi-delete-outline"
         variant="text"
         density="compact"
@@ -190,6 +202,7 @@ function onPrecisionChange(val: unknown) {
         :field-type="row.fieldType"
         :type-config="row.typeConfig"
         :dictionary-id="row.dictionaryId"
+        :readonly="readonly"
       />
     </div>
     <div v-if="withValues && valueError" class="field-value-error">
@@ -203,6 +216,7 @@ function onPrecisionChange(val: unknown) {
           row.typeConfig?.precision ?? precisionConfig.default
         "
         :items="precisionItems"
+        :readonly="readonly"
         @update:model-value="onPrecisionChange"
         density="compact"
         variant="outlined"
@@ -216,6 +230,7 @@ function onPrecisionChange(val: unknown) {
         item-title="entry.value"
         item-value="entry.id"
         item-children="children"
+        :readonly="readonly"
       />
     </div>
   </div>

@@ -20,6 +20,7 @@ function partsToMs(parts: DateTimeParts, unit: string): number {
 
 const props = defineProps<{
   modelValue: [number, number] | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -101,6 +102,7 @@ watch(() => props.modelValue, (pair) => {
       :model-value="startYear"
       :min="0"
       :max="9999"
+      :readonly="readonly"
       :label="t('database.field-editor.range-start-label')"
       variant="outlined"
       density="compact"
@@ -112,6 +114,7 @@ watch(() => props.modelValue, (pair) => {
       :model-value="endYear"
       :min="0"
       :max="9999"
+      :readonly="readonly"
       :label="t('database.field-editor.range-end-label')"
       variant="outlined"
       density="compact"

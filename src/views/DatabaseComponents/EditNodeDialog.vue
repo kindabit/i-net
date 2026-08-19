@@ -4,6 +4,8 @@
   通过 defineExpose 的 open() 以 Promise 形式获取编辑结果：
   确认返回 { title, subTitle }（trim 后的新值），取消或关闭（遮罩 / ESC）返回 null。
   支持字段编辑与保存为模板。
+  支持以只读形式查看节点（open 的 options.readonly）：只读模式下隐藏编辑类控件，
+  只保留关闭按钮，因此永远不会 resolve 出非 null 值。
 -->
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
@@ -30,6 +32,8 @@ const draft = reactive({
 });
 /** 标题错误提示 */
 const titleError = ref("");
+/** 只读模式（用于影子节点只读查看） */
+const readonly = ref(false);
 /** 提交中 */
 const submitting = ref(false);
 /** 初始标题（用于比较是否有变化） */
@@ -49,12 +53,17 @@ const fieldList = useFieldList({ withValues: true });
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
 
 /**
- * 打开对话框编辑节点。
- * @param node 节点信息
- * @returns 确认返回 trim 后的新值，取消返回 null
+ * 打开对话框编辑或查看节点。
+ * @param node 节点信息（含 id、标题、副标题）
+ * @param options 可选配置；readonly 为 true 时以只读模式展示（用于影子节点查看），只读模式不会 resolve 出非 null 值
+ * @returns 编辑模式确认返回 trim 后的新值，取消/关闭返回 null；只读模式永远返回 null
  */
-function open(node: { id: string; title: string; subTitle: string }): Promise<{ title: string; subTitle: string } | null> {
+function open(
+  node: { id: string; title: string; subTitle: string },
+  options?: { readonly?: boolean },
+): Promise<{ title: string; subTitle: string } | null> {
   settle(null);
+  readonly.value = options?.readonly ?? false;
   nodeId.value = node.id;
   draft.title = node.title;
   draft.subTitle = node.subTitle;
@@ -175,7 +184,7 @@ defineExpose({ open });
 <template>
   <VDialog v-model="dialog" max-width="48rem" :persistent="submitting">
     <VCard>
-      <VCardTitle>{{ t("database.canvas.edit-node") }}</VCardTitle>
+      <VCardTitle>{{ readonly ? t("database.canvas.view-node-readonly") : t("database.canvas.edit-node") }}</VCardTitle>
       <VCardText :class="{ 'fields-scroll': !loading }">
         <div v-if="loading" class="d-flex justify-center py-8">
           <VProgressCircular indeterminate color="primary" />
@@ -185,6 +194,7 @@ defineExpose({ open });
             v-model="draft.title"
             :label="t('database.canvas.edit-node-title-label')"
             :error-messages="titleError"
+            :readonly="readonly"
             variant="outlined"
             density="comfortable"
             class="mb-4"
@@ -192,6 +202,7 @@ defineExpose({ open });
           <VTextField
             v-model="draft.subTitle"
             :label="t('database.canvas.edit-node-subtitle-label')"
+            :readonly="readonly"
             variant="outlined"
             density="comfortable"
           />
@@ -200,6 +211,7 @@ defineExpose({ open });
             <FieldDefinitionRow
               :row="row"
               :with-values="true"
+              :readonly="readonly"
               :name-error="fieldList.errors.value.get(row.uid)?.name"
               :value-error="fieldList.errors.value.get(row.uid)?.value"
               @remove="fieldList.removeRow"
@@ -208,6 +220,7 @@ defineExpose({ open });
             />
           </div>
           <VBtn
+            v-if="!readonly"
             variant="text"
             prepend-icon="mdi-plus"
             @click="fieldList.addRow()"
@@ -217,21 +230,26 @@ defineExpose({ open });
         </template>
       </VCardText>
       <VCardActions class="justify-end ga-2">
-        <VBtn
-          v-if="!loading"
-          class="mr-auto"
-          :loading="savingTemplate"
-          :disabled="submitting"
-          variant="text"
-          @click="saveAsTemplate"
-        >
-          {{ t("database.canvas.edit-node-save-as-template") }}
-        </VBtn>
-        <VBtn variant="text" :disabled="submitting || savingTemplate" @click="dialog = false">
+        <template v-if="!readonly">
+          <VBtn
+            v-if="!loading"
+            class="mr-auto"
+            :loading="savingTemplate"
+            :disabled="submitting"
+            variant="text"
+            @click="saveAsTemplate"
+          >
+            {{ t("database.canvas.edit-node-save-as-template") }}
+          </VBtn>
+          <VBtn variant="text" :disabled="submitting || savingTemplate" @click="dialog = false">
+            {{ t("common.cancel") }}
+          </VBtn>
+          <VBtn color="primary" variant="flat" :loading="submitting" :disabled="savingTemplate" @click="onConfirm">
+            {{ t("common.confirm") }}
+          </VBtn>
+        </template>
+        <VBtn v-else variant="text" @click="dialog = false">
           {{ t("common.cancel") }}
-        </VBtn>
-        <VBtn color="primary" variant="flat" :loading="submitting" :disabled="savingTemplate" @click="onConfirm">
-          {{ t("common.confirm") }}
         </VBtn>
       </VCardActions>
     </VCard>

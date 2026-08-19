@@ -4,6 +4,7 @@
   将 VTreeview 置于 VMenu 中，通过只读 VTextField 激活下拉。
   通过 item-title / item-value / item-children 适配任意形态的树形数据，
   仅叶子节点可选中，选中值可通过清除按钮置空。
+  readonly 时不允许打开下拉与清除，仅展示当前选中项文本。
 -->
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
@@ -26,9 +27,12 @@ const props = withDefaults(defineProps<{
   label?: string;
   errorMessages?: string | string[];
   clearable?: boolean;
+  /** 只读模式：仅展示选中项文本，不打开下拉、不可清除。 */
+  readonly?: boolean;
 }>(), {
   label: "",
   clearable: true,
+  readonly: false,
 });
 
 const emit = defineEmits<{
@@ -165,11 +169,11 @@ function onActivated(val: unknown): void {
           variant="outlined"
           density="compact"
           hide-details="auto"
-          append-inner-icon="mdi-menu-down"
-          :clearable="clearable && modelValue !== null"
+          :append-inner-icon="readonly ? undefined : 'mdi-menu-down'"
+          :clearable="clearable && !readonly && modelValue !== null"
           :label="label"
           :error-messages="errorMessages"
-          v-bind="menuProps"
+          v-bind="readonly ? {} : menuProps"
           @click:clear="emit('update:modelValue', null)"
         />
       </div>

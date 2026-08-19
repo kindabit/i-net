@@ -283,6 +283,7 @@ function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; n
       :min-zoom="0.1"
       :snap-to-grid="true"
       :snap-grid="snapGrid"
+      :delete-key-code="null"
       @node-drag-stop="onNodeDragStop"
       @viewport-change="viewport.save"
       @drop="onDrop"

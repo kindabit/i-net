@@ -20,7 +20,7 @@ use crate::util::{file_system_util, time_util};
 /// - `source_path`: 源文件路径。
 ///
 /// # 返回值
-/// 返回导入的附件值对象；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 返回导入的附件值对象；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，节点是影子节点时返回 `ErrorCode::NodeIsShadow`，
 /// 源文件路径取不到文件名时返回 `ErrorCode::EmptyFilePath`，
 /// 明文大小超过上限时返回 `ErrorCode::AttachmentTooLarge`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
@@ -31,6 +31,10 @@ pub fn import(node_id: &str, source_path: &str) -> Result<AttachmentVO, ErrorCod
             id: node_id.to_string(),
         }
     })?;
+    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
+    if node.shadow_id.is_some() {
+        return Err(ErrorCode::NodeIsShadow);
+    }
     let file_name = Path::new(source_path)
         .file_name()
         .map(|name| name.to_string_lossy().to_string())

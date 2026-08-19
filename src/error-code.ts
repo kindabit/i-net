@@ -18,6 +18,7 @@ export type ErrorCodeVariant =
   | "DuplicateDictionaryId"
   | "DuplicateNodeFieldName"
   | "EdgeAlreadyExists"
+  | "EdgeDeleteDisconnectsNodes"
   | "EdgeWouldFormCycle"
   | "EmptyCanvasName"
   | "EmptyDictionaryValue"
@@ -55,6 +56,7 @@ export type ErrorCodeVariant =
   | "InvalidNodeId"
   | "InvalidNodePort"
   | "InvalidPath"
+  | "InvalidShadowEdge"
   | "InvalidTemplateId"
   | "InvalidUserDatabaseId"
   | "MultipleDataVersion"
@@ -68,6 +70,7 @@ export type ErrorCodeVariant =
   | "NoTemplateWithSuchId"
   | "NodeFieldValueKindMismatch"
   | "NodeFieldValueValidationFailed"
+  | "NodeIsShadow"
   | "RootCanvasCannotBeDeleted"
   | "TemplateNameAlreadyExists"
   | "UserDatabaseNotOpen";

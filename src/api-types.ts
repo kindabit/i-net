@@ -71,6 +71,18 @@ export interface Node {
   deleted: boolean;
   /** 序列化自定义颜色，空串 = 默认 */
   color: string;
+  /** 影子节点指向的原始节点 id；null 表示普通节点 */
+  shadow_id: string | null;
+}
+
+/** 节点列表（user_database_node_list）的返回项：在 Node 基础上附带影子节点的展示信息。
+ * 影子节点的 title / sub_title / color / canvas_ref_id 已被后端合并为原始节点的值；
+ * 普通节点的两个扩展字段均为 null。 */
+export interface NodeVO extends Node {
+  /** 影子节点的原始节点是否已被逻辑删除；仅影子节点有值 */
+  shadow_origin_deleted: boolean | null;
+  /** 影子节点的方向；仅影子节点有值 */
+  shadow_direction: "inflow" | "outflow" | null;
 }
 
 /** 边（对应后端 Edge 实体） */

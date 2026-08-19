@@ -4,6 +4,7 @@ import PasswordGeneratorDialog from "./PasswordGeneratorDialog.vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -48,6 +49,7 @@ async function openPasswordGenerator() {
   <VTextField
     v-model="text"
     :type="inputType"
+    :readonly="readonly"
     variant="outlined"
     density="compact"
     hide-details="auto"
@@ -60,6 +62,7 @@ async function openPasswordGenerator() {
         @click="visible = !visible"
       />
       <VIcon
+        v-if="!readonly"
         icon="mdi-auto-fix"
         class="cursor-pointer"
         @click="openPasswordGenerator()"

@@ -25,6 +25,7 @@ function msToLocalDate(ms: number): Date {
 
 const props = defineProps<{
   modelValue: number | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -77,7 +78,8 @@ function onClear() {
     <template #activator="{ props: menuProps }">
       <VTextField
         :model-value="dayDisplay"
-        readonly
+        :readonly="!readonly"
+        :disabled="readonly"
         clearable
         prepend-inner-icon="mdi-calendar"
         variant="outlined"

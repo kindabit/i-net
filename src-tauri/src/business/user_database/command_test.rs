@@ -470,12 +470,12 @@ fn test_user_database_command_all_functions() {
 
     // user_database_edge_delete::preprocess 失败路径：id 非法时报 InvalidEdgeId。
     assert!(matches!(
-        user_database_edge_delete::preprocess("no-such-id".to_string()),
+        user_database_edge_delete::preprocess("no-such-id".to_string(), false),
         Err(ErrorCode::InvalidEdgeId { .. })
     ));
 
     // user_database_edge_delete::preprocess 成功路径。
-    user_database_edge_delete::preprocess(edge_1.id.clone()).unwrap();
+    user_database_edge_delete::preprocess(edge_1.id.clone(), false).unwrap();
 
     // user_database_edge_list::preprocess 失败路径：画布 id 非法时报 InvalidCanvasId。
     assert!(matches!(

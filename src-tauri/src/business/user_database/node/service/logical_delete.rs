@@ -12,12 +12,16 @@ use crate::error_code::ErrorCode;
 /// - `id`: 节点 id。
 ///
 /// # 返回值
-/// 成功时返回逻辑删除后的节点对象；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 成功时返回逻辑删除后的节点对象；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，影子节点时返回 `ErrorCode::NodeIsShadow`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn logical_delete(id: &str) -> Result<Node, ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
+    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
+    if node.shadow_id.is_some() {
+        return Err(ErrorCode::NodeIsShadow);
+    }
     node.deleted = true;
     dao::update(&connection, &node)?;
     let canvas_ref_id = node.canvas_ref_id.clone();

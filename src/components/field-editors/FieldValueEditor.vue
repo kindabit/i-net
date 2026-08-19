@@ -20,6 +20,8 @@ const props = defineProps<{
   dictionaryId: string | null;
   /** 字段值（v-model 绑定，FieldValue 包装形态）。 */
   modelValue: FieldValue | null;
+  /** 只读模式：透传给具体值编辑器；复制按钮保持可用。 */
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -93,6 +95,7 @@ async function copyFieldValue(): Promise<void> {
       v-if="editorComponent"
       :model-value="editorModelValue"
       :dictionary-items="editorDictionaryItems"
+      :readonly="readonly"
       @update:model-value="onEditorUpdate"
     />
     <VBtn

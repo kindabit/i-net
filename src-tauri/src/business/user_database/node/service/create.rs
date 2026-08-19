@@ -71,6 +71,7 @@ pub fn create(
             canvas_ref_id: Some(canvas.id.clone()),
             deleted: false,
             color: String::new(),
+            shadow_id: None,
         };
 
         if let Err(e) = dao::insert(&connection, &node) {
@@ -101,6 +102,7 @@ pub fn create(
         canvas_ref_id: None,
         deleted: false,
         color: String::new(),
+        shadow_id: None,
     };
     dao::insert(&connection, &node)?;
     if let Some(ref tid) = template_id {

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,6 +39,7 @@ const eyeIcon = computed<string>(() =>
     v-model="text"
     :type="inputType"
     :append-inner-icon="eyeIcon"
+    :readonly="readonly"
     variant="outlined"
     density="compact"
     hide-details="auto"

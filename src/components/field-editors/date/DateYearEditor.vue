@@ -19,6 +19,7 @@ function partsToMs(parts: DateTimeParts, unit: string): number {
 
 defineProps<{
   modelValue: number | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -50,6 +51,7 @@ function onYearInput(val: number | null | undefined) {
     :model-value="msToYear(modelValue)"
     :min="0"
     :max="9999"
+    :readonly="readonly"
     :label="t('database.field-editor.year-label')"
     variant="outlined"
     density="compact"

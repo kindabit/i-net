@@ -21,6 +21,7 @@ function partsToMs(parts: DateTimeParts, unit: string): number {
 
 const props = defineProps<{
   modelValue: [number, number] | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -215,7 +216,8 @@ function onEndTimeClear() {
         <template #activator="{ props: menuProps }">
           <VTextField
             :model-value="startDateDisplay"
-            readonly
+            :readonly="!readonly"
+            :disabled="readonly"
             clearable
             prepend-inner-icon="mdi-calendar"
             :label="t('database.field-editor.range-start-label')"
@@ -239,7 +241,8 @@ function onEndTimeClear() {
         <template #activator="{ props: menuProps }">
           <VTextField
             :model-value="startTime ?? ''"
-            readonly
+            :readonly="!readonly"
+            :disabled="readonly"
             clearable
             prepend-inner-icon="mdi-clock-outline"
             variant="outlined"
@@ -265,7 +268,8 @@ function onEndTimeClear() {
         <template #activator="{ props: menuProps }">
           <VTextField
             :model-value="endDateDisplay"
-            readonly
+            :readonly="!readonly"
+            :disabled="readonly"
             clearable
             prepend-inner-icon="mdi-calendar"
             :label="t('database.field-editor.range-end-label')"
@@ -289,7 +293,8 @@ function onEndTimeClear() {
         <template #activator="{ props: menuProps }">
           <VTextField
             :model-value="endTime ?? ''"
-            readonly
+            :readonly="!readonly"
+            :disabled="readonly"
             clearable
             prepend-inner-icon="mdi-clock-outline"
             variant="outlined"
