@@ -12,7 +12,7 @@
 //! 系统 temp 可能与数据目录在不同 mount point，因此移动时跨设备 fallback 到 copy+remove。
 //! 临时目录由 RAII 守卫清理，任何错误路径（含解压失败、断言失败、panic）都不残留。
 //!
-//! 各阶段边界通过调用方注入的进度回调上报 [`Phase`]，本模块不感知事件通道。
+//! 各阶段边界与阶段内粒度进度通过调用方注入的进度回调上报 [`Phase`]，本模块不感知事件通道。
 
 use std::fs::File;
 use std::io::Read;
@@ -103,6 +103,60 @@ pub(super) fn verify_shard_region(
     Ok(result)
 }
 
+/// 流式读取并校验 shard 区：从 `file` 当前位置逐 shard 容错读取并做 SHA-256 校验，
+/// 每块完成后以 `(已完成数/总数)` 调用 `on_progress`。
+///
+/// 语义与 [`verify_shard_region`] 一致：尾部截断导致数据不完整的 shard 记为缺失（None），
+/// 校验失败的 shard 记为缺失；校验和表长度不符报 `InvalidBackupFile`。
+/// 原 verify_shard_region 的「shard 区超长」校验在此天然不可达
+/// （逐块读取总量恰为 total × shard_size，不会多读），故不保留。
+///
+/// # 参数
+/// - `file`：已打开且当前位置位于 shard 区起点的备份文件。
+/// - `params`：shard 参数。
+/// - `checksum_table`：长度为 (data_shards + parity_shards) × 32 的校验和表。
+/// - `on_progress`：进度回调，值域 (0.0, 1.0]，逐块单调递增。
+///
+/// # 返回值
+/// 长度为 data_shards + parity_shards 的列表：校验通过为 Some(data)，损坏或缺失为 None。
+fn read_and_verify_shards(
+    file: &File,
+    params: ShardParams,
+    checksum_table: &[u8],
+    on_progress: &dyn Fn(f32),
+) -> Result<Vec<Option<Vec<u8>>>, ErrorCode> {
+    let total = params.data_shards as usize + params.parity_shards as usize;
+    if checksum_table.len() != total * 32 {
+        return Err(ErrorCode::InvalidBackupFile {
+            detail: format!(
+                "shard checksum table size mismatch: got {}, expected {}",
+                checksum_table.len(),
+                total * 32
+            ),
+        });
+    }
+    let shard_size = params.shard_size as usize;
+    let mut result = Vec::with_capacity(total);
+    for i in 0..total {
+        // 容错读取：尾部截断时得到短数据；一旦发生短读，后续块必然也短读（EOF），
+        // 本块及后续块全部按缺失处理。
+        let buf = read_up_to(file, shard_size)?;
+        if buf.len() < shard_size {
+            result.push(None);
+        } else {
+            let expected = &checksum_table[i * 32..(i + 1) * 32];
+            let actual = Sha256::digest(&buf);
+            if actual.as_slice() == expected {
+                result.push(Some(buf));
+            } else {
+                result.push(None);
+            }
+        }
+        on_progress((i + 1) as f32 / total as f32);
+    }
+    Ok(result)
+}
+
 /// 生成临时目录名（用于还原时解压到系统 temp 目录）。
 ///
 /// 包含进程 id 与毫秒时间戳，避免同一进程并发还原或短时间内多次还原冲突。
@@ -133,26 +187,79 @@ impl Drop for TempDirGuard {
     }
 }
 
-/// 把 tar 流解压到指定目录。
-fn extract_tar_to(tar_bytes: &[u8], target: &Path) -> Result<(), ErrorCode> {
+/// 把 tar 流逐条目解压到指定目录，按已解压 payload 字节数上报进度。
+///
+/// 逐条目调用 `unpack_in`，与 `Archive::unpack` 内部一致地保留 tar 库的路径穿越防护。
+///
+/// # 参数
+/// - `tar_bytes`：完整 tar 字节流。
+/// - `target`：解压目标目录。
+/// - `on_progress`：进度回调，按 已解压 payload 字节 / payload 总字节 上报。
+fn extract_tar_to(
+    tar_bytes: &[u8],
+    target: &Path,
+    on_progress: &dyn Fn(f32),
+) -> Result<(), ErrorCode> {
     file_system_util::create_dir_all(target)?;
+    // 第一遍扫描求 payload 总字节作为进度分母（内存 tar，扫描开销可忽略）。
+    // 分母不能用 tar 流总长（含每条目 512 字节头与块填充），否则进度永远到不了 1.0。
+    let mut total_payload = 0u64;
+    {
+        let mut scan = Archive::new(tar_bytes);
+        let scan_entries = scan.entries().map_err(|e| ErrorCode::FailToUnpackBackup {
+            detail: format!("failed to iterate tar entries: {}", e),
+        })?;
+        for entry in scan_entries {
+            let entry = entry.map_err(|e| ErrorCode::FailToUnpackBackup {
+                detail: format!("failed to read tar entry: {}", e),
+            })?;
+            total_payload += entry.size();
+        }
+    }
     let mut archive = Archive::new(tar_bytes);
-    archive.unpack(target).map_err(|e| ErrorCode::FailToUnpackBackup {
-        detail: format!("failed to unpack tar: {}", e),
+    let entries = archive.entries().map_err(|e| ErrorCode::FailToUnpackBackup {
+        detail: format!("failed to iterate tar entries: {}", e),
     })?;
+    let mut processed = 0u64;
+    for entry in entries {
+        let mut entry = entry.map_err(|e| ErrorCode::FailToUnpackBackup {
+            detail: format!("failed to read tar entry: {}", e),
+        })?;
+        let size = entry.size();
+        entry.unpack_in(target).map_err(|e| ErrorCode::FailToUnpackBackup {
+            detail: format!("failed to unpack tar entry: {}", e),
+        })?;
+        processed += size;
+        // total_payload 为 0（空 tar 或全空文件）时跳过避免除零；阶段末的 1.0 由调用方上报。
+        if total_payload > 0 {
+            on_progress((processed as f32 / total_payload as f32).min(1.0));
+        }
+    }
     Ok(())
 }
 
 /// 清空数据目录（保留 `logs/` 子目录）。
-fn clear_data_directory_keeping_logs(data_directory: &Path) -> Result<(), ErrorCode> {
-    let entries = file_system_util::read_dir(data_directory)?;
-    for entry in entries {
-        let entry = entry.map_err(|e| ErrorCode::FailToUnpackBackup {
+///
+/// # 参数
+/// - `data_directory`：应用数据根目录。
+/// - `on_progress`：进度回调，每项（含跳过的 `logs/` 子目录）处理完后以 `(i+1)/total` 上报。
+///   `total == 0` 时循环不执行，天然无除零。
+fn clear_data_directory_keeping_logs(
+    data_directory: &Path,
+    on_progress: &dyn Fn(f32),
+) -> Result<(), ErrorCode> {
+    let entries: Vec<_> = file_system_util::read_dir(data_directory)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ErrorCode::FailToUnpackBackup {
             detail: format!("failed to iterate data directory: {}", e),
         })?;
+    let total = entries.len();
+    for (i, entry) in entries.into_iter().enumerate() {
         let path = entry.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if name == "logs" {
+            // logs 仍计入 total，确保进度单调递增。
+            on_progress((i + 1) as f32 / total as f32);
             continue;
         }
         let file_type = entry.file_type().map_err(|e| ErrorCode::FailToUnpackBackup {
@@ -163,6 +270,7 @@ fn clear_data_directory_keeping_logs(data_directory: &Path) -> Result<(), ErrorC
         } else if file_type.is_file() {
             file_system_util::remove_file(&path)?;
         }
+        on_progress((i + 1) as f32 / total as f32);
     }
     Ok(())
 }
@@ -174,20 +282,33 @@ fn clear_data_directory_keeping_logs(data_directory: &Path) -> Result<(), ErrorC
 /// 失败时（典型场景：跨 mount point）fallback 到 copy + remove，以支持跨设备的场景；
 /// 每个目录在数据目录对应位置 `create_dir_all`。
 /// 临时目录本身的清理由调用方的 [`TempDirGuard`] 负责，不在此函数内删除。
-fn move_temp_into_data_directory(temp_dir: &Path, data_directory: &Path) -> Result<(), ErrorCode> {
+///
+/// # 参数
+/// - `temp_dir`：解压产物所在的临时目录。
+/// - `data_directory`：应用数据根目录。
+/// - `on_progress`：进度回调，每项（含跳过的根目录与符号链接）处理完后以 `(i+1)/total` 上报。
+///   `total == 0` 时循环不执行，天然无除零。
+fn move_temp_into_data_directory(
+    temp_dir: &Path,
+    data_directory: &Path,
+    on_progress: &dyn Fn(f32),
+) -> Result<(), ErrorCode> {
     let entries: Vec<_> = WalkDir::new(temp_dir).into_iter().collect();
+    let total = entries.len();
     tracing::info!(
         "move_temp_into_data_directory: {} -> {} (entries={})",
         temp_dir.display(),
         data_directory.display(),
-        entries.len()
+        total
     );
-    for entry in entries {
+    for (i, entry) in entries.into_iter().enumerate() {
         let entry = entry.map_err(|e| ErrorCode::FailToUnpackBackup {
             detail: format!("failed to iterate temp dir: {}", e),
         })?;
         // 跳过根目录本身，避免在 data 目录创建空目录条目。
         if entry.depth() == 0 {
+            // 根目录仍计入 total，确保进度单调递增。
+            on_progress((i + 1) as f32 / total as f32);
             continue;
         }
         let src = entry.path();
@@ -198,6 +319,7 @@ fn move_temp_into_data_directory(temp_dir: &Path, data_directory: &Path) -> Resu
         let file_type = entry.file_type();
         // 跳过符号链接，按项目约定。
         if file_type.is_symlink() {
+            on_progress((i + 1) as f32 / total as f32);
             continue;
         }
         if file_type.is_dir() {
@@ -221,6 +343,7 @@ fn move_temp_into_data_directory(temp_dir: &Path, data_directory: &Path) -> Resu
                 file_system_util::remove_file(&src)?;
             }
         }
+        on_progress((i + 1) as f32 / total as f32);
     }
     Ok(())
 }
@@ -229,7 +352,8 @@ fn move_temp_into_data_directory(temp_dir: &Path, data_directory: &Path) -> Resu
 ///
 /// # 参数
 /// - `source_path`：备份文件路径。
-/// - `on_progress`：进度回调，流程推进到各阶段边界时以 `(Phase, 0.0/1.0)` 调用。
+/// - `on_progress`：进度回调。本函数在每个阶段边界以 `(Phase, 0.0)` 与 `(Phase, 1.0)` 调用，
+///   阶段内按工作量单调上报中间值；`RestoreDecode` 阶段仅在边界上报（解码为库级单体调用）。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；校验失败、解码失败、解压失败、IO 失败时返回对应的 `ErrorCode`。
@@ -249,15 +373,13 @@ pub fn unpack(source_path: &Path, on_progress: &dyn Fn(Phase, f32)) -> Result<()
     let header = Header::from_bytes(&header_bytes)?;
     on_progress(Phase::RestoreReadHeader, 1.0);
 
-    // 2. 顺序读取校验和表与 shard 区（校验和表紧跟 Header，shard 区在其后直至文件尾）。
-    //    校验和表严格读取：尾部截断若侵入校验和表，shard 数据必然已全部丢失，无恢复价值；
-    //    shard 区容错读取：尾部截断按缺失 shard 处理，由 Reed-Solomon 冗余兜底。
+    // 2. 严格读取校验和表（校验和表紧跟 Header）；shard 区在第 3 步流式逐块读取并校验
+    //    原 read_up_to 一次性读取 shard 区的耗时已并入 RestoreVerify 阶段覆盖。
     let mut checksum_table = vec![0u8; header.shard_checksum_table_size()];
     file.read_exact(&mut checksum_table)
         .map_err(|e| ErrorCode::InvalidBackupFile {
             detail: format!("failed to read shard checksum table: {}", e),
         })?;
-    let shard_bytes = read_up_to(&file, header.shard_region_size())?;
 
     let params = ShardParams {
         data_shards: header.data_shards,
@@ -267,7 +389,9 @@ pub fn unpack(source_path: &Path, on_progress: &dyn Fn(Phase, f32)) -> Result<()
 
     // 3. 逐块 SHA-256 校验。
     on_progress(Phase::RestoreVerify, 0.0);
-    let verified = verify_shard_region(&shard_bytes, params, &checksum_table)?;
+    let verified = read_and_verify_shards(&file, params, &checksum_table, &|v| {
+        on_progress(Phase::RestoreVerify, v);
+    })?;
     on_progress(Phase::RestoreVerify, 1.0);
 
     // 4. 解码坏块。
@@ -309,17 +433,19 @@ pub fn unpack(source_path: &Path, on_progress: &dyn Fn(Phase, f32)) -> Result<()
     let temp_dir = std::env::temp_dir().join(temp_directory_name());
     let _temp_guard = TempDirGuard::new(temp_dir.clone());
     on_progress(Phase::RestoreUnpack, 0.0);
-    extract_tar_to(&recovered_tar, &temp_dir)?;
+    extract_tar_to(&recovered_tar, &temp_dir, &|v| on_progress(Phase::RestoreUnpack, v))?;
     on_progress(Phase::RestoreUnpack, 1.0);
 
     // 8. 清空数据目录（保留 logs/）。
     on_progress(Phase::RestoreClear, 0.0);
-    clear_data_directory_keeping_logs(&data_directory)?;
+    clear_data_directory_keeping_logs(&data_directory, &|v| on_progress(Phase::RestoreClear, v))?;
     on_progress(Phase::RestoreClear, 1.0);
 
     // 9. 移动临时目录内容到数据目录（跨设备场景会 fallback 到 copy+remove）。
     on_progress(Phase::RestoreMove, 0.0);
-    move_temp_into_data_directory(&temp_dir, &data_directory)?;
+    move_temp_into_data_directory(&temp_dir, &data_directory, &|v| {
+        on_progress(Phase::RestoreMove, v)
+    })?;
     on_progress(Phase::RestoreMove, 1.0);
 
     Ok(())

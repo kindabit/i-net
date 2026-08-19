@@ -105,10 +105,16 @@ pub fn compute_shard_params(
 /// # 参数
 /// - `data`：待编码的原始字节。
 /// - `params`：shard 参数（来自 [`compute_shard_params`]）。
+/// - `on_progress`：编码进度回调，每完成一个数据 shard 后以 `(已完成数/总数)` 调用；
+///   首值为 `1/data_shards`，末值为 1.0，值域 `(0.0, 1.0]`。
 ///
 /// # 返回值
 /// 成功时返回长度为 `data_shards + parity_shards` 的 shard 列表。
-pub fn encode_shards(data: &[u8], params: ShardParams) -> Result<Vec<Vec<u8>>, ErrorCode> {
+pub fn encode_shards(
+    data: &[u8],
+    params: ShardParams,
+    on_progress: &dyn Fn(f32),
+) -> Result<Vec<Vec<u8>>, ErrorCode> {
     let total = params.data_shards as usize + params.parity_shards as usize;
     if total > MAX_TOTAL_SHARDS as usize {
         return Err(ErrorCode::InvalidBackupFile {
@@ -145,12 +151,17 @@ pub fn encode_shards(data: &[u8], params: ShardParams) -> Result<Vec<Vec<u8>>, E
         detail: format!("failed to create ReedSolomon encoder: {:?}", e),
     })?;
 
-    // 使用 SEP 变体：数据 shard 只读、校验 shard 可写，便于流式或并行场景。
+    // 逐数据 shard 编码（encode_single_sep 要求严格按 0..data_shards 顺序调用，
+    // 本循环天然满足），每块完成后上报进度；性能与一次性 encode_sep 等价。
     let (data_ref, parity_ref) = shards.split_at_mut(params.data_shards as usize);
-    rs.encode_sep(&data_ref.iter().collect::<Vec<_>>(), parity_ref)
-        .map_err(|e| ErrorCode::FailToPackBackup {
-            detail: format!("Reed-Solomon encode failed: {:?}", e),
-        })?;
+    let data_count = params.data_shards as usize;
+    for (i, data_shard) in data_ref.iter().enumerate() {
+        rs.encode_single_sep(i, data_shard, parity_ref)
+            .map_err(|e| ErrorCode::FailToPackBackup {
+                detail: format!("Reed-Solomon encode failed at data shard {}: {:?}", i, e),
+            })?;
+        on_progress((i + 1) as f32 / data_count as f32);
+    }
 
     Ok(shards)
 }
@@ -287,7 +298,7 @@ mod tests {
         let params = compute_shard_params(original.len() as u64, 0.20).unwrap();
         let total = params.data_shards as usize + params.parity_shards as usize;
 
-        let shards = encode_shards(&original, params).unwrap();
+        let shards = encode_shards(&original, params, &|_: f32| {}).unwrap();
         assert_eq!(shards.len(), total);
 
         // 构造 partial：随机把部分 shard 标记为 None（模拟丢失或损坏）。
@@ -315,7 +326,7 @@ mod tests {
     fn test_reconstruct_rejects_too_many_losses() {
         let original = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
         let params = compute_shard_params(original.len() as u64, 0.5).unwrap();
-        let shards = encode_shards(&original, params).unwrap();
+        let shards = encode_shards(&original, params, &|_: f32| {}).unwrap();
         let mut partial: Vec<Option<Vec<u8>>> = shards.into_iter().map(Some).collect();
         // 故意多丢一个 shard（> parity_shards）。
         for s in partial.iter_mut().take(params.parity_shards as usize + 1) {
@@ -332,7 +343,7 @@ mod tests {
     fn test_reconstruct_passes_through_when_complete() {
         let original = vec![9u8; 128];
         let params = compute_shard_params(original.len() as u64, 0.1).unwrap();
-        let shards = encode_shards(&original, params).unwrap();
+        let shards = encode_shards(&original, params, &|_: f32| {}).unwrap();
         let partial: Vec<Option<Vec<u8>>> = shards.iter().cloned().map(Some).collect();
         let restored = reconstruct_shards(partial, params).unwrap();
         let mut recovered = Vec::new();
@@ -341,5 +352,23 @@ mod tests {
         }
         recovered.truncate(original.len());
         assert_eq!(recovered, original);
+    }
+
+    /// 覆盖 encode_shards 的进度回调契约：逐数据 shard 上报，次数等于 data_shards，
+    /// 值严格递增且末次为 1.0，编码结果不受进度逻辑影响。
+    #[test]
+    fn test_encode_shards_reports_progress() {
+        let original: Vec<u8> = (0u32..8192).map(|i| (i % 251) as u8).collect();
+        let params = compute_shard_params(original.len() as u64, 0.2).unwrap();
+        let log = std::cell::RefCell::new(Vec::new());
+        let shards = encode_shards(&original, params, &|v: f32| log.borrow_mut().push(v)).unwrap();
+        let log = log.borrow();
+        assert_eq!(log.len(), params.data_shards as usize);
+        assert_eq!(log.last(), Some(&1.0));
+        assert!(log.windows(2).all(|w| w[0] < w[1]));
+        assert_eq!(
+            shards.len(),
+            (params.data_shards + params.parity_shards) as usize
+        );
     }
 }

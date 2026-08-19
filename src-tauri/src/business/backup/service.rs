@@ -36,6 +36,9 @@ mod tests {
     /// 不关注进度断言时使用的 noop 进度回调。
     fn noop_progress(_: Phase, _: f32) {}
 
+    /// 不关注粒度进度断言时使用的 noop 回调（供 build_tar / encode_shards 等 helper）。
+    fn noop_frac(_: f32) {}
+
     /// 覆盖完整 pack → 损坏中段 shard → probe → 修复 → 校验的端到端流程。
     #[test]
     fn test_pack_and_unpack_round_trip_with_corruption() {
@@ -67,13 +70,13 @@ mod tests {
 
         // pack 需要进度回调，本测试关注格式与校验链路而非进度，
         // 因此直接复用内部 helper 手工构造备份文件（与 pack 内第 2~5 步一致）。
-        let tar_bytes = build_tar(&path.data_directory).unwrap();
+        let tar_bytes = build_tar(&path.data_directory, &noop_frac).unwrap();
         let original_sha = Sha256::digest(&tar_bytes);
         let mut sha_arr = [0u8; 32];
         sha_arr.copy_from_slice(&original_sha);
         let params = compute_shard_params(tar_bytes.len() as u64, 0.5).unwrap();
-        let shards = encode_shards(&tar_bytes, params).unwrap();
-        let checksum_table = compute_shard_checksums(&shards);
+        let shards = encode_shards(&tar_bytes, params, &noop_frac).unwrap();
+        let checksum_table = compute_shard_checksums(&shards, &noop_frac);
         let header = Header {
             original_size: tar_bytes.len() as u64,
             data_shards: params.data_shards,
@@ -82,7 +85,7 @@ mod tests {
             redundancy_ratio: 0.5,
             original_sha256: sha_arr,
         };
-        write_backup_file(&backup_path, &header, &shards, &checksum_table).unwrap();
+        write_backup_file(&backup_path, &header, &shards, &checksum_table, &noop_frac).unwrap();
 
         // 读取 shard 区并人为损坏一个数据 shard（替换前几个字节）。
         // shard 区紧跟 Header + 校验和表，所以起始偏移为 HEADER_SIZE + 校验和表大小。
@@ -204,7 +207,7 @@ mod tests {
         let extra_bytes = std::fs::read(path.data_directory.join("extra.txt")).unwrap();
         let log_bytes = std::fs::read(path.log_directory.join("today.log")).unwrap();
 
-        // 用收集闭包跑 pack/unpack，顺带验证进度回调契约：阶段边界成对上报（0.0 → 1.0）。
+        // 用收集闭包跑 pack/unpack，顺带验证粒度化进度回调契约。
         let progress_log = std::cell::RefCell::new(Vec::new());
         let collect_progress = |phase: Phase, progress: f32| {
             progress_log.borrow_mut().push((phase, progress));
@@ -243,10 +246,14 @@ mod tests {
         // 跑 unpack：临时目录在系统 temp，整流完成后应被清理。
         unpack(&backup_path, &collect_progress).unwrap();
 
-        // 验证进度回调契约：pack 上报 BackupPack/BackupEncode/BackupWrite，
-        // unpack 上报 RestoreReadHeader/RestoreVerify/RestoreDecode/RestoreUnpack/RestoreClear/RestoreMove
-        // （本测试损坏了 1 块 shard，因此包含 RestoreDecode），每个阶段均为 (0.0, 1.0) 成对出现。
-        let expected_progress: Vec<(Phase, f32)> = [
+        // 验证粒度化后的进度回调契约：
+        // 1. 阶段按预期顺序分段出现（连续同阶段视为一段，本测试损坏 1 块 shard 故含 RestoreDecode）；
+        // 2. 每段首事件为 0.0、末事件为 1.0；
+        // 3. 每段内进度单调不减；
+        // 4. BackupWrite 段存在 0/1 之外的中间值（shard 总数 >= 3，逐块写入必有中间值），
+        //    证明粒度上报生效。
+        let log = progress_log.borrow();
+        let expected_order = [
             Phase::BackupPack,
             Phase::BackupEncode,
             Phase::BackupWrite,
@@ -256,11 +263,35 @@ mod tests {
             Phase::RestoreUnpack,
             Phase::RestoreClear,
             Phase::RestoreMove,
-        ]
-        .iter()
-        .flat_map(|phase| [(*phase, 0.0), (*phase, 1.0)])
-        .collect();
-        assert_eq!(*progress_log.borrow(), expected_progress);
+        ];
+        let mut segments: Vec<(Phase, Vec<f32>)> = Vec::new();
+        for (phase, value) in log.iter() {
+            match segments.last_mut() {
+                Some((last_phase, values)) if *last_phase == *phase => values.push(*value),
+                _ => segments.push((*phase, vec![*value])),
+            }
+        }
+        let order: Vec<Phase> = segments.iter().map(|(p, _)| *p).collect();
+        assert_eq!(order, expected_order);
+        for (phase, values) in &segments {
+            assert_eq!(values.first(), Some(&0.0), "phase {:?} must start at 0.0", phase);
+            assert_eq!(values.last(), Some(&1.0), "phase {:?} must end at 1.0", phase);
+            assert!(
+                values.windows(2).all(|w| w[0] <= w[1]),
+                "phase {:?} progress must be non-decreasing: {:?}",
+                phase,
+                values
+            );
+        }
+        let write_values = &segments
+            .iter()
+            .find(|(p, _)| *p == Phase::BackupWrite)
+            .unwrap()
+            .1;
+        assert!(
+            write_values.iter().any(|v| *v > 0.0 && *v < 1.0),
+            "BackupWrite should report intermediate progress"
+        );
 
         // 验证数据目录里的非 SQLite 内容与原始一致（含子目录）。
         let restored_a = std::fs::read(
@@ -379,8 +410,8 @@ mod tests {
         let original_sha = Sha256::digest(payload);
         sha_arr.copy_from_slice(&original_sha);
         let params = compute_shard_params(payload.len() as u64, 0.5).unwrap();
-        let shards = encode_shards(payload, params).unwrap();
-        let checksums = compute_shard_checksums(&shards);
+        let shards = encode_shards(payload, params, &noop_frac).unwrap();
+        let checksums = compute_shard_checksums(&shards, &noop_frac);
         let header = Header {
             original_size: payload.len() as u64,
             data_shards: params.data_shards,
@@ -390,7 +421,7 @@ mod tests {
             original_sha256: sha_arr,
         };
         let backup_path = path.data_directory.join("bad.ibackup");
-        write_backup_file(&backup_path, &header, &shards, &checksums).unwrap();
+        write_backup_file(&backup_path, &header, &shards, &checksums, &noop_frac).unwrap();
 
         // 解压必须失败（payload 太短，tar 头块不完整）。
         let result = unpack(&backup_path, &noop_progress);
