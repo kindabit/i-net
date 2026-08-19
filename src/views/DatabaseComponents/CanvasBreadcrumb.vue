@@ -4,7 +4,7 @@
   组件自行加载画布列表、组装层级链并上报数据异常。
   在 DatabaseView 顶部浮条中展示从画布宇宙到当前画布的层级导航路径。
   位于画布宇宙时仅显示静态"画布宇宙"文本。
-  中间层级过多时自动折叠为省略号菜单。
+  中间层级过多时折叠为省略号菜单，根画布与上一级画布固定显示。
 -->
 <script setup lang="ts">
 import { ref, computed, watch, type Ref } from "vue";
@@ -93,7 +93,15 @@ const crumbs = computed<Crumb[]>(() => {
   if (chainResult.value.status === "ok") {
     const collapsed = collapseChain(chainResult.value.chain);
     if (collapsed.collapsed) {
+      items.push({
+        title: displayName(collapsed.root),
+        to: { name: "canvas", params: { canvasId: collapsed.root.id } },
+      });
       items.push({ title: "\u2026", ellipsis: true, hidden: collapsed.hidden });
+      items.push({
+        title: displayName(collapsed.parent),
+        to: { name: "canvas", params: { canvasId: collapsed.parent.id } },
+      });
       items.push({ title: displayName(collapsed.current), disabled: true });
     } else {
       for (const c of collapsed.visible.slice(0, -1)) {
