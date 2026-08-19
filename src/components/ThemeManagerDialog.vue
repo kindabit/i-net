@@ -7,6 +7,7 @@
 -->
 <script setup lang="ts">
 import { ref } from "vue";
+import { isString } from "lodash";
 import { t } from "@/i18n";
 import { vuetify } from "@/vuetify";
 import { exportTheme, removeCustomTheme, themeList } from "@/themes";
@@ -48,7 +49,7 @@ function swatchesOf(name: string): string[] {
     def.colors.secondary,
     def.colors.surface,
     def.colors.background,
-  ].filter((color): color is string => typeof color === "string");
+  ].filter((color): color is string => isString(color));
 }
 
 /** 打开新建主题编辑器 */

@@ -20,6 +20,7 @@
 import { ref, computed } from "vue";
 import { Handle, Position, useNode } from "@vue-flow/core";
 import { useRoute, useRouter } from "vue-router";
+import { isString } from "lodash";
 import { t } from "@/i18n";
 import { userDatabaseCanvasList } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
@@ -80,7 +81,7 @@ function onDblClick() {
 async function onShadowVirtualEdgeClick() {
   if (!props.data.shadowId || !props.data.shadowDirection) return;
   const canvasId = route.params.canvasId;
-  if (typeof canvasId !== "string" || canvasId === "") return;
+  if (!isString(canvasId) || canvasId === "") return;
   try {
     const canvases = await userDatabaseCanvasList(false);
     const current = canvases.find((c) => c.id === canvasId);

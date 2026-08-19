@@ -3,6 +3,7 @@
  *
  * 字段类型的唯一事实来源是 schemas/field-types.json（前后端共享）。
  */
+import { isNumber, isString } from "lodash";
 import { DateTime } from "luxon";
 import rawSchema from "../../schemas/field-types.json";
 import type { FieldValue } from "@/api-types";
@@ -95,7 +96,7 @@ export function validateValue(
   if (def.validation) {
     if (
       (value.variant === "string" || value.variant === "decimal") &&
-      typeof value.data === "string"
+      isString(value.data)
     ) {
       if (!new RegExp(def.validation.regex).test(value.data)) {
         return def.validation.errorI18nKey;
@@ -108,7 +109,7 @@ export function validateValue(
     value.data.length === 2
   ) {
     const [start, end] = value.data;
-    if (typeof start === "number" && typeof end === "number" && start > end) {
+    if (isNumber(start) && isNumber(end) && start > end) {
       return "invalid-range";
     }
   }

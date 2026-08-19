@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { isFunction, isObjectLike } from "lodash";
 import { t } from "@/i18n";
 import { useMenuDismiss } from "@/composables/use-menu-dismiss";
 
@@ -63,11 +64,11 @@ function resolveItemProp(
   key: ItemKey | undefined,
   defaultKey: string,
 ): unknown {
-  if (typeof key === "function") return key(item);
+  if (isFunction(key)) return key(item);
   const path = key ?? defaultKey;
   let cur: unknown = item;
   for (const segment of path.split(".")) {
-    if (cur === null || typeof cur !== "object") return undefined;
+    if (!isObjectLike(cur)) return undefined;
     cur = (cur as Record<string, unknown>)[segment];
   }
   return cur;

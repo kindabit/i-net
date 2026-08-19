@@ -6,6 +6,8 @@
  * 无法解析时返回空字符串。
  */
 
+import { isNumber, isObjectLike, isString } from "lodash";
+
 /** 匹配 #RGB / #RGBA / #RRGGBB / #RRGGBBAA */
 const HEX_REGEX =
   /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -96,9 +98,9 @@ function normalizeColorObject(obj: Record<string, unknown>): string {
   const g = obj.g;
   const b = obj.b;
   if (
-    typeof r !== "number" ||
-    typeof g !== "number" ||
-    typeof b !== "number" ||
+    !isNumber(r) ||
+    !isNumber(g) ||
+    !isNumber(b) ||
     isNaN(r) ||
     isNaN(g) ||
     isNaN(b)
@@ -109,7 +111,7 @@ function normalizeColorObject(obj: Record<string, unknown>): string {
   if (a === undefined || a === null) {
     return `#${toHex2(r)}${toHex2(g)}${toHex2(b)}ff`;
   }
-  if (typeof a !== "number" || isNaN(a)) return "";
+  if (!isNumber(a) || isNaN(a)) return "";
   let alpha255: number;
   if (a <= 1) {
     alpha255 = Math.round(a * 255);
@@ -130,14 +132,14 @@ function normalizeColorObject(obj: Record<string, unknown>): string {
  */
 export function parseVuetifyColor(color: unknown): string {
   if (color === null || color === undefined) return "";
-  if (typeof color === "string") {
+  if (isString(color)) {
     const str = color.trim();
     if (!str) return "";
     if (str[0] === "#") return normalizeHex(str);
     if (str.toLowerCase().startsWith("rgb")) return normalizeRgb(str);
     return "";
   }
-  if (typeof color === "object") {
+  if (isObjectLike(color)) {
     return normalizeColorObject(color as Record<string, unknown>);
   }
   return "";

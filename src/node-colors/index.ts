@@ -10,6 +10,7 @@
  * parseVuetifyColor 或本模块预设字面量产生，格式已保证闭合）。
  */
 
+import { isObjectLike, isString } from "lodash";
 import { t } from "@/i18n";
 import {
   userDatabaseNodeColorList,
@@ -105,10 +106,10 @@ export function deserializeNodeColor(color: string): DataNodeColorScheme {
   }
   for (const theme of ["light", "dark"] as const) {
     const themeObj = (parsed as Record<string, unknown> | null)?.[theme];
-    if (typeof themeObj !== "object" || themeObj === null) continue;
+    if (!isObjectLike(themeObj)) continue;
     for (const key of DATA_NODE_COLOR_KEYS) {
       const value = (themeObj as Record<string, unknown>)[key];
-      if (typeof value === "string" && value) scheme[theme][key] = value;
+      if (isString(value) && value) scheme[theme][key] = value;
     }
   }
   return scheme;
@@ -131,10 +132,10 @@ export function deserializeCanvasColor(color: string): CanvasNodeColorScheme {
   }
   for (const theme of ["light", "dark"] as const) {
     const themeObj = (parsed as Record<string, unknown> | null)?.[theme];
-    if (typeof themeObj !== "object" || themeObj === null) continue;
+    if (!isObjectLike(themeObj)) continue;
     for (const key of CANVAS_NODE_COLOR_KEYS) {
       const value = (themeObj as Record<string, unknown>)[key];
-      if (typeof value === "string" && value) scheme[theme][key] = value;
+      if (isString(value) && value) scheme[theme][key] = value;
     }
   }
   return scheme;

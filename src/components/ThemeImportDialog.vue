@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { isString } from "lodash";
 import { t } from "@/i18n";
 import { importTheme } from "@/themes";
 import { snackbarText } from "@/composables/use-snackbar";
@@ -49,7 +50,7 @@ function onImport() {
 function readDisplayName(text: string): string {
   try {
     const parsed = JSON.parse(text) as { displayName?: unknown };
-    return typeof parsed.displayName === "string" ? parsed.displayName : "";
+    return isString(parsed.displayName) ? parsed.displayName : "";
   } catch {
     return "";
   }

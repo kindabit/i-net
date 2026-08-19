@@ -10,6 +10,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, type Ref } from "vue";
 import { useRoute } from "vue-router";
+import { isString } from "lodash";
 import { VueFlow, useVueFlow } from "@vue-flow/core";
 import type { Node as VFNode, Edge as VFEdge, Connection, VueFlowStore } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
@@ -131,7 +132,7 @@ onUnmounted(() => {
  */
 function onFlowInit(instance: VueFlowStore) {
   const nodeId = route.query.nodeId;
-  if (typeof nodeId !== "string" || nodeId === "") return;
+  if (!isString(nodeId) || nodeId === "") return;
   const target = nodes.value.find((n) => n.id === nodeId);
   if (!target) return;
   instance.setCenter(target.position.x + 80, target.position.y + 40, {
