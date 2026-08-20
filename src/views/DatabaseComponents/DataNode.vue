@@ -5,8 +5,8 @@
   显示节点标题和副标题，canvasId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
   四个方向均为出口（source）。
   节点为固定宽高（160×80，背景网格 20px 的整数倍），标题/副标题过长时显示省略号。
-  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、附件、自定义颜色与逻辑删除四个按钮，
-  影子节点只显示编辑按钮。
+  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
+  影子节点只显示编辑按钮，画布节点不显示复制按钮。
   支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
 
   影子节点（data.shadowId 非 null）的渲染差异：
@@ -41,7 +41,7 @@ const props = defineProps<{
   selected: boolean;
 }>();
 
-const emit = defineEmits<{ delete: [id: string]; edit: [id: string]; attachment: [id: string]; color: [id: string] }>();
+const emit = defineEmits<{ delete: [id: string]; edit: [id: string]; copy: [id: string]; attachment: [id: string]; color: [id: string] }>();
 
 /** 当前节点对象（响应式，含 position）。替代已 deprecated 的 slot position 属性。DEBUG 关闭时模板不引用，无副作用。 */
 const { node } = useNode();
@@ -127,6 +127,19 @@ async function onShadowVirtualEdgeClick() {
           :title="t('database.canvas.edit-node')"
           :style="{ color: colors.action }"
           @click.stop="emit('edit', props.id)"
+          @pointerdown.stop
+          @mousedown.stop
+          @dblclick.stop
+        />
+        <VBtn
+          v-if="!data.shadowId && !data.canvasId"
+          icon="mdi-content-copy"
+          size="x-small"
+          variant="text"
+          density="comfortable"
+          :title="t('database.canvas.copy-node')"
+          :style="{ color: colors.action }"
+          @click.stop="emit('copy', props.id)"
           @pointerdown.stop
           @mousedown.stop
           @dblclick.stop

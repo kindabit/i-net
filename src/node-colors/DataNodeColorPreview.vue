@@ -92,6 +92,7 @@ function handleStyle(colors: DataNodeColorProperties) {
           <!-- mock 工具按钮排：与真实节点一致定位于卡片右上方 -->
           <div class="node-color-preview__actions frosted-glass">
             <VIcon icon="mdi-pencil-outline" size="12" :style="{ color: pane.colors.action }" />
+            <VIcon icon="mdi-content-copy" size="12" :style="{ color: pane.colors.action }" />
             <VIcon icon="mdi-paperclip" size="12" :style="{ color: pane.colors.action }" />
             <VIcon icon="mdi-delete-outline" size="12" :style="{ color: pane.colors.action }" />
           </div>

@@ -22,6 +22,7 @@ import {
   userDatabaseNodeMoveNode,
   userDatabaseNodeMoveNodes,
   userDatabaseNodeCreate,
+  userDatabaseNodeCopy,
   userDatabaseEdgeCreate,
   userDatabaseEdgeUpdate,
 } from "@/api";
@@ -212,6 +213,31 @@ function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; n
   } else if (items.length > 1) {
     userDatabaseNodeMoveNodes(items).catch(snackbarErrorCode);
   }
+}
+
+/**
+ * 复制指定节点到画布视口正中央。
+ *
+ * 落点取画布容器中心的屏幕坐标，经 screenToFlowCoordinate 换算为画布坐标后
+ * 手动按 snapGrid 取整（vue-flow 的 snap 只在拖拽时生效，程序写入的坐标需自行对齐）。
+ * @param id 被复制的节点 id
+ * @returns 无返回值
+ */
+function onNodeCopy(id: string): void {
+  const el = containerRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const center = screenToFlowCoordinate({
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  });
+  const x = Math.round(center.x / snapGrid[0]) * snapGrid[0];
+  const y = Math.round(center.y / snapGrid[1]) * snapGrid[1];
+  userDatabaseNodeCopy(id, x, y)
+    .then((created) => {
+      nodes.value.push(toVFNode(created));
+    })
+    .catch(snackbarErrorCode);
 }
 
 /**
@@ -490,7 +516,7 @@ async function onEdgeEdit(id: string): Promise<void> {
       <Background pattern="dots" :gap="20" :size="1" />
       <Controls class="theme-controls frosted-glass" />
       <template #node-data-node="{ id, data, selected }">
-        <DataNode :id="id" :data="data" :selected="selected" @delete="onNodeLogicalDelete" @edit="onNodeEdit" @attachment="onNodeAttachment" @color="onNodeColor" />
+        <DataNode :id="id" :data="data" :selected="selected" @delete="onNodeLogicalDelete" @edit="onNodeEdit" @copy="onNodeCopy" @attachment="onNodeAttachment" @color="onNodeColor" />
       </template>
       <template #edge-custom="edgeProps">
         <CustomEdge v-bind="edgeProps" @contextmenu="(p) => onEdgeContextMenu(p.id, { x: p.x, y: p.y })" />

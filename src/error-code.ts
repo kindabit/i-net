@@ -70,6 +70,7 @@ export type ErrorCodeVariant =
   | "NoTemplateWithSuchId"
   | "NodeFieldValueKindMismatch"
   | "NodeFieldValueValidationFailed"
+  | "NodeIsCanvasNode"
   | "NodeIsShadow"
   | "RootCanvasCannotBeDeleted"
   | "TemplateNameAlreadyExists"

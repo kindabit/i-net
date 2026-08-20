@@ -50,6 +50,7 @@
       "customize-color": "Customize color",
       "cycle-detected": "Canvas hierarchy error: cycle detected",
       "delete-node": "Delete node",
+      "copy-node": "Copy node",
       "edit-node": "Edit node",
       "edit-node-title-label": "Title",
       "edit-node-title-required": "Title is required",

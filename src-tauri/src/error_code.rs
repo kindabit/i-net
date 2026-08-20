@@ -141,6 +141,8 @@ pub enum ErrorCode {
     NodeFieldValueKindMismatch { field_type: String, expected: String, actual: String },
     /// 节点字段值未通过校验，包含字段名称。
     NodeFieldValueValidationFailed { name: String },
+    /// 该操作不允许作用于画布节点。
+    NodeIsCanvasNode,
     /// 该操作不允许作用于影子节点。
     NodeIsShadow,
     /// 根画布不可删除。

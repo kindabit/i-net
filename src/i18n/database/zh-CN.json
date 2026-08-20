@@ -50,6 +50,7 @@
       "customize-color": "自定义颜色",
       "cycle-detected": "画布层级数据异常：检测到环状结构",
       "delete-node": "删除节点",
+      "copy-node": "复制节点",
       "edit-node": "编辑节点",
       "edit-node-title-label": "标题",
       "edit-node-title-required": "标题不能为空",

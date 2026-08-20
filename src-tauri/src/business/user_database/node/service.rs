@@ -1,4 +1,5 @@
 mod color_list;
+mod copy;
 mod create;
 mod initialize;
 mod list;
@@ -13,6 +14,7 @@ mod set_color;
 mod shadow_direction;
 
 pub use color_list::color_list;
+pub use copy::copy;
 pub use create::create;
 pub use initialize::initialize;
 pub use list::list;

@@ -192,7 +192,7 @@ fn test_user_database_command_all_functions() {
     );
 
     use node::command::{
-        user_database_node_create, user_database_node_list,
+        user_database_node_copy, user_database_node_create, user_database_node_list,
         user_database_node_logical_delete, user_database_node_modify,
         user_database_node_move_node, user_database_node_physical_delete,
         user_database_node_restore,
@@ -358,6 +358,22 @@ fn test_user_database_command_all_functions() {
             .len(),
         4
     );
+
+    // user_database_node_copy::preprocess 失败路径：id 非法时报 InvalidNodeId。
+    assert!(matches!(
+        user_database_node_copy::preprocess("no-such-id".to_string(), 0.0, 0.0),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // user_database_node_copy::preprocess 成功路径：副本继承标题与副标题，id 全新、坐标取入参。
+    let copied_node_2 =
+        user_database_node_copy::preprocess(node_2.id.clone(), 500.0, 600.0).unwrap();
+    assert_ne!(copied_node_2.id, node_2.id);
+    assert_eq!(copied_node_2.title, "title-2");
+    assert_eq!(copied_node_2.sub_title, "sub-2");
+    assert_eq!((copied_node_2.x, copied_node_2.y), (500.0, 600.0));
+    assert!(copied_node_2.canvas_ref_id.is_none());
+    assert!(copied_node_2.shadow_id.is_none());
 
     // user_database_node_list::preprocess 失败路径：画布 id 非法时报 InvalidCanvasId。
     assert!(matches!(

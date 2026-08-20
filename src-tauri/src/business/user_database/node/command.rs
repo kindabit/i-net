@@ -1,4 +1,5 @@
 pub mod user_database_node_color_list;
+pub mod user_database_node_copy;
 pub mod user_database_node_create;
 pub mod user_database_node_list;
 pub mod user_database_node_logical_delete;

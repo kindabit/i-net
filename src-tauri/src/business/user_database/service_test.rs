@@ -2220,6 +2220,88 @@ fn test_user_database_service_all_functions() {
     assert_eq!(entries[0].title, "color-node");
     assert_eq!(entries[0].color, "{\"fill\":\"#aabbcc\"}");
 
+    // == node::copy 失败路径：源节点不存在 → NoNodeWithSuchId ==
+    assert!(matches!(
+        node::service::copy(&uuid::Uuid::new_v4().to_string(), 0.0, 0.0),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
+
+    // == node::copy 失败路径：源节点是画布节点 → NodeIsCanvasNode ==
+    let copy_canvas_node = node::service::create(
+        root_id,
+        "copy-canvas-node".to_string(),
+        String::new(),
+        0.0,
+        0.0,
+        None,
+        true,
+    ).unwrap();
+    assert!(matches!(
+        node::service::copy(&copy_canvas_node.id, 0.0, 0.0),
+        Err(ErrorCode::NodeIsCanvasNode)
+    ));
+
+    // == node::copy 成功路径：副本继承标题、副标题、颜色和字段结构（值为 None），
+    //    id 全新、坐标取入参、非删除态、canvas_ref_id 与 shadow_id 均为 None ==
+    let copy_source = node::service::create(
+        root_id,
+        "copy-source".to_string(),
+        "copy-sub".to_string(),
+        10.0,
+        20.0,
+        None,
+        false,
+    ).unwrap();
+    node::service::set_color(&copy_source.id, "{\"fill\":\"#aabbcc\"}".to_string()).unwrap();
+    node_field::service::set(
+        &copy_source.id,
+        &[
+            NodeFieldVO {
+                name: "文本".to_string(),
+                field_type: "TextSingleLine".to_string(),
+                type_config: None,
+                value: FieldValue::String(Some("secret".to_string())),
+                dictionary_id: None,
+            },
+            NodeFieldVO {
+                name: "日期".to_string(),
+                field_type: "Date".to_string(),
+                type_config: Some(serde_json::json!({"precision": "day"})),
+                value: FieldValue::Instant(Some(1712345678000)),
+                dictionary_id: None,
+            },
+        ],
+    ).unwrap();
+
+    let copied = node::service::copy(&copy_source.id, 300.0, 400.0).unwrap();
+    assert_ne!(copied.id, copy_source.id);
+    assert_eq!(copied.canvas_id, *root_id);
+    assert_eq!((copied.x, copied.y), (300.0, 400.0));
+    assert_eq!(copied.title, "copy-source");
+    assert_eq!(copied.sub_title, "copy-sub");
+    assert_eq!(copied.color, "{\"fill\":\"#aabbcc\"}");
+    assert!(!copied.deleted);
+    assert!(copied.canvas_ref_id.is_none());
+    assert!(copied.shadow_id.is_none());
+
+    // 字段结构随副本复制且顺序保持，但字段值一律为 None（各变体的无值形态）。
+    let copied_fields = node_field::service::get(&copied.id).unwrap();
+    assert_eq!(copied_fields.len(), 2);
+    assert_eq!(copied_fields[0].name, "文本");
+    assert_eq!(copied_fields[0].field_type, "TextSingleLine");
+    assert_eq!(copied_fields[0].type_config, None);
+    assert_eq!(copied_fields[0].value, FieldValue::String(None));
+    assert_eq!(copied_fields[1].name, "日期");
+    assert_eq!(copied_fields[1].field_type, "Date");
+    assert_eq!(
+        copied_fields[1].type_config,
+        Some(serde_json::json!({"precision": "day"}))
+    );
+    assert_eq!(copied_fields[1].value, FieldValue::Instant(None));
+    // 源节点字段不受复制影响，值仍在。
+    let source_fields = node_field::service::get(&copy_source.id).unwrap();
+    assert_eq!(source_fields[0].value, FieldValue::String(Some("secret".to_string())));
+
     // == canvas::color_list 成功路径：根画布已带色；另建无色画布与已删除带色画布，验证只返回未删除带色画布 ==
     let plain_canvas = canvas::service::create(root_id, "plain-canvas".to_string()).unwrap();
     let deleted_colored_canvas = canvas::service::create(root_id, "deleted-colored-canvas".to_string()).unwrap();
@@ -2617,10 +2699,14 @@ fn test_shadow_node_service() {
         .unwrap();
     assert_eq!(merged_x.shadow_origin_deleted, Some(false));
 
-    // 影子守卫失败路径：修改、逻辑删除、恢复、设置颜色、物理删除、写字段、导入附件
+    // 影子守卫失败路径：修改、逻辑删除、恢复、设置颜色、物理删除、写字段、导入附件、复制
     // 作用于影子节点时均报 NodeIsShadow。
     assert!(matches!(
         node::service::modify(&shadow_x.id, "t".to_string(), "s".to_string()),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+    assert!(matches!(
+        node::service::copy(&shadow_x.id, 0.0, 0.0),
         Err(ErrorCode::NodeIsShadow)
     ));
     assert!(matches!(

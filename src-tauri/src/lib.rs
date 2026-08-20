@@ -157,6 +157,7 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::lifecycle::command::user_database_lifecycle_save::user_database_lifecycle_save,
             business::user_database::log::command::user_database_log_list::user_database_log_list,
             business::user_database::node::command::user_database_node_create::user_database_node_create,
+            business::user_database::node::command::user_database_node_copy::user_database_node_copy,
             business::user_database::node::command::user_database_node_list::user_database_node_list,
             business::user_database::node::command::user_database_node_logical_delete::user_database_node_logical_delete,
             business::user_database::node::command::user_database_node_modify::user_database_node_modify,
