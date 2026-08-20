@@ -2,7 +2,7 @@
   画布页面。
 
   渲染单个画布内的有向无环图，包括节点和边的可视化。
-   支持视图拖拽平移、缩放，节点可拖拽移动，视口变化自动持久化。
+   左键拖动空白处框选节点（框选后拖动任一选中节点可批量移动），右键/中键拖动平移视口，视口变化自动持久化。
    路由携带 nodeId 时视角居中到目标节点。
    集成节点编辑、逻辑删除与回收站功能。
    支持自动布局（罗盘锚定分层）。
@@ -502,6 +502,8 @@ async function onEdgeEdit(id: string): Promise<void> {
       :snap-to-grid="true"
       :snap-grid="snapGrid"
       :delete-key-code="null"
+      :pan-on-drag="[1, 2]"
+      :selection-key-code="true"
       :is-valid-connection="isValidConnection"
       @node-drag-stop="onNodeDragStop"
       @viewport-change="viewport.save"

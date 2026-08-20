@@ -2,7 +2,8 @@
   画布宇宙页面。
 
   以 vue-flow 渲染画布宇宙中的所有画布节点（每个画布作为一个节点）。
-  支持视图拖拽平移、缩放，画布节点可拖拽移动并自动持久化位置，可重命名（根画布除外）。
+  左键拖动空白处框选节点（框选后拖动任一选中节点可批量移动），右键/中键拖动平移视口，
+  画布节点可拖拽移动并自动持久化位置，可重命名（根画布除外）。
   视口变化以 500ms 防抖保存至后端，恢复时自动定位至上一次浏览位置。
   集成画布回收站功能：逻辑删除、恢复、物理删除、拖拽恢复及飞入飞出动画。
   支持自动布局（罗盘锚定分层）。
@@ -196,6 +197,12 @@ async function onCanvasRestore(canvas: Canvas, position?: { x: number; y: number
   updateNodeInternals([canvas.id]);
 }
 
+/** 节点右键：阻止浏览器原生菜单（右键平移视口后松开在节点上也会触发） */
+function onNodeContextMenu({ event }: { event: MouseEvent | TouchEvent }) {
+  if (!(event instanceof MouseEvent)) return;
+  event.preventDefault();
+}
+
 function onDragOver(event: DragEvent) {
   event.preventDefault();
   if (event.dataTransfer) {
@@ -284,7 +291,10 @@ function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; n
       :snap-to-grid="true"
       :snap-grid="snapGrid"
       :delete-key-code="null"
+      :pan-on-drag="[1, 2]"
+      :selection-key-code="true"
       @node-drag-stop="onNodeDragStop"
+      @node-context-menu="onNodeContextMenu"
       @viewport-change="viewport.save"
       @drop="onDrop"
       @dragover="onDragOver"
