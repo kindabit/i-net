@@ -27,6 +27,7 @@ import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
 import { useCanvasRecycleBin } from "@/composables/use-canvas-recycle-bin";
 import { flyToRecycleBin, fadeInNode } from "@/composables/use-canvas-animations";
+import { CANVAS_NODE_FALLBACK_WIDTH, CANVAS_NODE_FALLBACK_HEIGHT } from "@/node-size";
 import CanvasNode from "./DatabaseComponents/CanvasNode.vue";
 import CanvasRecycleBinPanel from "./DatabaseComponents/CanvasRecycleBinPanel.vue";
 import NameInputDialog from "@/components/NameInputDialog.vue";
@@ -55,7 +56,7 @@ const { isLayouting, applyAutoLayout } = useAutoLayout({
   getEdges: () => getVFEdges.value,
   persist: userDatabaseCanvasMoveCanvases,
   snapGrid,
-  fallbackSize: { width: 130, height: 60 },
+  fallbackSize: { width: CANVAS_NODE_FALLBACK_WIDTH, height: CANVAS_NODE_FALLBACK_HEIGHT },
   // 自动布局动画结束、persist 之前把新坐标整体替换回父组件 nodes.position，
   // 避免后续增删画布时被 vue-flow 的 parseNode 用 props 中的旧坐标回滚 store。
   onNodesMoved: (items) => {

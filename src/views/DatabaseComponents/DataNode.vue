@@ -4,7 +4,7 @@
   在画布中将一个敏感数据节点或子画布节点渲染为 vue-flow 节点。
   显示节点标题和副标题，canvasId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
   四个方向均为出口（source）。
-  节点为固定宽高（160×80，背景网格 20px 的整数倍），标题/副标题过长时显示省略号。
+  节点为固定宽高（尺寸常量见 node-size.ts，为吸附网格 20px 的整数倍），标题/副标题过长时显示省略号。
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
   影子节点只显示编辑按钮，画布节点不显示复制按钮。
   支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
@@ -29,6 +29,7 @@ import type { DataNodeData } from "@/vf-convert";
 import nodeMoveAndRelocate from "@/composables/use-node-move-and-relocate";
 import { setCanvasNavIntent } from "./canvas-route-transition";
 import { deserializeNodeColor } from "@/node-colors";
+import { DATA_NODE_WIDTH_REM, DATA_NODE_HEIGHT_REM } from "@/node-size";
 import { currentThemeIsDark } from "@/themes";
 // #if [DEBUG]
 import NodeDebugOverlay from "./NodeDebugOverlay.vue";
@@ -120,6 +121,8 @@ async function onShadowVirtualEdgeClick() {
       'data-node-card--drop-forbid': dropState === 'forbid',
     }"
     :style="{
+      width: DATA_NODE_WIDTH_REM,
+      height: DATA_NODE_HEIGHT_REM,
       backgroundColor: colors.background,
       color: colors.title,
       borderColor: selected
@@ -253,8 +256,6 @@ async function onShadowVirtualEdgeClick() {
   cursor: grab;
   user-select: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  width: 10rem;
-  height: 5rem;
 
   // 桥接节点与按钮排之间的间隙，避免鼠标移向按钮排时触发 mouseleave 收起按钮排
   &::before {

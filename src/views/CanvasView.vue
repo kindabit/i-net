@@ -34,6 +34,7 @@ import {
 } from "@/api";
 import type { Node, Edge, MoveNodeVO } from "@/api-types";
 import { toVFNode, toVFEdge } from "@/vf-convert";
+import { DATA_NODE_WIDTH, DATA_NODE_HEIGHT, DATA_NODE_HALF_WIDTH, DATA_NODE_HALF_HEIGHT } from "@/node-size";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
@@ -80,7 +81,7 @@ const { isLayouting, applyAutoLayout } = useAutoLayout({
   getEdges: () => getVFEdges.value,
   persist: userDatabaseNodeMoveNodes,
   snapGrid,
-  fallbackSize: { width: 160, height: 80 },
+  fallbackSize: { width: DATA_NODE_WIDTH, height: DATA_NODE_HEIGHT },
   // 自动布局动画结束、persist 之前把新坐标整体替换回父组件 nodes.position，
   // 避免后续增删节点时被 vue-flow 的 parseNode 用 props 中的旧坐标回滚 store。
   onNodesMoved: (items) => {
@@ -140,7 +141,7 @@ onUnmounted(() => {
 
 /**
  * VueFlow 实例初始化回调：在持久化视口恢复完成后，若路由携带 nodeId 查询参数，
- * 则将视角以动画飞行方式居中到目标节点（节点为 160×80 的固定尺寸，坐标为左上角，故偏移半个宽高）。
+ * 则将视角以动画飞行方式居中到目标节点（节点为固定尺寸，见 node-size.ts；坐标为左上角，故偏移半个宽高）。
  * 输入：instance VueFlow 实例。
  * 返回：无返回值。
  */
@@ -149,7 +150,7 @@ function onFlowInit(instance: VueFlowStore) {
   if (!isString(nodeId) || nodeId === "") return;
   const target = nodes.value.find((n) => n.id === nodeId);
   if (!target) return;
-  instance.setCenter(target.position.x + 80, target.position.y + 40, {
+  instance.setCenter(target.position.x + DATA_NODE_HALF_WIDTH, target.position.y + DATA_NODE_HALF_HEIGHT, {
     zoom: viewport.current.value.zoom,
     duration: 300,
   });
@@ -547,7 +548,7 @@ async function resolveRelocateTargetCanvasId(target: RelocatingTarget): Promise<
 }
 
 /**
- * 计算迁移落点：节点区域包围盒（节点固定尺寸 160×80）中心平移到目标锚点，
+ * 计算迁移落点：节点区域包围盒（节点固定尺寸，见 node-size.ts）中心平移到目标锚点，
  * 平移量按吸附网格逐轴取整——源坐标本就网格对齐，取整后的平移量保证结果仍对齐，
  * 且节点之间的相对位置关系不变。
  * @param draggedNodes 被拖动的节点数组
@@ -555,14 +556,12 @@ async function resolveRelocateTargetCanvasId(target: RelocatingTarget): Promise<
  * @returns 迁移条目列表（id + 最终坐标）
  */
 function computeRelocateItems(draggedNodes: VFNode[], center: { x: number; y: number }): MoveNodeVO[] {
-  const nodeWidth = 160;
-  const nodeHeight = 80;
   const minX = Math.min(...draggedNodes.map((n) => n.position.x));
   const minY = Math.min(...draggedNodes.map((n) => n.position.y));
   const maxX = Math.max(...draggedNodes.map((n) => n.position.x));
   const maxY = Math.max(...draggedNodes.map((n) => n.position.y));
-  const dx = Math.round((center.x - (minX + maxX + nodeWidth) / 2) / snapGrid[0]) * snapGrid[0];
-  const dy = Math.round((center.y - (minY + maxY + nodeHeight) / 2) / snapGrid[1]) * snapGrid[1];
+  const dx = Math.round((center.x - (minX + maxX + DATA_NODE_WIDTH) / 2) / snapGrid[0]) * snapGrid[0];
+  const dy = Math.round((center.y - (minY + maxY + DATA_NODE_HEIGHT) / 2) / snapGrid[1]) * snapGrid[1];
   return draggedNodes.map((n) => ({ id: n.id, x: n.position.x + dx, y: n.position.y + dy }));
 }
 

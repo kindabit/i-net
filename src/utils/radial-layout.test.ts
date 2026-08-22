@@ -8,6 +8,7 @@ import {
   type RadialLayoutPoint,
   type RadialPortDirection,
 } from "./radial-layout";
+import { DATA_NODE_WIDTH, DATA_NODE_HEIGHT } from "@/node-size";
 
 /** 测试用固定布局参数：数值取整便于推算预期坐标。 */
 const CONFIG: RadialLayoutConfig = {
@@ -17,9 +18,9 @@ const CONFIG: RadialLayoutConfig = {
   isolatedCell: 240,
 };
 
-/** 构造测试用节点（与普通画布的 160×80 固定尺寸一致）。 */
+/** 构造测试用节点（与普通画布数据节点固定尺寸一致，见 node-size.ts）。 */
 function node(id: string): RadialLayoutNode {
-  return { id, width: 160, height: 80 };
+  return { id, width: DATA_NODE_WIDTH, height: DATA_NODE_HEIGHT };
 }
 
 /** 构造测试用边。 */

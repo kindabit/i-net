@@ -80,7 +80,7 @@ export interface RadialLayoutPoint {
   cy: number;
 }
 
-/** 默认布局参数，适用于普通画布（160×80 节点）与画布宇宙。 */
+/** 默认布局参数，适用于普通画布（数据节点固定尺寸，见 node-size.ts）与画布宇宙。 */
 export const DEFAULT_RADIAL_LAYOUT_CONFIG: RadialLayoutConfig = {
   ringSpacing: 300,
   nodeMargin: 40,
