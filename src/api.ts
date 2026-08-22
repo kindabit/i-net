@@ -364,6 +364,19 @@ export async function userDatabaseNodeMoveNodes(items: MoveNodeVO[]): Promise<vo
 }
 
 /**
+ * 批量跨画布迁移节点。
+ *
+ * items 中的 x/y 为前端算好的最终坐标（含目标画布视口中心定位与网格吸附），
+ * 后端只负责校验与落库，不参与定位。
+ * @param items 节点坐标列表，每个元素包含 id、x、y
+ * @param targetCanvasId 目标画布 id
+ * @returns 无返回值
+ */
+export async function userDatabaseNodeRelocateNodes(items: MoveNodeVO[], targetCanvasId: string): Promise<void> {
+  return invoke("user_database_node_relocate_nodes", { items, targetCanvasId });
+}
+
+/**
  * 修改节点的标题和副标题。
  * @param id 节点 id
  * @param title 新标题

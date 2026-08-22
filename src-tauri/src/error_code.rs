@@ -145,6 +145,10 @@ pub enum ErrorCode {
     NodeIsCanvasNode,
     /// 该操作不允许作用于影子节点。
     NodeIsShadow,
+    /// 要迁移的节点不属于同一个画布。
+    NodeNotInSameCanvas,
+    /// 要迁移的节点集与源画布内其它节点之间存在边。
+    NodeSetHasExternalEdges,
     /// 根画布不可删除。
     RootCanvasCannotBeDeleted,
     /// 模板名称已经存在，包含重复的模板名称。

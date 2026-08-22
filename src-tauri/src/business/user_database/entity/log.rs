@@ -90,6 +90,12 @@ pub enum Action {
     },
     /// 物理删除节点，包含节点标题。
     NodePhysicalDelete { title: String },
+    /// 跨画布迁移节点，包含节点数量、源画布名称和目标画布名称。
+    NodeRelocate {
+        node_count: i64,
+        source_canvas_name: String,
+        target_canvas_name: String,
+    },
     /// 修改节点的字段集合，包含节点标题和逐字段的变更列表。
     NodeFieldsModify {
         node_title: String,

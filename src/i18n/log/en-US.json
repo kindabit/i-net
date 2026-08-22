@@ -116,6 +116,10 @@
       "AutoLayoutCanvasNodes": {
         "name": "Auto Layout Canvases",
         "detail": "Auto layout performed on canvases, moved {canvas_count} canvases"
+      },
+      "NodeRelocate": {
+        "name": "Relocate Nodes",
+        "detail": "Relocated {node_count} nodes from \"{source_canvas_name}\" to \"{target_canvas_name}\""
       }
     },
     "node-fields-change-added": "Added field \"{name}\" ({type}): {value}",

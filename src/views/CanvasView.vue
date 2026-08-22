@@ -6,13 +6,16 @@
    路由携带 nodeId 时视角居中到目标节点。
    集成节点编辑、逻辑删除与回收站功能。
    支持自动布局（罗盘锚定分层）。
+    集成节点移动和迁移系统：按住 Alt 拖拽节点到画布节点、影子节点或面包屑祖先片段可跨画布迁移，
+    并在落点处显示允许/禁止高亮；非法迁移尝试（落点有效但节点集不可迁移）弹出针对性错误提示；
+    迁移成功后节点与内部边失焦淡出消失；Alt 按下时禁止画布边缘自动滚动以免误触迁移。
 -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, type Ref } from "vue";
 import { useRoute } from "vue-router";
 import { isString } from "lodash";
 import { VueFlow, useVueFlow } from "@vue-flow/core";
-import type { Node as VFNode, Edge as VFEdge, Connection, VueFlowStore } from "@vue-flow/core";
+import type { Node as VFNode, Edge as VFEdge, Connection, VueFlowStore, NodeDragEvent } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
 import { t } from "@/i18n";
@@ -21,17 +24,21 @@ import {
   userDatabaseEdgeList,
   userDatabaseNodeMoveNode,
   userDatabaseNodeMoveNodes,
+  userDatabaseNodeRelocateNodes,
   userDatabaseNodeCreate,
   userDatabaseNodeCopy,
   userDatabaseEdgeCreate,
   userDatabaseEdgeUpdate,
+  userDatabaseCanvasList,
+  userDatabaseViewportGet,
 } from "@/api";
-import type { Node, Edge } from "@/api-types";
+import type { Node, Edge, MoveNodeVO } from "@/api-types";
 import { toVFNode, toVFEdge } from "@/vf-convert";
-import { snackbarErrorCode } from "@/composables/use-snackbar";
+import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
-
+import nodeMoveAndRelocate, { type Mode, type RelocatingLegality, type RelocatingTarget } from "@/composables/use-node-move-and-relocate.ts";
+import { blurOutRelocated } from "@/composables/use-relocate-animation";
 import { useRecycleBin } from "@/composables/use-recycle-bin";
 import { flyToRecycleBin, fadeInNode, fadeInEdges, ghostOutEdge } from "@/composables/use-canvas-animations";
 import DataNode from "./DatabaseComponents/DataNode.vue";
@@ -119,10 +126,16 @@ onMounted(async () => {
   }
 
   loaded.value = true;
+
+  nodeMoveAndRelocate.setQueryNodeAtPosition(queryNodeAtPosition);
+  nodeMoveAndRelocate.listenKeyboardEvents();
+  nodeMoveAndRelocate.listenOnDragStop(onNodeDragStopEffect);
 });
 
 onUnmounted(() => {
   viewport.flush();
+  nodeMoveAndRelocate.unlistenKeyboardEvents();
+  nodeMoveAndRelocate.unlistenOnDragStop(onNodeDragStopEffect);
 });
 
 /**
@@ -187,32 +200,6 @@ async function onNodeLogicalDelete(id: string) {
 
   // 立即从画布移除节点
   nodes.value = nodes.value.filter((n) => n.id !== id);
-}
-
-/**
- * 节点拖拽停止回调（含多选拖拽）。
- *
- * vue-flow store 已持有每个被拖动节点的最终 position（含 snap、clamp、parentNode 修正）；
- * 此处把每个新 position 整体替换回父组件 nodes.value 中对应节点，避免后续 filter / push
- * 操作触发 parseNode 把 store 中已拖动位置覆盖回 props 的初始坐标。
- * 持久化：单节点走单条 API；多节点走批量 API（userDatabaseNodeMoveNodes）。
- * @param event vue-flow NodeDragEvent（event / node / nodes）
- * @returns 无返回值
- */
-function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; nodes: VFNode[] }) {
-  const moved = event.nodes.length > 0 ? event.nodes : [event.node];
-  const movedMap = new Map(moved.map((n) => [n.id, n]));
-  for (const node of nodes.value) {
-    const m = movedMap.get(node.id);
-    if (!m) continue;
-    node.position = { x: m.position.x, y: m.position.y };
-  }
-  const items = moved.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
-  if (items.length === 1) {
-    userDatabaseNodeMoveNode(items[0].id, items[0].x, items[0].y).catch(snackbarErrorCode);
-  } else if (items.length > 1) {
-    userDatabaseNodeMoveNodes(items).catch(snackbarErrorCode);
-  }
 }
 
 /**
@@ -445,6 +432,192 @@ async function onEdgeEdit(id: string): Promise<void> {
     snackbarErrorCode(e);
   }
 }
+
+// 节点移动和迁移系统
+
+/**
+ * 查询指定屏幕坐标位置下的所有节点。
+ *
+ * 基于 document.elementsFromPoint 做 DOM 命中测试：vue-flow 节点容器带
+ * vue-flow__node 类和 data-id 属性，重叠节点与被拖动节点下方的节点都会被
+ * 收集，按自顶向下的顺序返回。被拖动的节点也会被返回——其 data 上没有
+ * canvasId/shadowId 时会被状态机的迁移目标计算自然跳过，无需在此排除。
+ * @param position 屏幕坐标（clientX / clientY）
+ * @returns 该位置处的节点数组，按 DOM 自顶向下排序
+ */
+function queryNodeAtPosition(position: { x: number, y: number }): VFNode[] {
+  const byId = new Map(nodes.value.map((n) => [n.id, n]));
+  const result: VFNode[] = [];
+  for (const el of document.elementsFromPoint(position.x, position.y)) {
+    if (el instanceof HTMLElement && el.classList.contains("vue-flow__node")) {
+      const node = el.dataset.id ? byId.get(el.dataset.id) : undefined;
+      if (node) result.push(node);
+    }
+  }
+  return result;
+}
+
+/**
+ * 从 vue-flow 拖拽事件中取出实际被拖动的节点集。
+ * @param event vue-flow NodeDragEvent
+ * @returns 被拖动的节点数组（多选拖拽时 nodes 非空，否则回退为单个 node）
+ */
+function draggedNodesOf(event: NodeDragEvent): VFNode[] {
+  return event.nodes.length > 0 ? event.nodes : [event.node];
+}
+
+/**
+ * 节点拖拽开始回调：仅鼠标事件接入状态机；触摸事件不接入（触屏只支持画布内移动）。
+ * @param event vue-flow NodeDragEvent
+ * @returns 无返回值
+ */
+function onNodeDragStart(event: NodeDragEvent) {
+  if (!(event.event instanceof MouseEvent)) return;
+  nodeMoveAndRelocate.onDragStart(draggedNodesOf(event), getVFEdges.value, event.event);
+}
+
+/**
+ * 节点拖拽过程回调：仅鼠标事件接入状态机。
+ * @param event vue-flow NodeDragEvent
+ * @returns 无返回值
+ */
+function onNodeDrag(event: NodeDragEvent) {
+  if (!(event.event instanceof MouseEvent)) return;
+  nodeMoveAndRelocate.onDrag(draggedNodesOf(event), getVFEdges.value, event.event);
+}
+
+/**
+ * 节点拖拽停止回调：鼠标事件交给状态机（持久化由拖拽结束监听器统一处理）；
+ * 触摸事件不经过状态机，直接按画布内移动持久化。
+ * @param event vue-flow NodeDragEvent
+ * @returns 无返回值
+ */
+function onNodeDragStop(event: NodeDragEvent) {
+  const moved = draggedNodesOf(event);
+  if (event.event instanceof MouseEvent) {
+    nodeMoveAndRelocate.onDragStop(moved, getVFEdges.value, event.event);
+  } else {
+    persistMove(moved);
+  }
+}
+
+/**
+ * 画布内移动持久化：先把被拖动节点的最终 position 回写进 nodes.value
+ * （避免后续 filter/push 触发 parseNode 用 props 旧坐标回滚 store），
+ * 再单节点走单条 API、多节点走批量 API。
+ * @param moved 被拖动的节点数组
+ * @returns 无返回值
+ */
+function persistMove(moved: VFNode[]) {
+  const movedMap = new Map(moved.map((n) => [n.id, n]));
+  for (const node of nodes.value) {
+    const m = movedMap.get(node.id);
+    if (!m) continue;
+    node.position = { x: m.position.x, y: m.position.y };
+  }
+  const items = moved.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
+  if (items.length === 1) {
+    userDatabaseNodeMoveNode(items[0].id, items[0].x, items[0].y).catch(snackbarErrorCode);
+  } else if (items.length > 1) {
+    userDatabaseNodeMoveNodes(items).catch(snackbarErrorCode);
+  }
+}
+
+/**
+ * 解析迁移目标画布 id。
+ *
+ * canvas-node / breadcrumb-segment 目标直接携带 canvasId；
+ * shadow-node 目标取当前画布的父画布 id（影子 origin 恒位于父画布——该不变量由后端
+ * 迁移校验保证：与画布节点有边的节点永远无法通过合法性校验，故影子 origin 不会被迁走）。
+ * @param target 状态机算出的迁移目标
+ * @returns 目标画布 id；解析失败（当前画布无父画布或查询出错）时返回 null
+ */
+async function resolveRelocateTargetCanvasId(target: RelocatingTarget): Promise<string | null> {
+  if (target.type === "canvas-node" || target.type === "breadcrumb-segment") {
+    return target.canvasId;
+  }
+  try {
+    const canvases = await userDatabaseCanvasList(false);
+    const current = canvases.find((c) => c.id === canvasId);
+    return current?.parent_id ?? null;
+  } catch (e) {
+    snackbarErrorCode(e);
+    return null;
+  }
+}
+
+/**
+ * 计算迁移落点：节点区域包围盒（节点固定尺寸 160×80）中心平移到目标锚点，
+ * 平移量按吸附网格逐轴取整——源坐标本就网格对齐，取整后的平移量保证结果仍对齐，
+ * 且节点之间的相对位置关系不变。
+ * @param draggedNodes 被拖动的节点数组
+ * @param center 目标锚点（目标画布视口中心的画布坐标）
+ * @returns 迁移条目列表（id + 最终坐标）
+ */
+function computeRelocateItems(draggedNodes: VFNode[], center: { x: number; y: number }): MoveNodeVO[] {
+  const nodeWidth = 160;
+  const nodeHeight = 80;
+  const minX = Math.min(...draggedNodes.map((n) => n.position.x));
+  const minY = Math.min(...draggedNodes.map((n) => n.position.y));
+  const maxX = Math.max(...draggedNodes.map((n) => n.position.x));
+  const maxY = Math.max(...draggedNodes.map((n) => n.position.y));
+  const dx = Math.round((center.x - (minX + maxX + nodeWidth) / 2) / snapGrid[0]) * snapGrid[0];
+  const dy = Math.round((center.y - (minY + maxY + nodeHeight) / 2) / snapGrid[1]) * snapGrid[1];
+  return draggedNodes.map((n) => ({ id: n.id, x: n.position.x + dx, y: n.position.y + dy }));
+}
+
+/**
+ * 拖拽结束监听器（注册进状态机）：以统一形式落实节点的画布内移动与跨画布迁移。
+ *
+ * 迁移条件：relocate 模式 + 节点集合法 + 有迁移目标；其余一律按画布内移动持久化。
+ * 非法迁移尝试（relocate 模式 + 有迁移目标 + 节点集非法）按非法原因弹出针对性错误提示，
+ * 随后仍按画布内移动持久化。
+ * 迁移失败（含目标解析失败、视口查询失败、API 报错）时回退为画布内移动持久化——
+ * 节点已在视觉上移位，坐标必须落库，否则刷新后位置跳变。
+ * 迁移成功后先对被迁移节点与两端都在集合内的内部边播放失焦淡出动画，
+ * 动画结束再从本地移除（对齐逻辑删除的本地移除模式）。
+ * @param mode 拖拽结束时的模式
+ * @param draggedNodes 被拖动的节点数组
+ * @param legality 节点集的迁移合法性
+ * @param _pointerPosition 落点屏幕坐标（本实现未使用）
+ * @param target 迁移目标
+ * @returns 无返回值
+ */
+async function onNodeDragStopEffect(mode: Mode, draggedNodes: VFNode[], legality: RelocatingLegality, _pointerPosition: { x: number; y: number }, target: RelocatingTarget | null) {
+  if (mode === "relocate" && target !== null) {
+    if (legality !== "legal") {
+      // 用户按住 Alt 把节点拖到有效迁移目标上，但节点集不满足迁移条件：按非法原因提示
+      const key =
+        legality === "has-shadow" ? "database.canvas.relocate-has-shadow"
+        : legality === "has-canvas" ? "database.canvas.relocate-has-canvas"
+        : "database.canvas.relocate-has-external"; // has-external
+      snackbarText(t(key), "error");
+    } else {
+      const targetCanvasId = await resolveRelocateTargetCanvasId(target);
+      if (targetCanvasId !== null) {
+        try {
+          // 视口的持久化语义为"视口中心"：中心画布坐标 = (-x / zoom, -y / zoom)；
+          // 目标画布无视口记录时 GET 返回默认值 (0, 0, 1)，代入即画布原点 (0, 0)
+          const vp = await userDatabaseViewportGet(targetCanvasId);
+          const center = { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom };
+          const items = computeRelocateItems(draggedNodes, center);
+          await userDatabaseNodeRelocateNodes(items, targetCanvasId);
+          const movedIds = new Set(draggedNodes.map((n) => n.id));
+          const internalEdgeIds = edges.value
+            .filter((e) => movedIds.has(e.source) && movedIds.has(e.target))
+            .map((e) => e.id);
+          await blurOutRelocated([...movedIds], internalEdgeIds);
+          nodes.value = nodes.value.filter((n) => !movedIds.has(n.id));
+          edges.value = edges.value.filter((e) => !movedIds.has(e.source) && !movedIds.has(e.target));
+          return;
+        } catch (e) {
+          snackbarErrorCode(e);
+        }
+      }
+    }
+  }
+  persistMove(draggedNodes);
+}
 </script>
 
 <template>
@@ -504,7 +677,10 @@ async function onEdgeEdit(id: string): Promise<void> {
       :delete-key-code="null"
       :pan-on-drag="[1, 2]"
       :selection-key-code="true"
+      :auto-pan-on-node-drag="nodeMoveAndRelocate.mode.value !== 'relocate'"
       :is-valid-connection="isValidConnection"
+      @node-drag-start="onNodeDragStart"
+      @node-drag="onNodeDrag"
       @node-drag-stop="onNodeDragStop"
       @viewport-change="viewport.save"
       @init="onFlowInit"

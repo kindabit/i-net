@@ -72,6 +72,8 @@ export type ErrorCodeVariant =
   | "NodeFieldValueValidationFailed"
   | "NodeIsCanvasNode"
   | "NodeIsShadow"
+  | "NodeNotInSameCanvas"
+  | "NodeSetHasExternalEdges"
   | "RootCanvasCannotBeDeleted"
   | "TemplateNameAlreadyExists"
   | "UserDatabaseNotOpen";

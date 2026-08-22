@@ -128,7 +128,10 @@
       "shadow-origin-deleted": "原始节点已被逻辑删除（在回收站中）",
       "shadow-inflow-hint": "入度来自画布之外，点击跳转至父画布",
       "shadow-outflow-hint": "出度指向画布之外，点击跳转至父画布",
-      "view-node-readonly": "查看节点（只读）"
+      "view-node-readonly": "查看节点（只读）",
+      "relocate-has-shadow": "选中的节点包含影子节点，影子节点不能跨画布迁移",
+      "relocate-has-canvas": "选中的节点包含画布节点，画布节点不能跨画布迁移",
+      "relocate-has-external": "选中的节点与未选中的节点存在连线，无法迁移；如需迁移请将相关节点一并选中"
     },
     "search": {
       "open": "搜索",

@@ -361,6 +361,40 @@ pub fn batch_move(connection: &Connection, items: &[(String, f64, f64)]) -> Resu
     Ok(())
 }
 
+/// 批量迁移节点：更新 canvas_id、x、y 三列，prepared statement 只 prepare 一次。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `target_canvas_id`: 目标画布 id。
+/// - `items`: 要迁移的节点列表，每项为 (id, x, y)，x/y 为调用方算好的最终坐标。
+///
+/// # 返回值
+/// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
+pub fn batch_relocate(
+    connection: &Connection,
+    target_canvas_id: &str,
+    items: &[(String, f64, f64)],
+) -> Result<(), ErrorCode> {
+    let mut statement = connection
+        .prepare("UPDATE node SET canvas_id = :canvas_id, x = :x, y = :y WHERE id = :id")
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    for (id, x, y) in items {
+        statement
+            .execute(rusqlite::named_params! {
+                ":id": id,
+                ":canvas_id": target_canvas_id,
+                ":x": x,
+                ":y": y,
+            })
+            .map_err(|e| ErrorCode::DatabaseError {
+                detail: e.to_string(),
+            })?;
+    }
+    Ok(())
+}
+
 /// 查询所有未删除且设置了颜色的节点的标题与颜色。
 ///
 /// # 参数
@@ -624,6 +658,51 @@ mod tests {
         assert!(matches!(
             batch_move(
                 &connection2,
+                &[("any-id".to_string(), 0.0, 0.0)]
+            ),
+            Err(ErrorCode::DatabaseError { .. })
+        ));
+
+        // ===== batch_relocate 成功路径 =====
+        // 插入多行后批量迁移，验证 canvas_id、x、y 已更新且 title / sub_title / deleted 等其它字段不变。
+        let mut r1 = node("relocate-1", "canvas-1");
+        r1.x = 1.0;
+        r1.y = 2.0;
+        insert(&connection, &r1).unwrap();
+        let mut r2 = node("relocate-2", "canvas-1");
+        r2.x = 3.0;
+        r2.y = 4.0;
+        insert(&connection, &r2).unwrap();
+
+        let relocate_items = vec![
+            ("relocate-1".to_string(), 10.0, 20.0),
+            ("relocate-2".to_string(), 30.0, 40.0),
+        ];
+        batch_relocate(&connection, "canvas-2", &relocate_items).unwrap();
+
+        let relocated1 = select_by_id(&connection, "relocate-1").unwrap().unwrap();
+        assert_eq!(relocated1.canvas_id, "canvas-2");
+        assert_eq!((relocated1.x, relocated1.y), (10.0, 20.0));
+        assert_eq!(relocated1.title, "title-relocate-1");
+        assert_eq!(relocated1.sub_title, "sub-title-relocate-1");
+        assert!(!relocated1.deleted);
+        let relocated2 = select_by_id(&connection, "relocate-2").unwrap().unwrap();
+        assert_eq!(relocated2.canvas_id, "canvas-2");
+        assert_eq!((relocated2.x, relocated2.y), (30.0, 40.0));
+        assert_eq!(relocated2.title, "title-relocate-2");
+
+        // batch_relocate 成功路径：不存在的 id 不会报错（SQLite UPDATE 不命中即 0 行），存在性校验是 service 层职责。
+        let relocate_no_exist = vec![("no-such-id".to_string(), 5.0, 6.0)];
+        batch_relocate(&connection, "canvas-2", &relocate_no_exist).unwrap();
+
+        // batch_relocate 成功路径：空列表直接返回 Ok（no-op）。
+        batch_relocate(&connection, "canvas-2", &[]).unwrap();
+
+        // batch_relocate 失败路径：表不存在时报 DatabaseError。
+        assert!(matches!(
+            batch_relocate(
+                &connection2,
+                "canvas-x",
                 &[("any-id".to_string(), 0.0, 0.0)]
             ),
             Err(ErrorCode::DatabaseError { .. })

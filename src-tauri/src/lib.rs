@@ -164,6 +164,7 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::node::command::user_database_node_move_node::user_database_node_move_node,
             business::user_database::node::command::user_database_node_move_nodes::user_database_node_move_nodes,
             business::user_database::node::command::user_database_node_physical_delete::user_database_node_physical_delete,
+            business::user_database::node::command::user_database_node_relocate_nodes::user_database_node_relocate_nodes,
             business::user_database::node::command::user_database_node_restore::user_database_node_restore,
             business::user_database::node::command::user_database_node_color_list::user_database_node_color_list,
             business::user_database::node::command::user_database_node_search::user_database_node_search,

@@ -116,6 +116,10 @@
       "AutoLayoutCanvasNodes": {
         "name": "自动布局画布",
         "detail": "对画布宇宙执行自动布局，移动了 {canvas_count} 个画布"
+      },
+      "NodeRelocate": {
+        "name": "迁移节点",
+        "detail": "将 {node_count} 个节点从“{source_canvas_name}”迁移至“{target_canvas_name}”"
       }
     },
     "node-fields-change-added": "新增字段\u201c{name}\u201d（{type}）：{value}",

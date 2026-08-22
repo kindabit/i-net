@@ -128,7 +128,10 @@
       "shadow-origin-deleted": "The original node has been logically deleted (in the recycle bin)",
       "shadow-inflow-hint": "In-degree comes from outside this canvas; click to jump to the parent canvas",
       "shadow-outflow-hint": "Out-degree points outside this canvas; click to jump to the parent canvas",
-      "view-node-readonly": "View node (read-only)"
+      "view-node-readonly": "View node (read-only)",
+      "relocate-has-shadow": "The selection contains a shadow node; shadow nodes cannot be relocated across canvases",
+      "relocate-has-canvas": "The selection contains a canvas node; canvas nodes cannot be relocated across canvases",
+      "relocate-has-external": "The selection has edges to unselected nodes; select them together to relocate"
     },
     "search": {
       "open": "Search",

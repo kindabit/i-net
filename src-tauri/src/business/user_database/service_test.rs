@@ -2580,6 +2580,318 @@ fn test_user_database_service_all_functions() {
     lifecycle::service::close().unwrap();
     }
 
+    // == 阶段七：relocate_nodes 批量跨画布迁移节点 ==
+    {
+    let id = registered.id.clone();
+    lifecycle::service::initialize(&id, test::test_key()).unwrap();
+
+    // 根画布通过 parent_id 为 None 来识别（list 按名称排序，不能直接取 [0]）。
+    let root_id = canvas::service::list(false)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.parent_id.is_none())
+        .unwrap()
+        .id;
+
+    // 源画布、目标画布（在根画布下创建两个子画布，分别作为源与目标）。
+    let source_canvas = canvas::service::create(&root_id, "relocate-source".to_string()).unwrap();
+    let target_canvas = canvas::service::create(&root_id, "relocate-target".to_string()).unwrap();
+    // 另一个目标画布（用于源==目标成功路径），并事先将其逻辑删除（用于已删除目标失败路径）。
+    let same_canvas = canvas::service::create(&root_id, "relocate-same".to_string()).unwrap();
+    let deleted_target_canvas = canvas::service::create(&root_id, "relocate-deleted-target".to_string()).unwrap();
+    canvas::service::logical_delete(&deleted_target_canvas.id).unwrap();
+    // 源画布内准备夹具：画布节点（引用子画布 C）+ 一个普通节点 + 普通节点→画布节点的边。
+    // 该边在子画布 C 内自动生成影子节点（指向普通节点）。
+    let canvas_node_in_source = node::service::create(
+        &source_canvas.id,
+        "relocate-canvas-node".to_string(),
+        String::new(),
+        10.0,
+        20.0,
+        None,
+        true,
+    )
+    .unwrap();
+    let child_canvas = canvas_node_in_source.canvas_ref_id.clone().unwrap();
+    let normal_node = node::service::create(
+        &source_canvas.id,
+        "relocate-normal".to_string(),
+        "sub".to_string(),
+        30.0,
+        40.0,
+        None,
+        false,
+    )
+    .unwrap();
+    edge::service::create(
+        &source_canvas.id,
+        &normal_node.id,
+        "right".to_string(),
+        &canvas_node_in_source.id,
+        "left".to_string(),
+    )
+    .unwrap();
+    // 在子画布 C 内查到的影子节点（指向 normal_node）。
+    let shadow_node = node::service::list(&child_canvas, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_id.as_deref() == Some(normal_node.id.as_str()))
+        .unwrap();
+
+    // relocate_nodes 失败路径：目标画布不存在时报 NoCanvasWithSuchId。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: normal_node.id.clone(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &uuid::Uuid::new_v4().to_string(),
+        ),
+        Err(ErrorCode::NoCanvasWithSuchId { .. })
+    ));
+
+    // relocate_nodes 失败路径：目标画布已逻辑删除时报 NoCanvasWithSuchId。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: normal_node.id.clone(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &deleted_target_canvas.id,
+        ),
+        Err(ErrorCode::NoCanvasWithSuchId { .. })
+    ));
+
+    // relocate_nodes 失败路径：节点不存在时报 NoNodeWithSuchId。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: uuid::Uuid::new_v4().to_string(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &target_canvas.id,
+        ),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
+
+    // relocate_nodes 失败路径：items 含画布节点时报 NodeIsCanvasNode。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: canvas_node_in_source.id.clone(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &target_canvas.id,
+        ),
+        Err(ErrorCode::NodeIsCanvasNode)
+    ));
+
+    // relocate_nodes 失败路径：items 含影子节点（在子画布内查到的）时报 NodeIsShadow。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: shadow_node.id.clone(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &target_canvas.id,
+        ),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+
+    // relocate_nodes 失败路径：items 只含该普通节点（它与画布节点之间有边即外部边）时报 NodeSetHasExternalEdges。
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[node::vo::MoveNodeVO {
+                id: normal_node.id.clone(),
+                x: 1.0,
+                y: 2.0,
+            }],
+            &target_canvas.id,
+        ),
+        Err(ErrorCode::NodeSetHasExternalEdges)
+    ));
+
+    // relocate_nodes 失败路径：两个节点分属两个画布时报 NodeNotInSameCanvas。
+    let in_target_node = node::service::create(
+        &target_canvas.id,
+        "relocate-other-canvas".to_string(),
+        "sub".to_string(),
+        0.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(matches!(
+        node::service::relocate_nodes(
+            &[
+                node::vo::MoveNodeVO {
+                    id: normal_node.id.clone(),
+                    x: 1.0,
+                    y: 2.0,
+                },
+                node::vo::MoveNodeVO {
+                    id: in_target_node.id.clone(),
+                    x: 1.0,
+                    y: 2.0,
+                },
+            ],
+            &same_canvas.id,
+        ),
+        Err(ErrorCode::NodeNotInSameCanvas)
+    ));
+
+    // relocate_nodes 成功路径：源画布 == 目标画布，无操作且不产日志。
+    // 在 same_canvas 内新建一个普通节点（不带任何外部边）。
+    let same_canvas_node = node::service::create(
+        &same_canvas.id,
+        "relocate-same-canvas-node".to_string(),
+        "sub".to_string(),
+        50.0,
+        60.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let log_total_before_same = log::service::list(0, 1).unwrap().total;
+    node::service::relocate_nodes(
+        &[node::vo::MoveNodeVO {
+            id: same_canvas_node.id.clone(),
+            x: 999.0,
+            y: 999.0,
+        }],
+        &same_canvas.id,
+    )
+    .unwrap();
+    // 日志数未变。
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_same
+    );
+    // 坐标未被更新（仍是创建时的 50.0, 60.0）。
+    let unchanged = node::service::list(&same_canvas.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == same_canvas_node.id)
+        .unwrap();
+    assert_eq!((unchanged.x, unchanged.y), (50.0, 60.0));
+
+    // relocate_nodes 成功路径：空列表直接返回 Ok 且不产日志。
+    let log_total_before_empty = log::service::list(0, 1).unwrap().total;
+    node::service::relocate_nodes(&[], &target_canvas.id).unwrap();
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_empty
+    );
+
+    // relocate_nodes 成功路径：源画布中两个普通节点 + 它们之间一条边，迁移到目标画布。
+    // 先在源画布内新建一对普通节点并建边。
+    let reloc_a = node::service::create(
+        &source_canvas.id,
+        "reloc-a".to_string(),
+        "sub-a".to_string(),
+        100.0,
+        200.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let reloc_b = node::service::create(
+        &source_canvas.id,
+        "reloc-b".to_string(),
+        "sub-b".to_string(),
+        300.0,
+        400.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let reloc_edge = edge::service::create(
+        &source_canvas.id,
+        &reloc_a.id,
+        "right".to_string(),
+        &reloc_b.id,
+        "left".to_string(),
+    )
+    .unwrap();
+    let log_total_before = log::service::list(0, 1).unwrap().total;
+    node::service::relocate_nodes(
+        &[
+            node::vo::MoveNodeVO {
+                id: reloc_a.id.clone(),
+                x: 111.0,
+                y: 222.0,
+            },
+            node::vo::MoveNodeVO {
+                id: reloc_b.id.clone(),
+                x: 333.0,
+                y: 444.0,
+            },
+        ],
+        &target_canvas.id,
+    )
+    .unwrap();
+    // 节点坐标与画布归属已落库为传入值。
+    let after_a = node::service::list(&target_canvas.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == reloc_a.id)
+        .unwrap();
+    assert_eq!(after_a.canvas_id, target_canvas.id);
+    assert_eq!((after_a.x, after_a.y), (111.0, 222.0));
+    let after_b = node::service::list(&target_canvas.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == reloc_b.id)
+        .unwrap();
+    assert_eq!(after_b.canvas_id, target_canvas.id);
+    assert_eq!((after_b.x, after_b.y), (333.0, 444.0));
+    // 源画布不再含这两个节点（其它夹具节点仍在）。
+    assert!(node::service::list(&source_canvas.id, false)
+        .unwrap()
+        .iter()
+        .all(|n| n.id != reloc_a.id && n.id != reloc_b.id));
+    // 目标画布含这两个节点。
+    let target_nodes = node::service::list(&target_canvas.id, false).unwrap();
+    assert!(target_nodes.iter().any(|n| n.id == reloc_a.id));
+    assert!(target_nodes.iter().any(|n| n.id == reloc_b.id));
+    // 边的 canvas_id 随迁到目标画布。
+    assert!(edge::service::list(&source_canvas.id)
+        .unwrap()
+        .iter()
+        .all(|e| e.id != reloc_edge.id));
+    let target_edges = edge::service::list(&target_canvas.id).unwrap();
+    assert!(target_edges.iter().any(|e| e.id == reloc_edge.id
+        && e.canvas_id == target_canvas.id));
+    // 产生恰好一条 Action::NodeRelocate 日志，且 node_count=2、source/target 画布名称正确、object_id 为目标画布 id。
+    let logs_after = log::service::list(0, 1000).unwrap();
+    assert_eq!(logs_after.total, log_total_before + 1);
+    let relocate_log = logs_after
+        .items
+        .iter()
+        .find(|e| matches!(e.action, entity::Action::NodeRelocate { .. }))
+        .unwrap();
+    assert_eq!(relocate_log.object_id, target_canvas.id);
+    assert!(matches!(
+        &relocate_log.action,
+        entity::Action::NodeRelocate {
+            node_count,
+            source_canvas_name,
+            target_canvas_name,
+        } if *node_count == 2
+            && source_canvas_name == "relocate-source"
+            && target_canvas_name == "relocate-target"
+    ));
+
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
+    }
+
     test::cleanup(&path);
 }
 

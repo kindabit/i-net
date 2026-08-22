@@ -8,6 +8,7 @@
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
   影子节点只显示编辑按钮，画布节点不显示复制按钮。
   支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
+  在跨画布迁移（按住 Alt 拖拽）时根据节点集合法性显示"允许/禁止"落点光环。
 
   影子节点（data.shadowId 非 null）的渲染差异：
   - 边框使用虚线，整体略降透明度，提示其为对画布外原始节点的引用。
@@ -25,6 +26,7 @@ import { t } from "@/i18n";
 import { userDatabaseCanvasList } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import type { DataNodeData } from "@/vf-convert";
+import nodeMoveAndRelocate from "@/composables/use-node-move-and-relocate";
 import { setCanvasNavIntent } from "./canvas-route-transition";
 import { deserializeNodeColor } from "@/node-colors";
 import { currentThemeIsDark } from "@/themes";
@@ -59,6 +61,15 @@ const colors = computed(() => {
 const handleStyle = computed(() => {
   const handle = colors.value.handle;
   return handle ? { background: handle, borderColor: handle } : undefined;
+});
+
+/** 迁移落点高亮状态：仅当本节点成为迁移目标（状态机只会以影子节点/画布节点为目标）且处于 relocate 模式时非 null */
+const dropState = computed(() => {
+  if (nodeMoveAndRelocate.mode.value !== "relocate") return null;
+  const target = nodeMoveAndRelocate.relocatingTarget.value;
+  if (!target || target.type === "breadcrumb-segment") return null;
+  if (target.nodeId !== props.id) return null;
+  return nodeMoveAndRelocate.nodeSetRelocatingLegality.value === "legal" ? "allow" : "forbid";
 });
 
 function onDblClick() {
@@ -105,6 +116,8 @@ async function onShadowVirtualEdgeClick() {
       'data-node-card--selected': selected,
       'data-node-card--shadow': !!data.shadowId,
       'data-node-card--origin-deleted': !!data.shadowOriginDeleted,
+      'data-node-card--drop-allow': dropState === 'allow',
+      'data-node-card--drop-forbid': dropState === 'forbid',
     }"
     :style="{
       backgroundColor: colors.background,
@@ -272,6 +285,17 @@ async function onShadowVirtualEdgeClick() {
   &--origin-deleted {
     filter: grayscale(1);
     opacity: 0.55;
+  }
+
+  // 迁移落点高亮：允许=success 光环，禁止=error 光环
+  &--drop-allow {
+    outline: 0.125rem solid rgb(var(--v-theme-success));
+    outline-offset: 0.125rem;
+  }
+
+  &--drop-forbid {
+    outline: 0.125rem solid rgb(var(--v-theme-error));
+    outline-offset: 0.125rem;
   }
 }
 

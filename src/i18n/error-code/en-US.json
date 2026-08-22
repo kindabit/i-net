@@ -262,6 +262,14 @@
     "NodeIsShadow": {
       "title": "Operation not allowed on shadow node",
       "text": "A shadow node is a reference display of a node from another canvas and does not support this operation"
+    },
+    "NodeNotInSameCanvas": {
+      "title": "Nodes not in the same canvas",
+      "text": "The nodes to relocate must belong to the same canvas"
+    },
+    "NodeSetHasExternalEdges": {
+      "title": "Node set has external edges",
+      "text": "The node set to relocate has edges connecting to other nodes in the canvas"
     }
   }
 }

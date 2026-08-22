@@ -1203,6 +1203,7 @@ fn test_user_database_command_all_functions() {
 
     use node::command::user_database_node_move_nodes;
     use canvas::command::user_database_canvas_move_canvases;
+    use node::command::user_database_node_relocate_nodes;
 
     // user_database_node_move_nodes::preprocess 失败路径：列表中含非法 id 时报 InvalidNodeId。
     let invalid_items = vec![
@@ -1277,6 +1278,55 @@ fn test_user_database_command_all_functions() {
         .find(|c| c.id == canvas_d.id)
         .unwrap();
     assert_eq!((updated_canvas.x, updated_canvas.y), (100.0, 200.0));
+
+    // user_database_node_relocate_nodes::preprocess 失败路径：items 含非法 id 时报 InvalidNodeId。
+    let invalid_relocate_items = vec![node::vo::MoveNodeVO {
+        id: "not-a-uuid".to_string(),
+        x: 1.0,
+        y: 2.0,
+    }];
+    assert!(matches!(
+        user_database_node_relocate_nodes::preprocess(
+            invalid_relocate_items,
+            canvas_d.id.clone(),
+        ),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // user_database_node_relocate_nodes::preprocess 失败路径：目标画布 id 非法时报 InvalidCanvasId。
+    let relocate_invalid_canvas = vec![node::vo::MoveNodeVO {
+        id: node.id.clone(),
+        x: 1.0,
+        y: 2.0,
+    }];
+    assert!(matches!(
+        user_database_node_relocate_nodes::preprocess(
+            relocate_invalid_canvas,
+            "not-a-uuid".to_string(),
+        ),
+        Err(ErrorCode::InvalidCanvasId { .. })
+    ));
+
+    // user_database_node_relocate_nodes::preprocess 成功路径：合法参数正常走到 service。
+    // 把 cmd-batch-node 从 cmd-child 迁移到 cmd-canvas-d，验证画布归属确实改变。
+    let node_x_before = node.x;
+    let node_y_before = node.y;
+    user_database_node_relocate_nodes::preprocess(
+        vec![node::vo::MoveNodeVO {
+            id: node.id.clone(),
+            x: node_x_before + 100.0,
+            y: node_y_before + 100.0,
+        }],
+        canvas_d.id.clone(),
+    )
+    .unwrap();
+    let relocated_node = node::service::list(&canvas_d.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == node.id)
+        .unwrap();
+    assert_eq!(relocated_node.canvas_id, canvas_d.id);
+    assert_eq!((relocated_node.x, relocated_node.y), (node_x_before + 100.0, node_y_before + 100.0));
 
     lifecycle::command::user_database_lifecycle_save::preprocess().unwrap();
     lifecycle::command::user_database_lifecycle_close::preprocess().unwrap();

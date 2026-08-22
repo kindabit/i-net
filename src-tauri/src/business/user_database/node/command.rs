@@ -7,6 +7,7 @@ pub mod user_database_node_modify;
 pub mod user_database_node_move_node;
 pub mod user_database_node_move_nodes;
 pub mod user_database_node_physical_delete;
+pub mod user_database_node_relocate_nodes;
 pub mod user_database_node_restore;
 pub mod user_database_node_search;
 pub mod user_database_node_set_color;

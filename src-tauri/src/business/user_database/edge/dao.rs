@@ -185,6 +185,38 @@ pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> 
     Ok(())
 }
 
+/// 批量更新边的画布归属：只更新 canvas_id 一列，prepared statement 只 prepare 一次。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `ids`: 要更新的边 id 列表。
+/// - `canvas_id`: 目标画布 id。
+///
+/// # 返回值
+/// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
+pub fn batch_update_canvas_id(
+    connection: &Connection,
+    ids: &[String],
+    canvas_id: &str,
+) -> Result<(), ErrorCode> {
+    let mut statement = connection
+        .prepare("UPDATE edge SET canvas_id = :canvas_id WHERE id = :id")
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    for id in ids {
+        statement
+            .execute(rusqlite::named_params! {
+                ":id": id,
+                ":canvas_id": canvas_id,
+            })
+            .map_err(|e| ErrorCode::DatabaseError {
+                detail: e.to_string(),
+            })?;
+    }
+    Ok(())
+}
+
 /// 判断两个节点之间是否已存在边（以源节点和目标节点精确匹配）。
 ///
 /// # 参数
@@ -304,5 +336,35 @@ mod tests {
         let updated = select_by_id(&connection, "id-1").unwrap().unwrap();
         assert_eq!(updated.title, "new title");
         assert_eq!(updated.description, "new desc");
+
+        // ===== batch_update_canvas_id 成功路径 =====
+        // 先插一条带 title / description 的边，再更新其 canvas_id，验证 canvas_id 改变而其它字段不变。
+        let mut titled = edge("id-buc", "canvas-1", "node-buc-src", "node-buc-tgt");
+        titled.title = "titled edge".to_string();
+        titled.description = "titled desc".to_string();
+        insert(&connection, &titled).unwrap();
+        batch_update_canvas_id(&connection, &["id-buc".to_string()], "canvas-2").unwrap();
+        let updated_canvas = select_by_id(&connection, "id-buc").unwrap().unwrap();
+        assert_eq!(updated_canvas.canvas_id, "canvas-2");
+        assert_eq!(updated_canvas.source_id, "node-buc-src");
+        assert_eq!(updated_canvas.target_id, "node-buc-tgt");
+        assert_eq!(updated_canvas.title, "titled edge");
+        assert_eq!(updated_canvas.description, "titled desc");
+
+        // batch_update_canvas_id 成功路径：不存在的 id 不会报错（SQLite UPDATE 不命中即 0 行），存在性校验是 service 层职责。
+        batch_update_canvas_id(&connection, &["no-such-id".to_string()], "canvas-2").unwrap();
+
+        // batch_update_canvas_id 成功路径：空列表直接返回 Ok（no-op）。
+        batch_update_canvas_id(&connection, &[], "canvas-2").unwrap();
+
+        // batch_update_canvas_id 失败路径：表不存在时报 DatabaseError。
+        let connection2 = Connection::open_in_memory().unwrap();
+        connection2
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        assert!(matches!(
+            batch_update_canvas_id(&connection2, &["any-id".to_string()], "canvas-x"),
+            Err(ErrorCode::DatabaseError { .. })
+        ));
     }
 }
