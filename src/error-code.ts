@@ -19,6 +19,7 @@ export type ErrorCodeVariant =
   | "DuplicateNodeFieldName"
   | "EdgeAlreadyExists"
   | "EdgeDeleteDisconnectsNodes"
+  | "EdgeSameNodePort"
   | "EdgeWouldFormCycle"
   | "EmptyCanvasName"
   | "EmptyDictionaryValue"

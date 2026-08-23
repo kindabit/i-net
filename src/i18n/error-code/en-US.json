@@ -251,6 +251,10 @@
       "title": "Deleting edge will disconnect nodes",
       "text": "The following nodes will lose connection: {nodes}"
     },
+    "EdgeSameNodePort": {
+      "title": "Same Node Port",
+      "text": "The source and target nodes use the same port; this connection is not allowed"
+    },
     "InvalidShadowEdge": {
       "title": "Invalid shadow node connection",
       "text": "An inflow shadow can only be the source of a connection, an outflow shadow can only be the target, and a shadow node cannot connect to a canvas node"

@@ -29,6 +29,7 @@ use crate::error_code::ErrorCode;
 ///
 /// # 返回值
 /// 返回新建的边；任一节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 两端连接桩相同时返回 `ErrorCode::EdgeSameNodePort`，
 /// 两个节点之间已存在边时返回 `ErrorCode::EdgeAlreadyExists`，
 /// 新建该边会成环时返回 `ErrorCode::EdgeWouldFormCycle`，
 /// 影子节点连线不合法时返回 `ErrorCode::InvalidShadowEdge`，
@@ -52,6 +53,9 @@ pub fn create(
             id: target_id.to_string(),
         })?;
     validate_shadow_endpoints(&connection, &source, &target)?;
+    if source_port == target_port {
+        return Err(ErrorCode::EdgeSameNodePort);
+    }
     if dao::exists_between(&connection, source_id, target_id)? {
         return Err(ErrorCode::EdgeAlreadyExists);
     }

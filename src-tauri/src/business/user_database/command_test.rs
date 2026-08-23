@@ -458,6 +458,19 @@ fn test_user_database_command_all_functions() {
     .unwrap();
     assert_eq!(edge_1.source_port, "right");
 
+    // user_database_edge_create::preprocess 失败路径：两端连接桩相同时报 EdgeSameNodePort
+    // （preprocess 不再吃掉端口字符串，业务层拒收）。
+    assert!(matches!(
+        user_database_edge_create::preprocess(
+            child.id.clone(),
+            node_1.id.clone(),
+            "top".to_string(),
+            node_2.id.clone(),
+            "top".to_string()
+        ),
+        Err(ErrorCode::EdgeSameNodePort)
+    ));
+
     // user_database_edge_update::preprocess 失败路径：id 非法时报 InvalidEdgeId。
     assert!(matches!(
         user_database_edge_update::preprocess(

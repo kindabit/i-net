@@ -389,8 +389,9 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
- * 连接合法性校验：不允许自环；出向影子只能作为目标（只有入度），入向影子只能作为源（只有出度）；
- * 影子节点不允许与画布节点相连（避免产生影子的影子；后端有 InvalidShadowEdge 兜底）。
+ * 连接合法性校验：不允许自环；不允许两端连接桩相同；出向影子只能作为目标（只有入度），
+ * 入向影子只能作为源（只有出度）；影子节点不允许与画布节点相连（避免产生影子的影子；
+ * 后端有 InvalidShadowEdge 兜底）。
  * @param connection vue-flow 连接对象
  * @returns 是否允许建立该连接
  */
@@ -401,6 +402,8 @@ function isValidConnection(connection: Connection): boolean {
   if (!source || !target) return false;
   if (source.data.shadowDirection === "outflow") return false;
   if (target.data.shadowDirection === "inflow") return false;
+  // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 port 即合法"）。
+  if ((connection.sourceHandle ?? "") === (connection.targetHandle ?? "")) return false;
   // "画布节点"判定须排除影子节点：影子节点的 canvasId 是后端从原始节点合并来的，
   // 它自身的 canvas_ref_id 为 null，后端语义上不是画布节点。
   const sourceIsShadow = !!source.data.shadowId;

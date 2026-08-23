@@ -512,6 +512,29 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::EdgeAlreadyExists)
     ));
 
+    // edge::create 失败路径：两端连接桩相同时报 EdgeSameNodePort（早于查重与成环检查）。
+    assert!(matches!(
+        edge::service::create(
+            &child.id,
+            &node_1.id,
+            "top".to_string(),
+            &node_2.id,
+            "top".to_string()
+        ),
+        Err(ErrorCode::EdgeSameNodePort)
+    ));
+    // 自环 + 同连接桩同样报 EdgeSameNodePort，覆盖同 port 检查先于 would_form_cycle 的语义。
+    assert!(matches!(
+        edge::service::create(
+            &child.id,
+            &node_1.id,
+            "right".to_string(),
+            &node_1.id,
+            "right".to_string()
+        ),
+        Err(ErrorCode::EdgeSameNodePort)
+    ));
+
     // edge::create 失败路径：反向建边会成环报 EdgeWouldFormCycle；自环同样报 EdgeWouldFormCycle。
     assert!(matches!(
         edge::service::create(

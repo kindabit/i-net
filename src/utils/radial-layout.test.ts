@@ -639,4 +639,199 @@ describe("computeRadialLayout", () => {
       }
     }
   });
+
+  it("十字汇聚：多源多方位汇入中心时中心成为视觉根", () => {
+    // 意图：四个节点从四个端口方位指向中心 C（N bottom→C top、
+    // W right→C left、E left→C right、S top→C bottom）。
+    // 方向规范化应反转该分量使 C 成为分层根，各源绕其四方位锚定：
+    // N 正上、W 正左、E 正右、S 正下，间距均为 ringSpacing。
+    const result = computeRadialLayout(
+      [node("C"), node("N"), node("W"), node("E"), node("S")],
+      [
+        portedEdge("N", "C", "bottom", "top"),
+        portedEdge("W", "C", "right", "left"),
+        portedEdge("E", "C", "left", "right"),
+        portedEdge("S", "C", "top", "bottom"),
+      ],
+      CONFIG,
+    );
+    const c = result.get("C")!;
+    expect(distance(result.get("N")!, c)).toBeCloseTo(300, 6);
+    expect(distance(result.get("W")!, c)).toBeCloseTo(300, 6);
+    expect(distance(result.get("E")!, c)).toBeCloseTo(300, 6);
+    expect(distance(result.get("S")!, c)).toBeCloseTo(300, 6);
+    expect(result.get("N")!.cx).toBeCloseTo(c.cx, 6);
+    expect(result.get("N")!.cy).toBeLessThan(c.cy);
+    expect(result.get("S")!.cx).toBeCloseTo(c.cx, 6);
+    expect(result.get("S")!.cy).toBeGreaterThan(c.cy);
+    expect(result.get("W")!.cy).toBeCloseTo(c.cy, 6);
+    expect(result.get("W")!.cx).toBeLessThan(c.cx);
+    expect(result.get("E")!.cy).toBeCloseTo(c.cy, 6);
+    expect(result.get("E")!.cx).toBeGreaterThan(c.cx);
+  });
+
+  it("方向翻转对称：十字场景两种边方向产生相同布局", () => {
+    // 意图：布局对边方向翻转必须对称——把十字场景全部边反向后，
+    // 每个节点相对中心 C 的偏移应与原始方向完全一致（逐坐标）。
+    const forwardEdges = [
+      portedEdge("N", "C", "bottom", "top"),
+      portedEdge("W", "C", "right", "left"),
+      portedEdge("E", "C", "left", "right"),
+      portedEdge("S", "C", "top", "bottom"),
+    ];
+    const backwardEdges = forwardEdges.map((edge) => ({
+      source: edge.target,
+      target: edge.source,
+      sourcePort: edge.targetPort,
+      targetPort: edge.sourcePort,
+    }));
+    const nodes = [node("C"), node("N"), node("W"), node("E"), node("S")];
+    const forward = computeRadialLayout(nodes, forwardEdges, CONFIG);
+    const backward = computeRadialLayout(nodes, backwardEdges, CONFIG);
+    for (const id of ["C", "N", "W", "E", "S"]) {
+      const p1 = forward.get(id)!;
+      const p2 = backward.get(id)!;
+      expect(p1.cx).toBeCloseTo(p2.cx, 6);
+      expect(p1.cy).toBeCloseTo(p2.cy, 6);
+    }
+  });
+
+  it("汇聚带中间节点：反转保持端口语义链", () => {
+    // 意图：N 经中间节点 M 间接汇聚到 C（N bottom→M top、M bottom→C top），
+    // 加上 W/E/S 三方位直连。纯源 4 > 纯汇 1 且方位发散（bottom/right/left/top）
+    // → 反转。反转后 C 为根、M 在 C 正上、N 在 M 正上、W/E/S 三方位直连，
+    // 每条边的端口方位语义在反转下保持。
+    const result = computeRadialLayout(
+      [node("C"), node("M"), node("N"), node("W"), node("E"), node("S")],
+      [
+        portedEdge("N", "M", "bottom", "top"),
+        portedEdge("M", "C", "bottom", "top"),
+        portedEdge("W", "C", "right", "left"),
+        portedEdge("E", "C", "left", "right"),
+        portedEdge("S", "C", "top", "bottom"),
+      ],
+      CONFIG,
+    );
+    const c = result.get("C")!;
+    const m = result.get("M")!;
+    const n = result.get("N")!;
+    // M 在 C 正上方，N 在 M 正上方（垂直语义链保持）
+    expect(m.cx).toBeCloseTo(c.cx, 6);
+    expect(m.cy - c.cy).toBeCloseTo(-300, 6);
+    expect(n.cx).toBeCloseTo(m.cx, 6);
+    expect(n.cy - m.cy).toBeCloseTo(-300, 6);
+    // W/E/S 仍绕 C 三方位
+    expect(result.get("W")!.cx - c.cx).toBeCloseTo(-300, 6);
+    expect(result.get("E")!.cx - c.cx).toBeCloseTo(300, 6);
+    expect(result.get("S")!.cy - c.cy).toBeCloseTo(300, 6);
+  });
+
+  it("夹心汇聚：反向方位对反转成垂直排列", () => {
+    // 意图：a1 bottom→b 与 a2 top→b 的锚向方位各 1 种且互为反向
+    //（方位集 {bottom, top} 发散），纯源 2 > 纯汇 1 → 反转。
+    // 反转后 b 为根，a1 在 b 正上、a2 在 b 正下（a1 的 bottom 朝向 b、
+    // a2 的 top 朝向 b，语义保持）。
+    const result = computeRadialLayout(
+      [node("a1"), node("a2"), node("b")],
+      [portedEdge("a1", "b", "bottom"), portedEdge("a2", "b", "top")],
+      CONFIG,
+    );
+    const a1 = result.get("a1")!;
+    const a2 = result.get("a2")!;
+    const b = result.get("b")!;
+    // 垂直共线，b 夹在中间
+    expect(a1.cx).toBeCloseTo(b.cx, 6);
+    expect(a2.cx).toBeCloseTo(b.cx, 6);
+    expect(a1.cy).toBeLessThan(b.cy);
+    expect(a2.cy).toBeGreaterThan(b.cy);
+    expect(b.cy - a1.cy).toBeCloseTo(300, 6);
+    expect(a2.cy - b.cy).toBeCloseTo(300, 6);
+  });
+
+  it("方位一致的汇聚不反转：源在上汇在下", () => {
+    // 意图：a1、a2 都从 bottom 汇入 b（方位集仅 {bottom}，语义一致：
+    // "源在上、汇在下"）。方向规范化不应反转——a1、a2 保持根行在上，
+    // b 在下方取锚点均值。这是防止过度反转的失败分支。
+    const result = computeRadialLayout(
+      [node("a1"), node("a2"), node("b")],
+      [portedEdge("a1", "b", "bottom", "top"), portedEdge("a2", "b", "bottom", "top")],
+      CONFIG,
+    );
+    const a1 = result.get("a1")!;
+    const a2 = result.get("a2")!;
+    const b = result.get("b")!;
+    // 源在上：b 在两个源下方
+    expect(b.cy).toBeGreaterThan(a1.cy);
+    expect(b.cy).toBeGreaterThan(a2.cy);
+    // 源保持根行（同高）
+    expect(a1.cy).toBeCloseTo(a2.cy, 6);
+    // b 取两锚点均值（水平居中于两源之间）
+    expect(b.cx).toBeCloseTo((a1.cx + a2.cx) / 2, 6);
+  });
+
+  it("发散型不反转：单源多汇保持源为根", () => {
+    // 意图：root 从 bottom 发散出 4 个子节点（纯源 1 < 纯汇 4，发散型）。
+    // 不应反转：root 保持分层根，4 子同锚向成行排在 root 下方。
+    // 这是防止过度反转的失败分支。
+    const kids = ["c1", "c2", "c3", "c4"];
+    const result = computeRadialLayout(
+      [node("root"), ...kids.map(node)],
+      kids.map((id) => portedEdge("root", id, "bottom", "top")),
+      CONFIG,
+    );
+    const root = result.get("root")!;
+    for (const id of kids) {
+      expect(result.get(id)!.cy - root.cy).toBeCloseTo(300, 6);
+    }
+    // 同父同锚向兄弟沿水平方向等距排开（成行且互不重叠）
+    const cxs = kids.map((id) => result.get(id)!.cx).sort((a, b) => a - b);
+    for (let i = 1; i < cxs.length; i++) {
+      expect(cxs[i] - cxs[i - 1]).toBeCloseTo(200, 6);
+    }
+  });
+
+  it("链式平局不反转：纯源=纯汇保持原方向", () => {
+    // 意图：a→b→c 垂直端口链（纯源 1 = 纯汇 1，平局）不触发反转，
+    // 布局沿边的原方向自上而下展开：a 上、b 中、c 下。
+    // 这是防止过度反转的失败分支。
+    const result = computeRadialLayout(
+      [node("a"), node("b"), node("c")],
+      [portedEdge("a", "b", "bottom", "top"), portedEdge("b", "c", "bottom", "top")],
+      CONFIG,
+    );
+    const a = result.get("a")!;
+    const b = result.get("b")!;
+    const c = result.get("c")!;
+    expect(a.cx).toBeCloseTo(b.cx, 6);
+    expect(b.cx).toBeCloseTo(c.cx, 6);
+    expect(b.cy - a.cy).toBeCloseTo(300, 6);
+    expect(c.cy - b.cy).toBeCloseTo(300, 6);
+  });
+
+  it("分量级规范化：汇聚分量反转而相邻链分量不受影响", () => {
+    // 意图：十字汇聚分量（触发反转）与独立链分量 p→q（平局不反转）
+    // 混合输入。方向规范化按分量独立判定：十字分量内 C 保持中心，
+    // 链分量保持 p 根、q 在 p 正下方，互不干扰。
+    const result = computeRadialLayout(
+      [node("C"), node("N"), node("W"), node("E"), node("S"), node("p"), node("q")],
+      [
+        portedEdge("N", "C", "bottom", "top"),
+        portedEdge("W", "C", "right", "left"),
+        portedEdge("E", "C", "left", "right"),
+        portedEdge("S", "C", "top", "bottom"),
+        portedEdge("p", "q", "bottom", "top"),
+      ],
+      CONFIG,
+    );
+    // 十字分量：C 到四方位邻居等距（C 是分量中心）
+    const c = result.get("C")!;
+    for (const id of ["N", "W", "E", "S"]) {
+      expect(distance(result.get(id)!, c)).toBeCloseTo(300, 6);
+    }
+    // 链分量：q 在 p 正下方（不反转，方向语义保持）
+    const p = result.get("p")!;
+    const q = result.get("q")!;
+    expect(q.cx).toBeCloseTo(p.cx, 6);
+    expect(q.cy - p.cy).toBeCloseTo(300, 6);
+  });
 });

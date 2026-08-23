@@ -33,6 +33,8 @@ pub enum ErrorCode {
     EdgeAlreadyExists,
     /// 删除该边会物理删除影子节点并使所列节点失去连接，包含受影响节点的标题列表。
     EdgeDeleteDisconnectsNodes { nodes: Vec<String> },
+    /// 源节点和目标节点使用了相同的连接桩，不允许建立这条边。
+    EdgeSameNodePort,
     /// 新建该边会在画布内形成环。
     EdgeWouldFormCycle,
     /// 画布名称为空。
