@@ -207,6 +207,10 @@
       "title": "Field value validation failed",
       "text": "Field: {name}"
     },
+    "NodeDeleteDisconnectsNodes": {
+      "title": "Deleting node permanently will disconnect nodes",
+      "text": "The following nodes will lose connection: {nodes}"
+    },
     "NoDictionaryEntryWithSuchId": {
       "title": "Dictionary entry not found",
       "text": "id: {id}"
@@ -257,7 +261,7 @@
     },
     "InvalidShadowEdge": {
       "title": "Invalid shadow node connection",
-      "text": "An inflow shadow can only be the source of a connection, an outflow shadow can only be the target, and a shadow node cannot connect to a canvas node"
+      "text": "An inflow shadow can only be the source of a connection, and an outflow shadow can only be the target"
     },
     "NodeIsCanvasNode": {
       "title": "Operation not allowed on canvas node",

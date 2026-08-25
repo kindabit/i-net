@@ -207,6 +207,10 @@
       "title": "字段值未通过校验",
       "text": "字段：{name}"
     },
+    "NodeDeleteDisconnectsNodes": {
+      "title": "永久删除节点将断开连接",
+      "text": "以下节点将失去连接：{nodes}"
+    },
     "NoDictionaryEntryWithSuchId": {
       "title": "字典条目不存在",
       "text": "id：{id}"
@@ -257,7 +261,7 @@
     },
     "InvalidShadowEdge": {
       "title": "影子节点连线无效",
-      "text": "入向影子只能作为连线的起点，出向影子只能作为连线的终点，且影子节点不能与画布节点相连"
+      "text": "入向影子只能作为连线的起点，出向影子只能作为连线的终点"
     },
     "NodeIsCanvasNode": {
       "title": "不允许操作画布节点",

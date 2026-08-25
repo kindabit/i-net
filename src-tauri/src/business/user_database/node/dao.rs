@@ -263,6 +263,38 @@ pub fn select_by_shadow_id_and_canvas_id(
         })
 }
 
+/// 按原始节点 id 查询其全部直接影子节点（跨所有画布）。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `shadow_id`: 原始节点 id（即影子节点 shadow_id 列的值）。
+///
+/// # 返回值
+/// 返回查询到的影子节点列表（可能为空）；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_by_shadow_id(
+    connection: &Connection,
+    shadow_id: &str,
+) -> Result<Vec<Node>, ErrorCode> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
+            FROM node
+            WHERE shadow_id = :shadow_id",
+        )
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    let rows = statement
+        .query_map(rusqlite::named_params! {":shadow_id": shadow_id}, map_row)
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })
+}
+
 /// 从查询结果行构造 NodeSearchResponse。
 fn map_search_row(row: &Row) -> rusqlite::Result<NodeSearchResponse> {
     Ok(NodeSearchResponse {

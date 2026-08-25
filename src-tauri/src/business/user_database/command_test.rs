@@ -519,12 +519,12 @@ fn test_user_database_command_all_functions() {
 
     // user_database_node_physical_delete::preprocess 失败路径：id 非法时报 InvalidNodeId。
     assert!(matches!(
-        user_database_node_physical_delete::preprocess("no-such-id".to_string()),
+        user_database_node_physical_delete::preprocess("no-such-id".to_string(), false),
         Err(ErrorCode::InvalidNodeId { .. })
     ));
 
     // user_database_node_physical_delete::preprocess 成功路径。
-    user_database_node_physical_delete::preprocess(node_2.id.clone()).unwrap();
+    user_database_node_physical_delete::preprocess(node_2.id.clone(), false).unwrap();
 
     use log::command::user_database_log_list;
 

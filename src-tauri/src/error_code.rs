@@ -115,7 +115,7 @@ pub enum ErrorCode {
     InvalidNodePort { port: String },
     /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
     InvalidPath { detail: String },
-    /// 影子节点的连线方向不合法或影子节点不允许与画布节点相连。
+    /// 影子节点的连线方向不合法。
     InvalidShadowEdge,
     /// 模板 id 无效，包含模板 id。
     InvalidTemplateId { id: String },
@@ -143,6 +143,8 @@ pub enum ErrorCode {
     NodeFieldValueKindMismatch { field_type: String, expected: String, actual: String },
     /// 节点字段值未通过校验，包含字段名称。
     NodeFieldValueValidationFailed { name: String },
+    /// 物理删除该节点会级联删除其在其它画布中的影子节点并使所列节点失去连接，包含受影响节点的标题列表。
+    NodeDeleteDisconnectsNodes { nodes: Vec<String> },
     /// 该操作不允许作用于画布节点。
     NodeIsCanvasNode,
     /// 该操作不允许作用于影子节点。

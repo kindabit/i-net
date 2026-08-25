@@ -416,14 +416,19 @@ export async function userDatabaseNodeRestore(
 }
 
 /**
- * 物理删除节点和相连的边。
+ * 物理删除节点及其影子子树（影子子树可能在多级画布中存在）。
+ * 删除会级联删除该节点在其它画布中的影子节点；若影子子树在下游画布内存在
+ * 关联节点且 `confirmed` 为 false，后端返回 ErrorCode `NodeDeleteDisconnectsNodes`，
+ * 其 data 为 `{ nodes: string[] }`，列出将失去连接的节点标题（可能跨多级画布）。
  * @param id 节点 id
+ * @param confirmed 是否确认级联断开节点连接
  * @returns 无返回值
  */
 export async function userDatabaseNodePhysicalDelete(
   id: string,
+  confirmed: boolean,
 ): Promise<void> {
-  return invoke("user_database_node_physical_delete", { id });
+  return invoke("user_database_node_physical_delete", { id, confirmed });
 }
 
 /**

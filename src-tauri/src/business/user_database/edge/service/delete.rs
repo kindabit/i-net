@@ -1,8 +1,5 @@
-use rusqlite::Connection;
-
 use crate::business::user_database::edge::dao;
 use crate::business::user_database::entity::{Action, Node};
-use crate::business::user_database::node::vo::ShadowDirection;
 use crate::business::user_database::{log, node, state};
 use crate::error_code::ErrorCode;
 
@@ -10,9 +7,13 @@ use crate::error_code::ErrorCode;
 ///
 /// 影子节点联动：如果边的某个端点是画布节点，则被引用子画布内另一端节点的影子节点
 /// 随边一并物理删除（影子节点自身相连的边由外键级联删除）；两端都是画布节点时
-/// 两个影子都会被删除。删除前收集影子节点在子画布内相连的节点（入向影子的出边目标、
-/// 出向影子的入边源）：存在受影响节点且调用方未确认时返回
-/// `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端向用户确认后以 `confirmed = true` 重调。
+/// 两个影子都会被删除。影子支持嵌套（影子的影子），嵌套影子会由 node.shadow_id
+/// 自引用外键与 edge.source_id/target_id 外键在 SQLite 层逐层级联删除，应用层
+/// 禁止手写递归删除。受影响节点的收集通过 [`node::service::collect_shadow_disconnected`]
+/// 递归覆盖下游各级画布：入向影子收集出边目标、出向影子收集入边源，方向推导不出
+/// （数据不一致）时两个方向都收集，邻居本身是影子时取其根原始节点的标题。
+/// 存在受影响节点且调用方未确认时返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，
+/// 由前端向用户确认后以 `confirmed = true` 重调。
 ///
 /// 产生 EdgePhysicalDelete 日志，载荷为源节点的标题和目标节点的标题。
 ///
@@ -70,9 +71,13 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
         }
     }
     // 收集受影响节点（须在删除边之前完成，影子方向推导依赖这条边）。
+    // 嵌套影子的断连递归覆盖到下游各级画布。
     let mut affected: Vec<String> = Vec::new();
     for shadow in &shadows {
-        affected.extend(collect_disconnected_nodes(&connection, shadow)?);
+        affected.extend(node::service::collect_shadow_disconnected(
+            &connection,
+            shadow,
+        )?);
     }
     if !affected.is_empty() && !confirmed {
         return Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected });
@@ -90,50 +95,4 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
         },
     )?;
     Ok(())
-}
-
-/// 收集影子节点在其画布内相连的节点的展示标题：入向影子收集出边目标，
-/// 出向影子收集入边源，方向推导不出（数据不一致）时两个方向都收集。
-/// 邻居本身是影子节点时取其原始节点的标题（影子行自身的标题是空串）。标题去重。
-///
-/// # 参数
-/// - `connection`: 数据库连接。
-/// - `shadow`: 影子节点。
-///
-/// # 返回值
-/// 返回受影响节点的标题列表；发生数据库错误时返回对应的 `ErrorCode`。
-fn collect_disconnected_nodes(
-    connection: &Connection,
-    shadow: &Node,
-) -> Result<Vec<String>, ErrorCode> {
-    let direction = node::service::shadow_direction(connection, shadow)?;
-    let edges = dao::select_by_canvas_id(connection, &shadow.canvas_id)?;
-    let mut titles: Vec<String> = Vec::new();
-    for edge in &edges {
-        let neighbor_id = if edge.source_id == shadow.id && direction != Some(ShadowDirection::Outflow)
-        {
-            Some(edge.target_id.as_str())
-        } else if edge.target_id == shadow.id && direction != Some(ShadowDirection::Inflow) {
-            Some(edge.source_id.as_str())
-        } else {
-            None
-        };
-        let Some(neighbor_id) = neighbor_id else {
-            continue;
-        };
-        let Some(neighbor) = node::dao::select_by_id(connection, neighbor_id)? else {
-            continue;
-        };
-        // 邻居是影子节点时，其自身标题是空串，展示用原始节点的标题。
-        let title = match &neighbor.shadow_id {
-            Some(origin_id) => node::dao::select_by_id(connection, origin_id)?
-                .map(|origin| origin.title)
-                .unwrap_or(neighbor.title),
-            None => neighbor.title,
-        };
-        if !titles.contains(&title) {
-            titles.push(title);
-        }
-    }
-    Ok(titles)
 }

@@ -69,6 +69,7 @@ export type ErrorCodeVariant =
   | "NoEdgeWithSuchId"
   | "NoNodeWithSuchId"
   | "NoTemplateWithSuchId"
+  | "NodeDeleteDisconnectsNodes"
   | "NodeFieldValueKindMismatch"
   | "NodeFieldValueValidationFailed"
   | "NodeIsCanvasNode"

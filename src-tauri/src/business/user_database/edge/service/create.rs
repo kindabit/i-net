@@ -11,8 +11,7 @@ use crate::error_code::ErrorCode;
 /// 在指定画布内新建一条边：两端节点都必须存在且属于该画布，
 /// 两个节点之间不能已存在边，且新建这条边不会在画布内成环（不考虑连接桩）。
 ///
-/// 影子节点连线约束：入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度），
-/// 影子节点不允许与画布节点相连（避免产生影子的影子）。
+/// 影子节点连线约束：入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度）。
 ///
 /// 影子节点联动：target 是画布节点时，原始节点 source 是其引用画布的父，
 /// 在引用画布内创建 source 的入向影子；source 是画布节点时，原始节点 target 是其引用画布的子，
@@ -91,8 +90,7 @@ pub fn create(
 }
 
 /// 校验影子节点参与连线时的方向约束：
-/// 入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度），
-/// 影子节点不允许与画布节点相连（避免产生影子的影子）。
+/// 入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度）。
 /// 影子方向因数据不一致推导不出时不作限制（宁可放行也不因脏数据锁死用户操作）。
 ///
 /// # 参数
@@ -108,25 +106,15 @@ fn validate_shadow_endpoints(
     source: &Node,
     target: &Node,
 ) -> Result<(), ErrorCode> {
-    if source.shadow_id.is_some() {
-        if target.canvas_ref_id.is_some() {
-            return Err(ErrorCode::InvalidShadowEdge);
-        }
-        if node::service::shadow_direction(connection, source)?
-            == Some(ShadowDirection::Outflow)
-        {
-            return Err(ErrorCode::InvalidShadowEdge);
-        }
+    if source.shadow_id.is_some()
+        && node::service::shadow_direction(connection, source)? == Some(ShadowDirection::Outflow)
+    {
+        return Err(ErrorCode::InvalidShadowEdge);
     }
-    if target.shadow_id.is_some() {
-        if source.canvas_ref_id.is_some() {
-            return Err(ErrorCode::InvalidShadowEdge);
-        }
-        if node::service::shadow_direction(connection, target)?
-            == Some(ShadowDirection::Inflow)
-        {
-            return Err(ErrorCode::InvalidShadowEdge);
-        }
+    if target.shadow_id.is_some()
+        && node::service::shadow_direction(connection, target)? == Some(ShadowDirection::Inflow)
+    {
+        return Err(ErrorCode::InvalidShadowEdge);
     }
     Ok(())
 }

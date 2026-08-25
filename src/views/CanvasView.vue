@@ -36,6 +36,7 @@ import type { Node, Edge, MoveNodeVO } from "@/api-types";
 import { toVFNode, toVFEdge } from "@/vf-convert";
 import { DATA_NODE_WIDTH, DATA_NODE_HEIGHT, DATA_NODE_HALF_WIDTH, DATA_NODE_HALF_HEIGHT } from "@/node-size";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
+import { isErrorCode } from "@/error-code";
 import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
 import nodeMoveAndRelocate, { type Mode, type RelocatingLegality, type RelocatingTarget } from "@/composables/use-node-move-and-relocate.ts";
@@ -47,6 +48,7 @@ import CustomEdge from "./DatabaseComponents/CustomEdge.vue";
 import EdgeContextMenu from "./DatabaseComponents/EdgeContextMenu.vue";
 import EditEdgeDialog from "./DatabaseComponents/EditEdgeDialog.vue";
 import RecycleBinPanel from "./DatabaseComponents/RecycleBinPanel.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import EditNodeDialog from "./DatabaseComponents/EditNodeDialog.vue";
 import EditDataNodeColorDialog from "@/node-colors/EditDataNodeColorDialog.vue";
 import NodeTemplatePanel from "./DatabaseComponents/NodeTemplatePanel.vue";
@@ -71,6 +73,7 @@ const templatePanelRef = ref<InstanceType<typeof NodeTemplatePanel>>();
 const templateManagerDialogRef = ref<InstanceType<typeof TemplateManagerDialog>>();
 const dictionaryManagerDialogRef = ref<InstanceType<typeof DictionaryManagerDialog>>();
 const attachmentDialogRef = ref<InstanceType<typeof AttachmentDialog>>();
+const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
 const recycleBinBtnRef = ref<any>(null);
 const { screenToFlowCoordinate, updateNodeInternals, updateEdgeData, getNodes: getVFNodes, getEdges: getVFEdges, viewport: vfViewport } = useVueFlow();
 const snapGrid: [number, number] = [20, 20];
@@ -389,9 +392,8 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
- * 连接合法性校验：不允许自环；不允许两端连接桩相同；出向影子只能作为目标（只有入度），
- * 入向影子只能作为源（只有出度）；影子节点不允许与画布节点相连（避免产生影子的影子；
- * 后端有 InvalidShadowEdge 兜底）。
+ * 连接合法性校验：不允许自环；不允许两端连接桩相同；方向守卫要求出向影子只能作为目标（只有入度），
+ * 入向影子只能作为源（只有出度），后端有 InvalidShadowEdge 兜底。
  * @param connection vue-flow 连接对象
  * @returns 是否允许建立该连接
  */
@@ -404,13 +406,6 @@ function isValidConnection(connection: Connection): boolean {
   if (target.data.shadowDirection === "inflow") return false;
   // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 port 即合法"）。
   if ((connection.sourceHandle ?? "") === (connection.targetHandle ?? "")) return false;
-  // "画布节点"判定须排除影子节点：影子节点的 canvasId 是后端从原始节点合并来的，
-  // 它自身的 canvas_ref_id 为 null，后端语义上不是画布节点。
-  const sourceIsShadow = !!source.data.shadowId;
-  const targetIsShadow = !!target.data.shadowId;
-  const sourceIsCanvasNode = !sourceIsShadow && !!source.data.canvasId;
-  const targetIsCanvasNode = !targetIsShadow && !!target.data.canvasId;
-  if ((sourceIsShadow && targetIsCanvasNode) || (targetIsShadow && sourceIsCanvasNode)) return false;
   return true;
 }
 
@@ -620,6 +615,39 @@ async function onNodeDragStopEffect(mode: Mode, draggedNodes: VFNode[], legality
   }
   persistMove(draggedNodes);
 }
+
+/**
+ * 物理删除节点（第二道确认）：RecycleBinPanel 的基础确认通过后进入此函数。
+ * 先以 confirmed=false 调用；若后端返回 NodeDeleteDisconnectsNodes（影子子树在其它画布
+ * 有关联节点），弹出断连确认对话框，用户确认后以 confirmed=true 重调。
+ * @param node 待物理删除的节点
+ * @returns 无返回值
+ */
+async function onNodePhysicalDelete(node: Node): Promise<void> {
+  try {
+    await recycleBin.physicalDelete(node, false);
+    return;
+  } catch (e) {
+    if (!isErrorCode(e, "NodeDeleteDisconnectsNodes")) {
+      snackbarErrorCode(e);
+      return;
+    }
+    const rawNodes = e.data?.nodes;
+    const disconnected: string[] = Array.isArray(rawNodes) ? rawNodes.map(String) : [];
+    const separator = t("database.canvas.delete-edge-disconnect-separator");
+    const confirmed = await confirmDialogRef.value?.open({
+      title: t("database.canvas.delete-node-disconnect-title"),
+      text: t("database.canvas.delete-node-disconnect-text", {
+        title: node.title,
+        nodes: disconnected.join(separator),
+      }),
+      confirmText: t("database.canvas.physical-delete-node"),
+      confirmColor: "error",
+    });
+    if (!confirmed) return;
+    await recycleBin.physicalDelete(node, true);
+  }
+}
 </script>
 
 <template>
@@ -714,9 +742,10 @@ async function onNodeDragStopEffect(mode: Mode, draggedNodes: VFNode[], legality
       ref="recycleBinPanelRef"
       :nodes="recycleBin.deletedNodes.value"
       @restore="onNodeRestore"
-      @physical-delete="recycleBin.physicalDelete"
+      @physical-delete="onNodePhysicalDelete"
       @empty="recycleBin.empty"
     />
+    <ConfirmDialog ref="confirmDialogRef" />
     <!-- #if [DEBUG] -->
     <ViewportDebugOverlay :viewport="vfViewport" />
     <!-- #endif -->

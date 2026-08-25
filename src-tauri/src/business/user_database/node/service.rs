@@ -13,6 +13,7 @@ mod restore;
 mod search;
 mod set_color;
 mod shadow_direction;
+mod shadow_disconnected;
 
 pub use color_list::color_list;
 pub use copy::copy;
@@ -29,3 +30,4 @@ pub use restore::restore;
 pub use search::search;
 pub use set_color::set_color;
 pub use shadow_direction::shadow_direction;
+pub use shadow_disconnected::collect_shadow_disconnected;

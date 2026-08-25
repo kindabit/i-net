@@ -1,5 +1,7 @@
 # 高
 
+[ ] 在两个已经相连的节点之间重新建立新的边会直接替换旧的边
+[ ] src-tauri\src\business\user_database\node\service\list.rs 递归查询可以用 prepared statement 优化
 [ ] 问问 ai 对我的代码地图的看法？如何才能让 ai 也易于理解这个项目？
 [ ] 教程引导系统（等自动化e2e测试）
 [ ] 视觉自动化流程
