@@ -460,9 +460,9 @@ function isValidConnection(connection: Connection): boolean {
   if (!source || !target) return false;
   if (source.data.shadowId !== null && target.data.shadowId !== null) return false;
   // 画布节点之间不能互相连接（后端 CanvasToCanvasEdge 兜底）；
-  // 判断需排除影子：影子不是画布节点，其 canvasId 不参与本判断。
-  const sourceIsCanvas = source.data.canvasId !== null && source.data.shadowId === null;
-  const targetIsCanvas = target.data.canvasId !== null && target.data.shadowId === null;
+  // 判断需排除影子：影子不是画布节点，其 canvasRefId 不参与本判断。
+  const sourceIsCanvas = source.data.canvasRefId !== null && source.data.shadowId === null;
+  const targetIsCanvas = target.data.canvasRefId !== null && target.data.shadowId === null;
   if (sourceIsCanvas && targetIsCanvas) return false;
   if (source.data.shadowDirection === "outflow") return false;
   if (target.data.shadowDirection === "inflow") return false;
@@ -502,7 +502,7 @@ async function onEdgeEdit(id: string): Promise<void> {
  * 基于 document.elementsFromPoint 做 DOM 命中测试：vue-flow 节点容器带
  * vue-flow__node 类和 data-id 属性，重叠节点与被拖动节点下方的节点都会被
  * 收集，按自顶向下的顺序返回。被拖动的节点也会被返回——其 data 上没有
- * canvasId/shadowId 时会被状态机的迁移目标计算自然跳过，无需在此排除。
+ * canvasRefId/shadowId 时会被状态机的迁移目标计算自然跳过，无需在此排除。
  * @param position 屏幕坐标（clientX / clientY）
  * @returns 该位置处的节点数组，按 DOM 自顶向下排序
  */
@@ -594,7 +594,10 @@ function persistMove(moved: VFNode[]) {
  * @returns 目标画布 id；解析失败（当前画布无父画布或查询出错）时返回 null
  */
 async function resolveRelocateTargetCanvasId(target: RelocatingTarget): Promise<string | null> {
-  if (target.type === "canvas-node" || target.type === "breadcrumb-segment") {
+  if (target.type === "canvas-node") {
+    return target.canvasRefId;
+  }
+  else if (target.type === "breadcrumb-segment") {
     return target.canvasId;
   }
   try {

@@ -13,7 +13,7 @@ export interface DataNodeData {
   /** 节点副标题 */
   subTitle: string;
   /** 引用的子画布 id，仅画布节点有值；影子节点恒为 null（影子的原始节点只能是普通节点） */
-  canvasId: string | null;
+  canvasRefId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;
   /** 原始节点 id；null 表示普通节点 */
@@ -42,7 +42,7 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
     data: {
       title: node.title,
       subTitle: node.sub_title,
-      canvasId: node.canvas_ref_id,
+      canvasRefId: node.canvas_ref_id,
       color: node.color,
       shadowId: node.shadow_id,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,

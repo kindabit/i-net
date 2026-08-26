@@ -17,7 +17,7 @@ import { DataNodeData } from "@/vf-convert";
  * 迁移目标的类型以及相关数据
  */
 export type RelocatingTarget =
-  { type: 'canvas-node', nodeId: string, canvasId: string } |
+  { type: 'canvas-node', nodeId: string, canvasRefId: string } |
   { type: 'shadow-node', nodeId: string, shadowId: string } |
   { type: 'breadcrumb-segment', canvasId: string, canvasName: string }
 
@@ -130,7 +130,7 @@ function useNodeMoveAndRelocate() {
   function calculateLegality(draggedNodes: VFNode[], allEdges: VFEdge[]): RelocatingLegality {
     let set = new Set();
     for (let node of draggedNodes) {
-      if ((node.data as DataNodeData).canvasId) {
+      if ((node.data as DataNodeData).canvasRefId) {
         return 'has-canvas';
       }
       if ((node.data as DataNodeData).shadowId) {
@@ -163,11 +163,11 @@ function useNodeMoveAndRelocate() {
           shadowId: data.shadowId,
         };
       }
-      if (data.canvasId) {
+      if (data.canvasRefId) {
         return {
           type: 'canvas-node',
           nodeId: node.id,
-          canvasId: data.canvasId,
+          canvasRefId: data.canvasRefId,
         };
       }
     }

@@ -2,7 +2,7 @@
   数据节点 / 画布节点组件。
 
   在画布中将一个敏感数据节点或子画布节点渲染为 vue-flow 节点。
-  显示节点标题和副标题，canvasId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
+  显示节点标题和副标题，canvasRefId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
   四个方向均为出口（source）。
   节点为固定宽高（尺寸常量见 node-size.ts，为吸附网格 20px 的整数倍），标题/副标题过长时显示省略号。
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
@@ -16,8 +16,8 @@
     表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
     点击该虚拟边可快捷跳转至父画布并尽量定位原始节点。
   - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
-  - data.canvasId 对影子节点恒为 null（影子的原始节点只能是普通节点），
-    因此双击影子节点走 canvasId === null 分支（打开编辑对话框）。
+  - data.canvasRefId 对影子节点恒为 null（影子的原始节点只能是普通节点），
+    因此双击影子节点走 canvasRefId === null 分支（打开编辑对话框）。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
@@ -77,13 +77,13 @@ const dropState = computed(() => {
 
 function onDblClick() {
   // 普通节点双击打开编辑对话框，画布节点双击进入子画布
-  // 影子节点的 canvasId 恒为 null（影子的原始节点只能是普通节点），因此走 canvasId === null 分支（打开编辑对话框）
-  if (props.data.canvasId === null) {
+  // 影子节点的 canvasRefId 恒为 null（影子的原始节点只能是普通节点），因此走 canvasRefId === null 分支（打开编辑对话框）
+  if (props.data.canvasRefId === null) {
     emit("edit", props.id);
     return;
   }
   setCanvasNavIntent("drill-in");
-  router.push({ name: "canvas", params: { canvasId: props.data.canvasId } });
+  router.push({ name: "canvas", params: { canvasId: props.data.canvasRefId } });
 }
 
 /**
@@ -150,7 +150,7 @@ async function onShadowVirtualEdgeClick() {
           @dblclick.stop
         />
         <VBtn
-          v-if="!data.shadowId && !data.canvasId"
+          v-if="!data.shadowId && !data.canvasRefId"
           icon="mdi-content-copy"
           size="x-small"
           variant="text"
@@ -232,7 +232,7 @@ async function onShadowVirtualEdgeClick() {
     <!-- #if [DEBUG] -->
     <NodeDebugOverlay v-if="actionsVisible" :x="node.position.x" :y="node.position.y" />
     <!-- #endif -->
-    <div v-if="data.canvasId" class="data-node-title-row">
+    <div v-if="data.canvasRefId" class="data-node-title-row">
       <VIcon icon="mdi-vector-square" size="18" class="data-node-icon" :style="{ color: colors.icon }" />
       <div class="data-node-title">{{ data.title }}</div>
     </div>
