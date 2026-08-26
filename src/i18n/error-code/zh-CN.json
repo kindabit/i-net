@@ -12,6 +12,10 @@
       "title": "删除前需归档",
       "text": "数据库必须先归档才能删除"
     },
+    "DataCorruptionCanvasRefMissing": {
+      "title": "画布节点引用缺失",
+      "text": "画布节点（{node_id}）引用的画布（{canvas_id}）不存在"
+    },
     "DataCorruptionDanglingShadow": {
       "title": "影子节点引用悬空",
       "text": "影子节点（{shadow_id}）引用的节点（{missing_id}）不存在"

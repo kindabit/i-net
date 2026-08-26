@@ -22,6 +22,8 @@ pub enum ErrorCode {
     DatabaseNameAlreadyExists { name: String },
     /// 数据库必须先归档才能删除。
     DatabaseMustBeArchivedBeforeDelete,
+    /// 画布节点引用的画布不存在，包含画布节点 id 与缺失的画布 id。
+    DataCorruptionCanvasRefMissing { node_id: String, canvas_id: String },
     /// 影子链中途悬空：链上节点的 shadow_id 指向不存在的节点，包含悬空节点 id 与缺失的节点 id。
     DataCorruptionDanglingShadow { shadow_id: String, missing_id: String },
     /// 边的端点节点不存在，包含边 id 与缺失的节点 id。

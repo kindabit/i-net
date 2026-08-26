@@ -15,6 +15,7 @@ export type ErrorCodeVariant =
   | "DatabaseError"
   | "DatabaseMustBeArchivedBeforeDelete"
   | "DatabaseNameAlreadyExists"
+  | "DataCorruptionCanvasRefMissing"
   | "DataCorruptionDanglingShadow"
   | "DataCorruptionEdgeEndpointMissing"
   | "DataCorruptionMissingShadow"

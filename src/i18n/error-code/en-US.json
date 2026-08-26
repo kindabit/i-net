@@ -12,6 +12,10 @@
       "title": "Archive Required Before Delete",
       "text": "The database must be archived before it can be deleted"
     },
+    "DataCorruptionCanvasRefMissing": {
+      "title": "Canvas reference missing",
+      "text": "The canvas ({canvas_id}) referenced by canvas node ({node_id}) does not exist"
+    },
     "DataCorruptionDanglingShadow": {
       "title": "Dangling shadow reference",
       "text": "The node ({missing_id}) referenced by shadow node ({shadow_id}) does not exist"

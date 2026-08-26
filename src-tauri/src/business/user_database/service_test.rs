@@ -313,6 +313,148 @@ fn test_user_database_service_all_functions() {
     .unwrap();
     assert_eq!(node_2_name.title, "canvas-node 2");
 
+    // ===== 画布节点标题与画布名称双向同步 =====
+
+    // node::modify 同步成功路径：修改画布节点标题，引用画布的名称随之更新，
+    // 产生 NodeModify + CanvasRename 两条日志。
+    let log_total_before_sync = log::service::list(0, 1).unwrap().total;
+    node::service::modify(
+        &canvas_node.id,
+        "canvas-node-renamed".to_string(),
+        "canvas-node-sub".to_string(),
+    )
+    .unwrap();
+    {
+        let conn = state::lock_connection();
+        let synced_node = node::dao::select_by_id(&conn, &canvas_node.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(synced_node.title, "canvas-node-renamed");
+        assert_eq!(synced_node.sub_title, "canvas-node-sub");
+        let synced_canvas = canvas::dao::select_by_id(
+            &conn,
+            canvas_node.canvas_ref_id.as_ref().unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(synced_canvas.name, "canvas-node-renamed");
+    }
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_sync + 2
+    );
+
+    // node::modify 同步失败路径：新标题与其它画布（"canvas-node 2"）重名时报 CanvasNameAlreadyExists，
+    // 节点标题/副标题与画布名称均保持原值（无任何落库，也不产生日志）。
+    let log_total_before_conflict = log::service::list(0, 1).unwrap().total;
+    assert!(matches!(
+        node::service::modify(
+            &canvas_node.id,
+            "canvas-node 2".to_string(),
+            "should-not-persist".to_string(),
+        ),
+        Err(ErrorCode::CanvasNameAlreadyExists { .. })
+    ));
+    {
+        let conn = state::lock_connection();
+        let unchanged_node = node::dao::select_by_id(&conn, &canvas_node.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged_node.title, "canvas-node-renamed");
+        assert_eq!(unchanged_node.sub_title, "canvas-node-sub");
+        let unchanged_canvas = canvas::dao::select_by_id(
+            &conn,
+            canvas_node.canvas_ref_id.as_ref().unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(unchanged_canvas.name, "canvas-node-renamed");
+    }
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_conflict
+    );
+
+    // node::modify 标题未变化路径：仅修改副标题，不触发画布同步，只产生 NodeModify 一条日志。
+    let log_total_before_sub_only = log::service::list(0, 1).unwrap().total;
+    node::service::modify(
+        &canvas_node.id,
+        "canvas-node-renamed".to_string(),
+        "canvas-node-sub-2".to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_sub_only + 1
+    );
+
+    // canvas::rename 同步成功路径：重命名画布，引用节点的标题随之更新（副标题不变），
+    // 产生 CanvasRename + NodeModify 两条日志。
+    let canvas_node_ref_id = canvas_node.canvas_ref_id.clone().unwrap();
+    let log_total_before_rename = log::service::list(0, 1).unwrap().total;
+    canvas::service::rename(&canvas_node_ref_id, "canvas-node-back".to_string()).unwrap();
+    {
+        let conn = state::lock_connection();
+        let synced_node = node::dao::select_by_id(&conn, &canvas_node.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(synced_node.title, "canvas-node-back");
+        assert_eq!(synced_node.sub_title, "canvas-node-sub-2");
+    }
+    assert_eq!(
+        log::service::list(0, 1).unwrap().total,
+        log_total_before_rename + 2
+    );
+
+    // canvas::rename 同步回收站节点：引用节点已逻辑删除（引用画布被级联逻辑删除）时标题仍同步。
+    node::service::logical_delete(&canvas_node.id).unwrap();
+    canvas::service::rename(&canvas_node_ref_id, "canvas-node-deleted".to_string()).unwrap();
+    {
+        let conn = state::lock_connection();
+        let deleted_synced = node::dao::select_by_id(&conn, &canvas_node.id)
+            .unwrap()
+            .unwrap();
+        assert!(deleted_synced.deleted);
+        assert_eq!(deleted_synced.title, "canvas-node-deleted");
+    }
+    // 恢复节点（级联恢复引用画布），避免影响后续测试。
+    node::service::restore(&canvas_node.id, 50.0, 60.0).unwrap();
+
+    // node::modify 数据损坏路径：画布节点引用的画布不存在（理论不可能）时
+    // 报 DataCorruptionCanvasRefMissing 触发受控崩溃，载荷为节点 id 与缺失的画布 id。
+    // 临时关闭外键以注入不一致数据（直接删除画布而保留引用节点），断言后清理现场并恢复外键。
+    let corrupt_node = node::service::create(
+        &child.id,
+        "corrupt-canvas-node".to_string(),
+        String::new(),
+        90.0,
+        100.0,
+        None,
+        true,
+    )
+    .unwrap();
+    {
+        let connection = state::lock_connection();
+        connection.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+        canvas::dao::delete_by_id(
+            &connection,
+            corrupt_node.canvas_ref_id.as_ref().unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(
+            node::service::modify(
+                &corrupt_node.id,
+                "corrupt-renamed".to_string(),
+                String::new(),
+            ),
+            Err(ErrorCode::DataCorruptionCanvasRefMissing { node_id, canvas_id })
+                if node_id == corrupt_node.id
+                    && canvas_id == corrupt_node.canvas_ref_id.as_deref().unwrap()
+        ));
+        node::dao::delete_by_id(&connection, &corrupt_node.id).unwrap();
+        connection.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+    }
+
     // node::create 失败路径：create_canvas=true，宿主画布已逻辑删除时报 NoCanvasWithSuchId。
     // 先新建一个临时子画布并逻辑删除它。
     let temp_canvas = canvas::service::create(&root.id, "temp-host".to_string()).unwrap();
