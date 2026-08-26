@@ -418,7 +418,8 @@ fn test_user_database_command_all_functions() {
             node_1.id.clone(),
             "right".to_string(),
             node_2.id.clone(),
-            "left".to_string()
+            "left".to_string(),
+            false
         ),
         Err(ErrorCode::InvalidCanvasId { .. })
     ));
@@ -430,7 +431,8 @@ fn test_user_database_command_all_functions() {
             "no-such-id".to_string(),
             "right".to_string(),
             node_2.id.clone(),
-            "left".to_string()
+            "left".to_string(),
+            false
         ),
         Err(ErrorCode::InvalidNodeId { .. })
     ));
@@ -442,7 +444,8 @@ fn test_user_database_command_all_functions() {
             node_1.id.clone(),
             "middle".to_string(),
             node_2.id.clone(),
-            "left".to_string()
+            "left".to_string(),
+            false
         ),
         Err(ErrorCode::InvalidNodePort { .. })
     ));
@@ -454,6 +457,7 @@ fn test_user_database_command_all_functions() {
         " right ".to_string(),
         node_2.id.clone(),
         "left".to_string(),
+        false,
     )
     .unwrap();
     assert_eq!(edge_1.source_port, "right");
@@ -466,7 +470,8 @@ fn test_user_database_command_all_functions() {
             node_1.id.clone(),
             "top".to_string(),
             node_2.id.clone(),
-            "top".to_string()
+            "top".to_string(),
+            false
         ),
         Err(ErrorCode::EdgeSameNodePort)
     ));

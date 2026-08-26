@@ -494,12 +494,16 @@ export async function userDatabaseNodeColorList(): Promise<NodeColorEntry[]> {
 // ==================== user_database / edge ====================
 
 /**
- * 在指定画布内新建边（后端校验重复边与成环）。
+ * 在指定画布内新建边。后端校验重复连接与成环：
+ * 1. 同向已有边时直接更新旧边的 port；
+ * 2. 反向已有边时执行删旧建新替换，级联删除影子节点，副作用未确认时后端返回 EdgeDeleteDisconnectsNodes；
+ * 3. 两节点间没有已存在的边则正常新建
  * @param canvasId 画布 id
  * @param sourceId 源节点 id
  * @param sourcePort 源节点连接桩
  * @param targetId 目标节点 id
  * @param targetPort 目标节点连接桩
+ * @param confirmed 是否确认替换造成的级联断开
  * @returns 新建的边
  */
 export async function userDatabaseEdgeCreate(
@@ -508,6 +512,7 @@ export async function userDatabaseEdgeCreate(
   sourcePort: string,
   targetId: string,
   targetPort: string,
+  confirmed: boolean,
 ): Promise<Edge> {
   return invoke<Edge>("user_database_edge_create", {
     canvasId,
@@ -515,6 +520,7 @@ export async function userDatabaseEdgeCreate(
     sourcePort,
     targetId,
     targetPort,
+    confirmed,
   });
 }
 
@@ -969,6 +975,16 @@ export async function reclaimMetadata(): Promise<void> {
  */
 export async function reclaimUserDatabase(): Promise<void> {
   return invoke<void>("reclaim_user_database");
+}
+
+/**
+ * 通知后端执行受控崩溃：后端记录错误日志后立即退出进程（不保存任何数据）。
+ * 仅在收到 DataCorruption* 系列错误时由 FatalErrorDialog 调用。
+ * @param detail 数据损坏的详细上下文（DataCorruption* 错误的 JSON 序列化）
+ * @returns 无返回值（进程随即退出）
+ */
+export async function fatalExit(detail: string): Promise<void> {
+  await invoke("fatal_exit", { detail });
 }
 
 

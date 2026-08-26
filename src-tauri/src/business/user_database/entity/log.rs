@@ -141,6 +141,13 @@ pub enum Action {
         source_title: String,
         target_title: String,
     },
+    /// 替换边（删除旧边并建立新边），包含新源节点标题、新目标节点标题、旧源节点标题和旧目标节点标题。
+    EdgeReplace {
+        source_title: String,
+        target_title: String,
+        old_source_title: String,
+        old_target_title: String,
+    },
     /// 更新边的标题和详情，包含源节点标题、目标节点标题、旧标题、旧详情、新标题和新详情。
     EdgeUpdate {
         source_title: String,

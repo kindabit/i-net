@@ -1,6 +1,9 @@
 {
   "app": {
     "switch-language": "Switch Language",
-    "switch-theme": "Switch Theme"
+    "switch-theme": "Switch Theme",
+    "fatal-error-title": "Data Corruption Detected",
+    "fatal-error-notice": "The application must exit now to protect your data. No changes will be saved.",
+    "fatal-error-exit": "Exit Application"
   }
 }

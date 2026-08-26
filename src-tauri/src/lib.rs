@@ -124,6 +124,7 @@ pub fn run(argv: argv::ArgV) {
             business::preference::command::preference_set::preference_set,
             business::preference::command::preference_save::preference_save,
             business::clipboard::command::clipboard_clear,
+            business::fatal_exit::fatal_exit,
             business::user_database::attachment::command::user_database_attachment_export::user_database_attachment_export,
             business::user_database::attachment::command::user_database_attachment_import::user_database_attachment_import,
             business::user_database::attachment::command::user_database_attachment_list::user_database_attachment_list,

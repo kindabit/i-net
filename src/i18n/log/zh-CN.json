@@ -81,6 +81,10 @@
         "name": "断开连接",
         "detail": "断开\u201c{source_title}\u201d与\u201c{target_title}\u201d的连接"
       },
+      "EdgeReplace": {
+        "name": "替换连接",
+        "detail": "将\u201c{old_source_title}\u201d\u2192\u201c{old_target_title}\u201d的连接替换为\u201c{source_title}\u201d\u2192\u201c{target_title}\u201d"
+      },
       "EdgeUpdate": {
         "name": "编辑边",
         "detail": "编辑了边\u201c{source_title}\u201d\u2192\u201c{target_title}\u201d"

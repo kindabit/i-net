@@ -355,6 +355,14 @@ function onDrop(event: DragEvent) {
 
 // 边
 
+/**
+ * 拖拽连线建立边：同向已有边时后端直接更新连接桩（边 id 不变，无断连确认）；
+ * 反向已有边时后端执行删旧建新替换，若替换会断开影子节点的关联连接，
+ * 后端返回 EdgeDeleteDisconnectsNodes，弹出确认框，用户确认后以 confirmed=true 重调；
+ * 无断连影响时静默替换。
+ * @param connection vue-flow 连接对象
+ * @returns 无返回值
+ */
 async function onConnect(connection: Connection) {
   try {
     const newEdge = await userDatabaseEdgeCreate(
@@ -363,11 +371,57 @@ async function onConnect(connection: Connection) {
       connection.sourceHandle ?? "",
       connection.target,
       connection.targetHandle ?? "",
+      false,
     );
-    edges.value.push(toVFEdge(newEdge));
+    upsertEdgeLocally(newEdge);
   } catch (e) {
+    if (isErrorCode(e, "EdgeDeleteDisconnectsNodes")) {
+      const rawNodes = e.data?.nodes;
+      const nodes: string[] = Array.isArray(rawNodes) ? rawNodes.map(String) : [];
+      const separator = t("database.canvas.delete-edge-disconnect-separator");
+      const confirmed = await confirmDialogRef.value?.open({
+        title: t("database.canvas.replace-edge-disconnect-title"),
+        text: t("database.canvas.replace-edge-disconnect-text", {
+          nodes: nodes.join(separator),
+        }),
+        confirmText: t("database.canvas.replace-edge-confirm"),
+        confirmColor: "error",
+      });
+      if (!confirmed) return;
+      try {
+        const newEdge = await userDatabaseEdgeCreate(
+          canvasId,
+          connection.source,
+          connection.sourceHandle ?? "",
+          connection.target,
+          connection.targetHandle ?? "",
+          true,
+        );
+        upsertEdgeLocally(newEdge);
+      } catch (e2) {
+        snackbarErrorCode(e2);
+      }
+      return;
+    }
     snackbarErrorCode(e);
   }
+}
+
+/**
+ * 把后端返回的新边写入本地边集：替换语义下先移除与新边同向或反向的旧边，
+ * 再加入新边；普通新建时无旧边可移除，等价于直接追加。
+ * @param newEdge 后端返回的新边
+ * @returns 无返回值
+ */
+function upsertEdgeLocally(newEdge: Edge) {
+  edges.value = edges.value.filter(
+    (e) =>
+      !(
+        (e.source === newEdge.source_id && e.target === newEdge.target_id) ||
+        (e.source === newEdge.target_id && e.target === newEdge.source_id)
+      ),
+  );
+  edges.value.push(toVFEdge(newEdge));
 }
 
 function onEdgeContextMenuFromFlow(e: { edge: { id: string }; event: MouseEvent | TouchEvent }) {
@@ -392,7 +446,9 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
- * 连接合法性校验：不允许自环；不允许两端连接桩相同；方向守卫要求出向影子只能作为目标（只有入度），
+ * 连接合法性校验：不允许自环；影子节点之间不能互相连接（后端 ShadowToShadowEdge 兜底）；
+ * 画布节点之间不能互相连接（后端 CanvasToCanvasEdge 兜底）；
+ * 不允许两端连接桩相同；方向守卫要求出向影子只能作为目标（只有入度），
  * 入向影子只能作为源（只有出度），后端有 InvalidShadowEdge 兜底。
  * @param connection vue-flow 连接对象
  * @returns 是否允许建立该连接
@@ -402,6 +458,12 @@ function isValidConnection(connection: Connection): boolean {
   const source = nodes.value.find((n) => n.id === connection.source);
   const target = nodes.value.find((n) => n.id === connection.target);
   if (!source || !target) return false;
+  if (source.data.shadowId !== null && target.data.shadowId !== null) return false;
+  // 画布节点之间不能互相连接（后端 CanvasToCanvasEdge 兜底）；
+  // 判断需排除影子：影子不是画布节点，其 canvasId 不参与本判断。
+  const sourceIsCanvas = source.data.canvasId !== null && source.data.shadowId === null;
+  const targetIsCanvas = target.data.canvasId !== null && target.data.shadowId === null;
+  if (sourceIsCanvas && targetIsCanvas) return false;
   if (source.data.shadowDirection === "outflow") return false;
   if (target.data.shadowDirection === "inflow") return false;
   // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 port 即合法"）。

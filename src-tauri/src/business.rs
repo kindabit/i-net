@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod clipboard;
+pub mod fatal_exit;
 pub mod metadata;
 pub mod preference;
 pub mod reclaim;

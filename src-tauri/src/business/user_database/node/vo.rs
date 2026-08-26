@@ -25,8 +25,8 @@ pub enum ShadowDirection {
 }
 
 /// 节点列表（node_list）的返回项：在 Node 基础上附带影子节点的展示信息。
-/// 影子节点的 title / sub_title / color / canvas_ref_id 已被合并为原始节点的值；
-/// 普通节点的两个扩展字段均为 None。
+/// 影子节点的 title / sub_title / color 合并自原始节点；canvas_ref_id 恒为 None
+/// （画布节点之间不能建立连接，影子的原始节点只能是普通节点）；普通节点的两个扩展字段均为 None。
 #[derive(Debug, Clone, Serialize)]
 pub struct NodeVO {
     /// 节点本体（serde flatten 展开）。

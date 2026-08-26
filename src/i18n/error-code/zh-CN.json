@@ -12,6 +12,42 @@
       "title": "删除前需归档",
       "text": "数据库必须先归档才能删除"
     },
+    "DataCorruptionDanglingShadow": {
+      "title": "影子节点引用悬空",
+      "text": "影子节点（{shadow_id}）引用的节点（{missing_id}）不存在"
+    },
+    "DataCorruptionEdgeEndpointMissing": {
+      "title": "边的端点缺失",
+      "text": "边（{edge_id}）的端点节点（{node_id}）不存在"
+    },
+    "DataCorruptionMissingShadow": {
+      "title": "影子节点缺失",
+      "text": "应当存在的影子节点不存在（原始节点 {origin_id}，画布 {canvas_id}）"
+    },
+    "DataCorruptionNodeNotShadow": {
+      "title": "节点类型异常",
+      "text": "预期为影子节点，但该节点（{id}）不是影子"
+    },
+    "DataCorruptionShadowCanvasUnreferenced": {
+      "title": "影子所在画布失去引用",
+      "text": "影子节点（{shadow_id}）所在画布（{canvas_id}）没有被任何画布节点引用"
+    },
+    "DataCorruptionShadowChainCycle": {
+      "title": "影子链成环",
+      "text": "影子节点的引用链出现环（节点 {id}）"
+    },
+    "DataCorruptionShadowEdgeDirectionMismatch": {
+      "title": "影子连线方向异常",
+      "text": "影子节点（{shadow_id}）存在与其方向不匹配的边（{edge_id}）"
+    },
+    "DataCorruptionShadowNeighborIsShadow": {
+      "title": "影子节点互连",
+      "text": "影子节点（{shadow_id}）与另一个影子节点（{neighbor_id}）相连"
+    },
+    "DataCorruptionShadowWithoutOriginEdge": {
+      "title": "影子失去原始连线",
+      "text": "影子节点（{shadow_id}）的原始节点（{origin_id}）与画布节点（{canvas_node_id}）之间不存在边"
+    },
     "DataVersionMismatch": {
       "title": "数据版本不匹配",
       "text": "数据库的数据版本与当前应用程序不兼容"
@@ -110,6 +146,10 @@
       "title": "画布名称已存在",
       "text": "名为\u201c{name}\u201d的画布已存在，请更换名称"
     },
+    "CanvasToCanvasEdge": {
+      "title": "画布节点不能互相连接",
+      "text": "画布节点之间不能建立连接，只有普通节点才能产生影子节点"
+    },
     "NoCanvasWithSuchId": {
       "title": "未找到画布",
       "text": "未找到 ID 为 {id} 的画布"
@@ -138,10 +178,6 @@
       "title": "无效的边 ID",
       "text": "无效的边 ID：{id}"
     },
-    "EdgeAlreadyExists": {
-      "title": "边已存在",
-      "text": "两个节点之间已存在边"
-    },
     "EdgeWouldFormCycle": {
       "title": "边会形成环",
       "text": "新建此边会在画布内形成环"
@@ -153,6 +189,10 @@
     "RootCanvasCannotBeDeleted": {
       "title": "根画布不可删除",
       "text": "根画布是画布的入口，不可删除"
+    },
+    "ShadowToShadowEdge": {
+      "title": "影子节点不能互相连接",
+      "text": "影子节点是连接关系的象征，影子节点之间不能互相连接"
     },
     "UserDatabaseNotOpen": {
       "title": "用户数据库未打开",

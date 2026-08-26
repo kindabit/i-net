@@ -4,10 +4,12 @@
  * snackbarText 由任意模块调用（含 setup 之外），
  * 消息进入队列后由 AppSnackbarQueue 组件统一展示。
  * snackbarErrorCode 为后端 ErrorCode 错误提供国际化的错误提示。
+ * DataCorruption* 系列错误改走受控崩溃（use-fatal-error），不再入 Snackbar 队列。
  */
 import { ref } from "vue";
 import { t, te } from "@/i18n";
 import { isErrorCode } from "@/error-code";
+import { triggerFatalError } from "@/composables/use-fatal-error";
 
 /** Snackbar 消息（VSnackbarQueue 的 modelValue 元素） */
 interface SnackbarMessage {
@@ -53,11 +55,16 @@ export function snackbarText(text: string, level: SnackbarLevel = "info") {
 
 /**
  * 根据后端返回的 ErrorCode 显示错误 Snackbar（文案取自 error-code 国际化模块）。
+ * DataCorruption* 系列错误改走受控崩溃流程（use-fatal-error）。
  * 未识别的错误以文本形式直接展示。
  * @param raw 后端返回的原始错误对象
  */
 export function snackbarErrorCode(raw: unknown): void {
   if (isErrorCode(raw)) {
+    if (raw.variant.startsWith("DataCorruption")) {
+      triggerFatalError(raw);
+      return;
+    }
     const titleKey = `error-code.${raw.variant}.title`;
     const textKey = `error-code.${raw.variant}.text`;
     const title = te(titleKey) ? t(titleKey) : raw.variant;

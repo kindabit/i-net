@@ -12,7 +12,7 @@ export interface DataNodeData {
   title: string;
   /** 节点副标题 */
   subTitle: string;
-  /** 引用的子画布 id，仅画布节点有值；影子节点的值来自后端合并的原始节点 */
+  /** 引用的子画布 id，仅画布节点有值；影子节点恒为 null（影子的原始节点只能是普通节点） */
   canvasId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;

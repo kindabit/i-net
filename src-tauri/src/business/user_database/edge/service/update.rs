@@ -14,31 +14,27 @@ use crate::error_code::ErrorCode;
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；边不存在时返回 `ErrorCode::NoEdgeWithSuchId`，
+/// 端点节点不存在时返回 `ErrorCode::DataCorruptionEdgeEndpointMissing`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn update(id: &str, title: String, description: String) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let edge = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoEdgeWithSuchId { id: id.to_string() })?;
     // 节点物理删除会连带删除边，因此此处两端节点必然仍然存在；
-    // 查不到节点只可能是数据污染或程序缺陷。为保护剩余的用户数据，
-    // 此时记录完整上下文并立即退出进程，不在受损状态下继续运行或写盘。
-    // 该路径按设计不可单元测试（会终止测试进程），由代码审查保证。
-    let source = node::dao::select_by_id(&connection, &edge.source_id)?;
-    let Some(source) = source else {
-        tracing::error!(
-            "updating edge {id}: source node {} does not exist (data corruption or program defect), exiting process immediately",
-            edge.source_id
-        );
-        std::process::exit(1);
-    };
-    let target = node::dao::select_by_id(&connection, &edge.target_id)?;
-    let Some(target) = target else {
-        tracing::error!(
-            "updating edge {id}: target node {} does not exist (data corruption or program defect), exiting process immediately",
-            edge.target_id
-        );
-        std::process::exit(1);
-    };
+    // 查不到节点只可能是数据污染或程序缺陷，返回 DataCorruptionEdgeEndpointMissing
+    // 由前端受控崩溃；该路径构造脏数据需绕过外键约束，按设计不单元测试，由代码审查保证。
+    let source = node::dao::select_by_id(&connection, &edge.source_id)?.ok_or_else(|| {
+        ErrorCode::DataCorruptionEdgeEndpointMissing {
+            edge_id: id.to_string(),
+            node_id: edge.source_id.clone(),
+        }
+    })?;
+    let target = node::dao::select_by_id(&connection, &edge.target_id)?.ok_or_else(|| {
+        ErrorCode::DataCorruptionEdgeEndpointMissing {
+            edge_id: id.to_string(),
+            node_id: edge.target_id.clone(),
+        }
+    })?;
     let old_title = edge.title.clone();
     let old_description = edge.description.clone();
     dao::update_title_and_description(&connection, id, &title, &description)?;

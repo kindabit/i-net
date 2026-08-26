@@ -16,6 +16,8 @@
     表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
     点击该虚拟边可快捷跳转至父画布并尽量定位原始节点。
   - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
+  - data.canvasId 对影子节点恒为 null（影子的原始节点只能是普通节点），
+    因此双击影子节点走 canvasId === null 分支（打开编辑对话框）。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
@@ -75,7 +77,7 @@ const dropState = computed(() => {
 
 function onDblClick() {
   // 普通节点双击打开编辑对话框，画布节点双击进入子画布
-  // 影子节点的 canvasId 由后端合并自原始节点，画布节点原始 → 进入子画布，普通节点原始 → 打开编辑对话框
+  // 影子节点的 canvasId 恒为 null（影子的原始节点只能是普通节点），因此走 canvasId === null 分支（打开编辑对话框）
   if (props.data.canvasId === null) {
     emit("edit", props.id);
     return;

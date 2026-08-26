@@ -12,6 +12,42 @@
       "title": "Archive Required Before Delete",
       "text": "The database must be archived before it can be deleted"
     },
+    "DataCorruptionDanglingShadow": {
+      "title": "Dangling shadow reference",
+      "text": "The node ({missing_id}) referenced by shadow node ({shadow_id}) does not exist"
+    },
+    "DataCorruptionEdgeEndpointMissing": {
+      "title": "Edge endpoint missing",
+      "text": "The endpoint node ({node_id}) of edge ({edge_id}) does not exist"
+    },
+    "DataCorruptionMissingShadow": {
+      "title": "Shadow node missing",
+      "text": "An expected shadow node does not exist (origin node {origin_id}, canvas {canvas_id})"
+    },
+    "DataCorruptionNodeNotShadow": {
+      "title": "Unexpected node type",
+      "text": "Expected a shadow node, but this node ({id}) is not a shadow"
+    },
+    "DataCorruptionShadowCanvasUnreferenced": {
+      "title": "Shadow canvas unreferenced",
+      "text": "The canvas ({canvas_id}) containing shadow node ({shadow_id}) is not referenced by any canvas node"
+    },
+    "DataCorruptionShadowChainCycle": {
+      "title": "Shadow chain cycle",
+      "text": "A cycle was detected in the shadow node reference chain (node {id})"
+    },
+    "DataCorruptionShadowEdgeDirectionMismatch": {
+      "title": "Shadow edge direction mismatch",
+      "text": "Shadow node ({shadow_id}) has an edge ({edge_id}) with a mismatched direction"
+    },
+    "DataCorruptionShadowNeighborIsShadow": {
+      "title": "Shadow-to-shadow connection",
+      "text": "Shadow node ({shadow_id}) is connected to another shadow node ({neighbor_id})"
+    },
+    "DataCorruptionShadowWithoutOriginEdge": {
+      "title": "Shadow missing origin edge",
+      "text": "No edge exists between origin node ({origin_id}) of shadow node ({shadow_id}) and canvas node ({canvas_node_id})"
+    },
     "DataVersionMismatch": {
       "title": "Data Version Mismatch",
       "text": "The database data version is incompatible with this application"
@@ -110,6 +146,10 @@
       "title": "Canvas Name Exists",
       "text": "A canvas named \"{name}\" already exists, please use a different name"
     },
+    "CanvasToCanvasEdge": {
+      "title": "Canvas nodes cannot connect to each other",
+      "text": "Connections between canvas nodes are not allowed; only regular nodes can have shadow nodes"
+    },
     "NoCanvasWithSuchId": {
       "title": "Canvas Not Found",
       "text": "No canvas found with ID {id}"
@@ -138,10 +178,6 @@
       "title": "Invalid Edge ID",
       "text": "Invalid edge ID: {id}"
     },
-    "EdgeAlreadyExists": {
-      "title": "Edge Already Exists",
-      "text": "An edge already exists between the two nodes"
-    },
     "EdgeWouldFormCycle": {
       "title": "Edge Would Form Cycle",
       "text": "Creating this edge would form a cycle in the canvas"
@@ -153,6 +189,10 @@
     "RootCanvasCannotBeDeleted": {
       "title": "Root Canvas Cannot Be Deleted",
       "text": "The root canvas is the entry point of canvases and cannot be deleted"
+    },
+    "ShadowToShadowEdge": {
+      "title": "Shadow nodes cannot connect to each other",
+      "text": "Shadow nodes symbolize connections between nodes; connecting one shadow node to another is not meaningful"
     },
     "UserDatabaseNotOpen": {
       "title": "User Database Not Open",

@@ -132,6 +132,37 @@ pub fn update_title_and_description(
     Ok(())
 }
 
+/// 更新边的源节点连接桩和目标节点连接桩。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `id`: 边 id。
+/// - `source_port`: 新源节点连接桩。
+/// - `target_port`: 新目标节点连接桩。
+///
+/// # 返回值
+/// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
+pub fn update_ports(
+    connection: &Connection,
+    id: &str,
+    source_port: &str,
+    target_port: &str,
+) -> Result<(), ErrorCode> {
+    connection
+        .execute(
+            "UPDATE edge SET source_port = :source_port, target_port = :target_port WHERE id = :id",
+            rusqlite::named_params! {
+                ":id": id,
+                ":source_port": source_port,
+                ":target_port": target_port,
+            },
+        )
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    Ok(())
+}
+
 /// 查询指定画布内的全部边。
 ///
 /// # 参数
@@ -248,6 +279,34 @@ pub fn exists_between(
     Ok(count > 0)
 }
 
+/// 按源节点和目标节点精确查询边。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `source_id`: 源节点 id。
+/// - `target_id`: 目标节点 id。
+///
+/// # 返回值
+/// 返回查询到的边，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_between(
+    connection: &Connection,
+    source_id: &str,
+    target_id: &str,
+) -> Result<Option<Edge>, ErrorCode> {
+    connection
+        .query_row(
+            "SELECT id, canvas_id, source_id, source_port, target_id, target_port, title, description
+            FROM edge
+            WHERE source_id = :source_id AND target_id = :target_id",
+            rusqlite::named_params! {":source_id": source_id, ":target_id": target_id},
+            map_row,
+        )
+        .optional()
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +376,22 @@ mod tests {
         assert!(!exists_between(&connection, "node-2", "node-1").unwrap());
         assert!(!exists_between(&connection, "node-1", "node-3").unwrap());
 
+        // select_between 成功路径：精确匹配 source_id 与 target_id 时返回该行。
+        let selected_between = select_between(&connection, "node-1", "node-2").unwrap().unwrap();
+        assert_eq!(selected_between.id, "id-1");
+        assert_eq!(selected_between.canvas_id, "canvas-1");
+        assert_eq!(selected_between.source_id, "node-1");
+        assert_eq!(selected_between.source_port, "right");
+        assert_eq!(selected_between.target_id, "node-2");
+        assert_eq!(selected_between.target_port, "left");
+
+        // select_between 成功路径：方向相反时返回 None（精确匹配，不做反向查找）。
+        assert!(select_between(&connection, "node-2", "node-1").unwrap().is_none());
+
+        // select_between 成功路径：源节点或目标节点不存在时返回 None。
+        assert!(select_between(&connection, "node-x", "node-2").unwrap().is_none());
+        assert!(select_between(&connection, "node-1", "node-x").unwrap().is_none());
+
         // select_by_canvas_id 成功路径：只返回指定画布内的边。
         insert(&connection, &edge("id-2", "canvas-1", "node-2", "node-3")).unwrap();
         insert(&connection, &edge("id-3", "canvas-2", "node-3", "node-4")).unwrap();
@@ -336,6 +411,43 @@ mod tests {
         let updated = select_by_id(&connection, "id-1").unwrap().unwrap();
         assert_eq!(updated.title, "new title");
         assert_eq!(updated.description, "new desc");
+
+        // select_between 成功路径：更新后再次查询，标题与详情随更新结果返回。
+        let updated_between = select_between(&connection, "node-1", "node-2").unwrap().unwrap();
+        assert_eq!(updated_between.title, "new title");
+        assert_eq!(updated_between.description, "new desc");
+
+        // ===== update_ports 成功路径 =====
+        // 更新连接桩后 select_by_id 往返一致，其它字段（canvas_id / source_id / target_id /
+        // title / description）保持不变。
+        update_ports(&connection, "id-1", "top", "bottom").unwrap();
+        let ports_updated = select_by_id(&connection, "id-1").unwrap().unwrap();
+        assert_eq!(ports_updated.source_port, "top");
+        assert_eq!(ports_updated.target_port, "bottom");
+        assert_eq!(ports_updated.canvas_id, "canvas-1");
+        assert_eq!(ports_updated.source_id, "node-1");
+        assert_eq!(ports_updated.target_id, "node-2");
+        assert_eq!(ports_updated.title, "new title");
+        assert_eq!(ports_updated.description, "new desc");
+
+        // update_ports 幂等：连接桩完全相同的重复更新也成功，字段值不变。
+        update_ports(&connection, "id-1", "top", "bottom").unwrap();
+        let ports_idempotent = select_by_id(&connection, "id-1").unwrap().unwrap();
+        assert_eq!(ports_idempotent.source_port, "top");
+        assert_eq!(ports_idempotent.target_port, "bottom");
+
+        // update_ports 成功路径：不存在的 id 不会报错（SQLite UPDATE 不命中即 0 行），存在性校验是 service 层职责。
+        update_ports(&connection, "no-such-id", "top", "bottom").unwrap();
+
+        // update_ports 失败路径：表不存在时报 DatabaseError。
+        let connection3 = Connection::open_in_memory().unwrap();
+        connection3
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        assert!(matches!(
+            update_ports(&connection3, "any-id", "top", "bottom"),
+            Err(ErrorCode::DatabaseError { .. })
+        ));
 
         // ===== batch_update_canvas_id 成功路径 =====
         // 先插一条带 title / description 的边，再更新其 canvas_id，验证 canvas_id 改变而其它字段不变。

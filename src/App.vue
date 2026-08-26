@@ -11,6 +11,7 @@ import { computed, ref, useTemplateRef } from "vue";
 import { currentLocale, setLocale, supportedLocales, t } from "@/i18n";
 import { currentThemeName, setTheme, themeList } from "@/themes";
 import AppSnackbarQueue from "@/components/AppSnackbarQueue.vue";
+import FatalErrorDialog from "@/components/FatalErrorDialog.vue";
 import ThemeManagerDialog from "@/components/ThemeManagerDialog.vue";
 import ClipboardSettingsDialog from "@/components/ClipboardSettingsDialog.vue";
 import { useClipboardClear } from "@/composables/use-clipboard-clear";
@@ -56,6 +57,7 @@ function openThemeManager() {
 <template>
   <div id="app-root">
     <AppSnackbarQueue />
+    <FatalErrorDialog />
     <div
       v-if="refreshKey > 0"
       :key="refreshKey"

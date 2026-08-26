@@ -9,15 +9,28 @@ use crate::business::user_database::{log, node, state};
 use crate::error_code::ErrorCode;
 
 /// 在指定画布内新建一条边：两端节点都必须存在且属于该画布，
-/// 两个节点之间不能已存在边，且新建这条边不会在画布内成环（不考虑连接桩）。
+/// 且新建这条边不会在画布内成环（不考虑连接桩；两端已有边时排除旧边后检查）。
 ///
-/// 影子节点连线约束：入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度）。
+/// 影子节点连线约束：影子节点之间不能互相连接；入向影子只能作为源（只有出度），
+/// 出向影子只能作为目标（只有入度）。
+///
+/// 画布节点连线约束：画布节点之间不能互相连接（两端都是画布节点时拒绝建边）。
+/// 这等价于"只有普通节点才能产生影子节点"——影子的原始节点必须是普通节点。
+/// 画布节点与普通节点的连线仍按既有联动规则建影子。
 ///
 /// 影子节点联动：target 是画布节点时，原始节点 source 是其引用画布的父，
 /// 在引用画布内创建 source 的入向影子；source 是画布节点时，原始节点 target 是其引用画布的子，
-/// 在引用画布内创建 target 的出向影子；两端都是画布节点时两个影子都会创建。
+/// 在引用画布内创建 target 的出向影子。
 ///
-/// 产生 EdgeCreate 日志，载荷为源节点的标题和目标节点的标题。
+/// 重建语义分两段：
+/// - 同向已有边（同 (source_id, target_id) 命中旧边）：仅更新旧边的连接桩后直接返回，
+///   不删边、不动影子、不做成环检查、不做断连确认、不记任何日志；连接桩完全相同的重复拖线幂等成功。
+/// - 反向已有边（同 (target_id, source_id) 命中旧边）：执行"删旧建新"——从边集中排除该旧边后
+///   做成环检查；通过后收集旧边关联影子的断连影响，未确认时返回
+///   `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端确认后以 `confirmed = true` 重调；
+///   确认后删除旧边、删除旧边关联的影子，插入新边（继承旧边的 title 和 description），
+///   再按新建流程建影子联动；产生 `Action::EdgeReplace` 日志。
+/// - 无旧边：走全新建边流程，产生 `Action::EdgeCreate` 日志。
 ///
 /// # 参数
 /// - `canvas_id`: 画布 id。
@@ -25,13 +38,17 @@ use crate::error_code::ErrorCode;
 /// - `source_port`: 源节点连接桩。
 /// - `target_id`: 目标节点 id。
 /// - `target_port`: 目标节点连接桩。
+/// - `confirmed`: 调用方已确认反向替换路径中影子删除带来的连接断开影响；同向重建与无旧边流程忽略。
 ///
 /// # 返回值
-/// 返回新建的边；任一节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 返回新建或更新后的边；任一节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
 /// 两端连接桩相同时返回 `ErrorCode::EdgeSameNodePort`，
-/// 两个节点之间已存在边时返回 `ErrorCode::EdgeAlreadyExists`，
 /// 新建该边会成环时返回 `ErrorCode::EdgeWouldFormCycle`，
-/// 影子节点连线不合法时返回 `ErrorCode::InvalidShadowEdge`，
+/// 画布节点之间建边时返回 `ErrorCode::CanvasToCanvasEdge`，
+/// 影子节点互相连接时返回 `ErrorCode::ShadowToShadowEdge`，
+/// 影子节点连线方向不合法时返回 `ErrorCode::InvalidShadowEdge`，
+/// 反向替换路径中删除旧边会使子画布内的节点失去连接且未确认时返回
+/// `ErrorCode::EdgeDeleteDisconnectsNodes`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn create(
     canvas_id: &str,
@@ -39,6 +56,7 @@ pub fn create(
     source_port: String,
     target_id: &str,
     target_port: String,
+    confirmed: bool,
 ) -> Result<Edge, ErrorCode> {
     let connection = state::lock_connection();
     let source = node::dao::select_by_id(&connection, source_id)?
@@ -51,17 +69,74 @@ pub fn create(
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId {
             id: target_id.to_string(),
         })?;
+    // 画布节点之间不能互相连接：只有普通节点才能产生影子节点（影子的原始节点必须是普通节点）。
+    // 此拦截覆盖新建、同向更新、换向替换三条路径，全部在 validate_shadow_endpoints 之前生效。
+    if source.canvas_ref_id.is_some() && target.canvas_ref_id.is_some() {
+        return Err(ErrorCode::CanvasToCanvasEdge);
+    }
     validate_shadow_endpoints(&connection, &source, &target)?;
     if source_port == target_port {
         return Err(ErrorCode::EdgeSameNodePort);
     }
-    if dao::exists_between(&connection, source_id, target_id)? {
-        return Err(ErrorCode::EdgeAlreadyExists);
+    // 查同向旧边：命中则直接更新连接桩并返回（同向重建只是调整连接位置，
+    // 不删边、不动影子、无需成环检查与断连确认、不记日志）。
+    if let Some(mut old) = dao::select_between(&connection, source_id, target_id)? {
+        dao::update_ports(&connection, &old.id, &source_port, &target_port)?;
+        old.source_port = source_port;
+        old.target_port = target_port;
+        return Ok(old);
     }
+    // 查反向旧边（换向替换路径）：UNIQUE(source_id, target_id) 保证至多一行。
+    let old_edge = dao::select_between(&connection, target_id, source_id)?;
+    // 成环检查：边集排除旧边。
     let edges = dao::select_by_canvas_id(&connection, canvas_id)?;
+    let edges: Vec<Edge> = match &old_edge {
+        Some(old) => edges.into_iter().filter(|e| e.id != old.id).collect(),
+        None => edges,
+    };
     if would_form_cycle(&edges, source_id, target_id) {
         return Err(ErrorCode::EdgeWouldFormCycle);
     }
+    // 替换路径：断连收集与确认拦截 → 删旧边 → 删影子。
+    let mut old_titles: Option<(String, String)> = None;
+    let mut inherited: Option<(String, String)> = None;
+    if let Some(old) = &old_edge {
+        // 旧边两端节点必然存在（节点物理删除会连带删边）；查不到属于数据污染或程序缺陷，
+        // 返回 DataCorruptionEdgeEndpointMissing 由前端受控崩溃；该路径构造脏数据需绕过外键约束，
+        // 按设计不单元测试，由代码审查保证。
+        let old_source = node::dao::select_by_id(&connection, &old.source_id)?.ok_or_else(
+            || ErrorCode::DataCorruptionEdgeEndpointMissing {
+                edge_id: old.id.clone(),
+                node_id: old.source_id.clone(),
+            },
+        )?;
+        let old_target = node::dao::select_by_id(&connection, &old.target_id)?.ok_or_else(
+            || ErrorCode::DataCorruptionEdgeEndpointMissing {
+                edge_id: old.id.clone(),
+                node_id: old.target_id.clone(),
+            },
+        )?;
+        let shadows = super::shadows_of_edge(&connection, &old_source, &old_target)?;
+        // 收集受影响节点（须在删除旧边之前完成，影子方向推导依赖旧边）。
+        let mut affected: Vec<String> = Vec::new();
+        for shadow in &shadows {
+            affected.extend(node::service::collect_shadow_disconnected(
+                &connection,
+                shadow,
+            )?);
+        }
+        if !affected.is_empty() && !confirmed {
+            return Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected });
+        }
+        dao::delete_by_id(&connection, &old.id)?;
+        // 物理删除影子节点：影子自身相连的边由 edge 外键随节点行的删除级联删除。
+        for shadow in &shadows {
+            node::dao::delete_by_id(&connection, &shadow.id)?;
+        }
+        old_titles = Some((old_source.title, old_target.title));
+        inherited = Some((old.title.clone(), old.description.clone()));
+    }
+    let (title, description) = inherited.unwrap_or_default();
     let edge = Edge {
         id: uuid::Uuid::new_v4().to_string(),
         canvas_id: canvas_id.to_string(),
@@ -69,8 +144,8 @@ pub fn create(
         source_port,
         target_id: target_id.to_string(),
         target_port,
-        title: String::new(),
-        description: String::new(),
+        title,
+        description,
     };
     dao::insert(&connection, &edge)?;
     if let Some(ref_canvas_id) = &target.canvas_ref_id {
@@ -79,19 +154,30 @@ pub fn create(
     if let Some(ref_canvas_id) = &source.canvas_ref_id {
         create_shadow(&connection, ref_canvas_id, &target, ShadowDirection::Outflow)?;
     }
-    log::service::create(
-        &edge.id,
-        Action::EdgeCreate {
-            source_title: source.title,
-            target_title: target.title,
-        },
-    )?;
+    match old_titles {
+        Some((old_source_title, old_target_title)) => log::service::create(
+            &edge.id,
+            Action::EdgeReplace {
+                source_title: source.title,
+                target_title: target.title,
+                old_source_title,
+                old_target_title,
+            },
+        )?,
+        None => log::service::create(
+            &edge.id,
+            Action::EdgeCreate {
+                source_title: source.title,
+                target_title: target.title,
+            },
+        )?,
+    }
     Ok(edge)
 }
 
-/// 校验影子节点参与连线时的方向约束：
+/// 校验影子节点参与连线时的约束：影子节点之间不能互相连接；
 /// 入向影子只能作为源（只有出度），出向影子只能作为目标（只有入度）。
-/// 影子方向因数据不一致推导不出时不作限制（宁可放行也不因脏数据锁死用户操作）。
+/// 影子方向必然可推导，推导不出时 shadow_direction 返回 DataCorruption* 错误。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -99,20 +185,26 @@ pub fn create(
 /// - `target`: 目标节点。
 ///
 /// # 返回值
-/// 连线合法时返回 `Ok(())`；不合法时返回 `ErrorCode::InvalidShadowEdge`，
+/// 连线合法时返回 `Ok(())`；两端皆影子节点时返回 `ErrorCode::ShadowToShadowEdge`，
+/// 影子节点连线方向不合法时返回 `ErrorCode::InvalidShadowEdge`，
+/// 影子方向推导失败时返回对应的 `DataCorruption*` 错误，
 /// 发生数据库错误时返回对应的 `ErrorCode`。
 fn validate_shadow_endpoints(
     connection: &Connection,
     source: &Node,
     target: &Node,
 ) -> Result<(), ErrorCode> {
+    // 影子节点之间不能互相连接（先于方向约束判断：无论方向如何都不允许）。
+    if source.shadow_id.is_some() && target.shadow_id.is_some() {
+        return Err(ErrorCode::ShadowToShadowEdge);
+    }
     if source.shadow_id.is_some()
-        && node::service::shadow_direction(connection, source)? == Some(ShadowDirection::Outflow)
+        && node::service::shadow_direction(connection, source)? == ShadowDirection::Outflow
     {
         return Err(ErrorCode::InvalidShadowEdge);
     }
     if target.shadow_id.is_some()
-        && node::service::shadow_direction(connection, target)? == Some(ShadowDirection::Inflow)
+        && node::service::shadow_direction(connection, target)? == ShadowDirection::Inflow
     {
         return Err(ErrorCode::InvalidShadowEdge);
     }
@@ -188,7 +280,7 @@ fn shadow_position(
     // 同方向已有影子的最大 y：逐个推导方向，与新建影子同方向的参与堆叠。
     let mut stack_y: Option<f64> = None;
     for existing in nodes.iter().filter(|n| n.shadow_id.is_some()) {
-        if node::service::shadow_direction(connection, existing)? != Some(direction) {
+        if node::service::shadow_direction(connection, existing)? != direction {
             continue;
         }
         stack_y = Some(match stack_y {

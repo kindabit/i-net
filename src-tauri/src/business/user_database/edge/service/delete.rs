@@ -1,5 +1,5 @@
 use crate::business::user_database::edge::dao;
-use crate::business::user_database::entity::{Action, Node};
+use crate::business::user_database::entity::Action;
 use crate::business::user_database::{log, node, state};
 use crate::error_code::ErrorCode;
 
@@ -10,10 +10,9 @@ use crate::error_code::ErrorCode;
 /// 两个影子都会被删除。影子支持嵌套（影子的影子），嵌套影子会由 node.shadow_id
 /// 自引用外键与 edge.source_id/target_id 外键在 SQLite 层逐层级联删除，应用层
 /// 禁止手写递归删除。受影响节点的收集通过 [`node::service::collect_shadow_disconnected`]
-/// 递归覆盖下游各级画布：入向影子收集出边目标、出向影子收集入边源，方向推导不出
-/// （数据不一致）时两个方向都收集，邻居本身是影子时取其根原始节点的标题。
-/// 存在受影响节点且调用方未确认时返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，
-/// 由前端向用户确认后以 `confirmed = true` 重调。
+/// 递归覆盖下游各级画布：影子方向必然可推导，邻居必然是非影子节点（数据不一致时
+/// collect_shadow_disconnected 返回 DataCorruption* 错误）。存在受影响节点且调用方未确认时
+/// 返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端向用户确认后以 `confirmed = true` 重调。
 ///
 /// 产生 EdgePhysicalDelete 日志，载荷为源节点的标题和目标节点的标题。
 ///
@@ -23,6 +22,7 @@ use crate::error_code::ErrorCode;
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；边不存在时返回 `ErrorCode::NoEdgeWithSuchId`，
+/// 端点节点不存在时返回 `ErrorCode::DataCorruptionEdgeEndpointMissing`，
 /// 删除会使子画布内的节点失去连接且未确认时返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
@@ -30,46 +30,22 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     let edge = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoEdgeWithSuchId { id: id.to_string() })?;
     // 节点物理删除会连带删除边，因此此处两端节点必然仍然存在；
-    // 查不到节点只可能是数据污染或程序缺陷。为保护剩余的用户数据，
-    // 此时记录完整上下文并立即退出进程，不在受损状态下继续运行或写盘。
-    // 该路径按设计不可单元测试（会终止测试进程），由代码审查保证。
-    let source = node::dao::select_by_id(&connection, &edge.source_id)?;
-    let Some(source) = source else {
-        tracing::error!(
-            "deleting edge {id}: source node {} does not exist (data corruption or program defect), exiting process immediately",
-            edge.source_id
-        );
-        std::process::exit(1);
-    };
-    let target = node::dao::select_by_id(&connection, &edge.target_id)?;
-    let Some(target) = target else {
-        tracing::error!(
-            "deleting edge {id}: target node {} does not exist (data corruption or program defect), exiting process immediately",
-            edge.target_id
-        );
-        std::process::exit(1);
-    };
-    // 找到这条边关联的影子节点：target 是画布节点时，其引用画布内 source 的入向影子；
-    // source 是画布节点时，其引用画布内 target 的出向影子。
-    let mut shadows: Vec<Node> = Vec::new();
-    if let Some(ref_canvas_id) = &target.canvas_ref_id {
-        if let Some(shadow) = node::dao::select_by_shadow_id_and_canvas_id(
-            &connection,
-            &edge.source_id,
-            ref_canvas_id,
-        )? {
-            shadows.push(shadow);
+    // 查不到节点只可能是数据污染或程序缺陷，返回 DataCorruptionEdgeEndpointMissing
+    // 由前端受控崩溃；该路径构造脏数据需绕过外键约束，按设计不单元测试，由代码审查保证。
+    let source = node::dao::select_by_id(&connection, &edge.source_id)?.ok_or_else(|| {
+        ErrorCode::DataCorruptionEdgeEndpointMissing {
+            edge_id: id.to_string(),
+            node_id: edge.source_id.clone(),
         }
-    }
-    if let Some(ref_canvas_id) = &source.canvas_ref_id {
-        if let Some(shadow) = node::dao::select_by_shadow_id_and_canvas_id(
-            &connection,
-            &edge.target_id,
-            ref_canvas_id,
-        )? {
-            shadows.push(shadow);
+    })?;
+    let target = node::dao::select_by_id(&connection, &edge.target_id)?.ok_or_else(|| {
+        ErrorCode::DataCorruptionEdgeEndpointMissing {
+            edge_id: id.to_string(),
+            node_id: edge.target_id.clone(),
         }
-    }
+    })?;
+    // 找到这条边关联的影子节点：复用 edge::service::shadows_of_edge。
+    let shadows = super::shadows_of_edge(&connection, &source, &target)?;
     // 收集受影响节点（须在删除边之前完成，影子方向推导依赖这条边）。
     // 嵌套影子的断连递归覆盖到下游各级画布。
     let mut affected: Vec<String> = Vec::new();

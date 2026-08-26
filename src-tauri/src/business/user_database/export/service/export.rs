@@ -450,6 +450,7 @@ mod tests {
             "right".to_string(),
             &node_b.id,
             "left".to_string(),
+            false,
         )
         .unwrap();
         // 创建边 C -> D（子画布内）。
@@ -459,6 +460,7 @@ mod tests {
             "right".to_string(),
             &node_d.id,
             "left".to_string(),
+            false,
         )
         .unwrap();
 

@@ -1,6 +1,7 @@
 # 高
 
-[ ] 在两个已经相连的节点之间重新建立新的边会直接替换旧的边
+[ ] 把 DataNodeData 里的 canvasId 重命名为 canvasRefId ，现在的命名有歧义
+[ ] 是不是应该给影子节点单独新建一个 service ？现在有一些在 node 里，有一些在 edge 里。
 [ ] src-tauri\src\business\user_database\node\service\list.rs 递归查询可以用 prepared statement 优化
 [ ] 问问 ai 对我的代码地图的看法？如何才能让 ai 也易于理解这个项目？
 [ ] 教程引导系统（等自动化e2e测试）
@@ -56,6 +57,8 @@
 
 # 已完成
 
+[x] 不允许影子节点之间互相连接
+[x] 在两个已经相连的节点之间重新建立新的边会直接替换旧的边
 [x] 节点的宽高常量
 [x] 将节点移入子画布或父画布
 [x] 批量选中节点，批量移动（左键选择，右键拖拽移动）
