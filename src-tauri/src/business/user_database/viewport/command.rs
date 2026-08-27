@@ -1,2 +1,2 @@
-pub mod user_database_viewport_get;
-pub mod user_database_viewport_set;
+pub mod get;
+pub mod set;

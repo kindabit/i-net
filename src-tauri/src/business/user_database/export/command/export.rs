@@ -17,7 +17,7 @@ use crate::util::preprocess_util;
 /// 导出完成时返回 `Ok(true)`；用户取消系统对话框时返回 `Ok(false)`；
 /// 发生错误时返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn user_database_export(
+pub fn user_database_export_export(
     app_handle: tauri::AppHandle,
     mode: String,
     locale: String,
@@ -38,7 +38,7 @@ pub fn user_database_export(
     }
 }
 
-/// `user_database_export` 的 preprocess 函数：校验 mode 与 target_path，
+/// `user_database_export_export` 的 preprocess 函数：校验 mode 与 target_path，
 /// 并拒绝指向应用数据目录内的目标路径后，接入 service 层的 export 函数。
 ///
 /// # 参数

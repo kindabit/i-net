@@ -1,2 +1,2 @@
-pub mod user_database_dictionary_list;
-pub mod user_database_dictionary_set;
+pub mod list;
+pub mod set;

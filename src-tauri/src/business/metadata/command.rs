@@ -1,8 +1,8 @@
-pub mod metadata_archive;
-pub mod metadata_list;
-pub mod metadata_physical_delete;
-pub mod metadata_register;
-pub mod metadata_save;
+pub mod archive;
+pub mod list;
+pub mod physical_delete;
+pub mod register;
+pub mod save;
 
 #[cfg(test)]
 mod tests {
@@ -23,34 +23,34 @@ mod tests {
         state::set_path(path.clone());
         service::initialize().unwrap();
 
-        // metadata_register::preprocess 失败路径：名称为空时报 EmptyUserDatabaseName。
+        // register::preprocess 失败路径：名称为空时报 EmptyUserDatabaseName。
         assert!(matches!(
-            metadata_register::preprocess("  ".to_string()),
+            register::preprocess("  ".to_string()),
             Err(ErrorCode::EmptyUserDatabaseName)
         ));
 
-        // metadata_register::preprocess 成功路径：注册数据库，名称两侧空白字符应被裁剪。
-        let first = metadata_register::preprocess(" db-1 ".to_string()).unwrap();
+        // register::preprocess 成功路径：注册数据库，名称两侧空白字符应被裁剪。
+        let first = register::preprocess(" db-1 ".to_string()).unwrap();
         assert_eq!(first.name, "db-1");
 
-        // metadata_register::preprocess 失败路径：名称重复时报 DatabaseNameAlreadyExists。
+        // register::preprocess 失败路径：名称重复时报 DatabaseNameAlreadyExists。
         assert!(matches!(
-            metadata_register::preprocess("db-1".to_string()),
+            register::preprocess("db-1".to_string()),
             Err(ErrorCode::DatabaseNameAlreadyExists { .. })
         ));
 
-        // metadata_list::preprocess 成功路径：未归档列表包含刚注册的数据库。
-        let unarchived = metadata_list::preprocess(false).unwrap();
+        // list::preprocess 成功路径：未归档列表包含刚注册的数据库。
+        let unarchived = list::preprocess(false).unwrap();
         assert_eq!(unarchived.len(), 1);
         assert_eq!(unarchived[0].id, first.id);
 
-        // metadata_archive::preprocess 失败路径：id 不是合法的 uuid 格式时报 InvalidUserDatabaseId。
+        // archive::preprocess 失败路径：id 不是合法的 uuid 格式时报 InvalidUserDatabaseId。
         assert!(matches!(
-            metadata_archive::preprocess("no-such-id".to_string(), true),
+            archive::preprocess("no-such-id".to_string(), true),
             Err(ErrorCode::InvalidUserDatabaseId { .. })
         ));
 
-        // metadata_archive::preprocess 失败路径：parse_str 能解析的宽松格式
+        // archive::preprocess 失败路径：parse_str 能解析的宽松格式
         // （无连字符、大写、花括号）同样应被拒绝。
         let uuid = uuid::Uuid::new_v4();
         for lenient in [
@@ -59,36 +59,36 @@ mod tests {
             uuid.braced().to_string(),
         ] {
             assert!(matches!(
-                metadata_archive::preprocess(lenient, true),
+                archive::preprocess(lenient, true),
                 Err(ErrorCode::InvalidUserDatabaseId { .. })
             ));
         }
 
-        // metadata_archive::preprocess 失败路径：id 格式合法但不存在时报 NoDatabaseWithSuchId。
+        // archive::preprocess 失败路径：id 格式合法但不存在时报 NoDatabaseWithSuchId。
         assert!(matches!(
-            metadata_archive::preprocess(uuid::Uuid::new_v4().to_string(), true),
+            archive::preprocess(uuid::Uuid::new_v4().to_string(), true),
             Err(ErrorCode::NoDatabaseWithSuchId { .. })
         ));
 
-        // metadata_archive::preprocess 成功路径：归档后数据库出现在归档列表。
-        metadata_archive::preprocess(first.id.clone(), true).unwrap();
-        assert_eq!(metadata_list::preprocess(true).unwrap().len(), 1);
-        assert!(metadata_list::preprocess(false).unwrap().is_empty());
+        // archive::preprocess 成功路径：归档后数据库出现在归档列表。
+        archive::preprocess(first.id.clone(), true).unwrap();
+        assert_eq!(list::preprocess(true).unwrap().len(), 1);
+        assert!(list::preprocess(false).unwrap().is_empty());
 
-        // metadata_physical_delete::preprocess 失败路径：id 不是合法的 uuid 格式时
+        // physical_delete::preprocess 失败路径：id 不是合法的 uuid 格式时
         // 报 InvalidUserDatabaseId。
         assert!(matches!(
-            metadata_physical_delete::preprocess("no-such-id".to_string(), "password".to_string()),
+            physical_delete::preprocess("no-such-id".to_string(), "password".to_string()),
             Err(ErrorCode::InvalidUserDatabaseId { .. })
         ));
 
-        // metadata_physical_delete::preprocess 失败路径：密码为空时报 EmptyPassword。
+        // physical_delete::preprocess 失败路径：密码为空时报 EmptyPassword。
         assert!(matches!(
-            metadata_physical_delete::preprocess(first.id.clone(), "".to_string()),
+            physical_delete::preprocess(first.id.clone(), "".to_string()),
             Err(ErrorCode::EmptyPassword)
         ));
 
-        // metadata_physical_delete::preprocess 失败路径：密码错误时报 FailToDecrypt。
+        // physical_delete::preprocess 失败路径：密码错误时报 FailToDecrypt。
         // 先用正确密码对应的密钥为该数据库实际创建一个加密的用户数据库文件。
         let key = preprocess_util::preprocess_password("password".to_string()).unwrap();
         let database_directory = path.user_database_directory(&first.id);
@@ -98,25 +98,25 @@ mod tests {
         connection::service::save_file_encrypt(&database_file, &user_database, key).unwrap();
         drop(user_database);
         assert!(matches!(
-            metadata_physical_delete::preprocess(first.id.clone(), "wrong".to_string()),
+            physical_delete::preprocess(first.id.clone(), "wrong".to_string()),
             Err(ErrorCode::FailToDecrypt { .. })
         ));
 
-        // metadata_physical_delete::preprocess 失败路径：数据库未归档时
+        // physical_delete::preprocess 失败路径：数据库未归档时
         // 报 DatabaseMustBeArchivedBeforeDelete。
-        let second = metadata_register::preprocess("db-2".to_string()).unwrap();
+        let second = register::preprocess("db-2".to_string()).unwrap();
         assert!(matches!(
-            metadata_physical_delete::preprocess(second.id.clone(), "password".to_string()),
+            physical_delete::preprocess(second.id.clone(), "password".to_string()),
             Err(ErrorCode::DatabaseMustBeArchivedBeforeDelete)
         ));
 
-        // metadata_physical_delete::preprocess 成功路径：密码正确时删除数据库目录和记录。
-        metadata_physical_delete::preprocess(first.id.clone(), "password".to_string()).unwrap();
+        // physical_delete::preprocess 成功路径：密码正确时删除数据库目录和记录。
+        physical_delete::preprocess(first.id.clone(), "password".to_string()).unwrap();
         assert!(!file_system_util::try_exists(&database_directory).unwrap());
-        assert!(metadata_list::preprocess(true).unwrap().is_empty());
+        assert!(list::preprocess(true).unwrap().is_empty());
 
-        // metadata_save::preprocess 成功路径：保存后 metadata.sqlite 文件存在。
-        metadata_save::preprocess().unwrap();
+        // save::preprocess 成功路径：保存后 metadata.sqlite 文件存在。
+        save::preprocess().unwrap();
         assert!(path.metadata_database_file.try_exists().unwrap());
 
         test::cleanup(&path);

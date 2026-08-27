@@ -1,3 +1,3 @@
-pub mod user_database_lifecycle_close;
-pub mod user_database_lifecycle_initialize;
-pub mod user_database_lifecycle_save;
+pub mod close;
+pub mod initialize;
+pub mod save;

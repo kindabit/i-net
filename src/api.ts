@@ -897,7 +897,7 @@ export type DatabaseExportMode =
 export async function userDatabaseExport(
   mode: DatabaseExportMode,
 ): Promise<boolean> {
-  return invoke<boolean>("user_database_export", {
+  return invoke<boolean>("user_database_export_export", {
     mode,
     locale: currentLocale.value,
   });
