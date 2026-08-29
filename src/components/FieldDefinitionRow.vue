@@ -262,7 +262,7 @@ function onPrecisionChange(val: unknown) {
 
 .field-type-select {
   flex: none;
-  width: 9rem;
+  width: 12rem;
 }
 
 .field-value-slot {

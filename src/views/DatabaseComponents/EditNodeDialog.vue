@@ -182,7 +182,7 @@ defineExpose({ open });
 </script>
 
 <template>
-  <VDialog v-model="dialog" max-width="48rem" :persistent="submitting">
+  <VDialog v-model="dialog" max-width="54rem" :persistent="submitting">
     <VCard>
       <VCardTitle>{{ readonly ? t("database.canvas.view-node-readonly") : t("database.canvas.edit-node") }}</VCardTitle>
       <VCardText :class="{ 'fields-scroll': !loading }">
@@ -190,22 +190,28 @@ defineExpose({ open });
           <VProgressCircular indeterminate color="primary" />
         </div>
         <template v-else>
-          <VTextField
-            v-model="draft.title"
-            :label="t('database.canvas.edit-node-title-label')"
-            :error-messages="titleError"
-            :readonly="readonly"
-            variant="outlined"
-            density="comfortable"
-            class="mb-4"
-          />
-          <VTextField
-            v-model="draft.subTitle"
-            :label="t('database.canvas.edit-node-subtitle-label')"
-            :readonly="readonly"
-            variant="outlined"
-            density="comfortable"
-          />
+          <v-row>
+            <v-col cols="6">
+              <VTextField
+                v-model="draft.title"
+                :label="t('database.canvas.edit-node-title-label')"
+                :error-messages="titleError"
+                :readonly="readonly"
+                variant="outlined"
+                density="comfortable"
+                class="mb-4"
+              />
+            </v-col>
+            <v-col cols="6">
+              <VTextField
+                v-model="draft.subTitle"
+                :label="t('database.canvas.edit-node-subtitle-label')"
+                :readonly="readonly"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+          </v-row>
           <VDivider class="my-4" />
           <div v-for="row in fieldList.rows.value" :key="row.uid" class="mb-4">
             <FieldDefinitionRow
