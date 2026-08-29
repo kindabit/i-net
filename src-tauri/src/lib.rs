@@ -108,6 +108,7 @@ pub fn run(argv: argv::ArgV) {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            business::app_info::app_info_get,
             business::backup::command::backup::backup_backup,
             business::backup::command::restore::backup_restore,
             business::backup::command::restore_probe::backup_restore_probe,

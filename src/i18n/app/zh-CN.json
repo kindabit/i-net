@@ -4,6 +4,17 @@
     "switch-theme": "切换主题",
     "fatal-error-title": "检测到数据损坏",
     "fatal-error-notice": "为保护你的数据，应用需要立即退出。退出不会保存任何更改。",
-    "fatal-error-exit": "退出应用"
+    "fatal-error-exit": "退出应用",
+    "about": "关于",
+    "about-title": "关于 I-Net",
+    "about-version": "版本",
+    "about-author": "作者",
+    "about-repository": "GitHub 仓库",
+    "about-rust-version": "Rust 版本",
+    "about-tauri-version": "Tauri 版本",
+    "about-vue-version": "Vue 版本",
+    "about-vuetify-version": "Vuetify 版本",
+    "about-description": "I-Net 是一款个人敏感数据管理软件，以有向无环图的形式可视化地组织和管理你的敏感数据，所有数据均加密存储在本地。",
+    "about-load-failed": "加载应用信息失败"
   }
 }

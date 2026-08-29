@@ -4,6 +4,17 @@
     "switch-theme": "Switch Theme",
     "fatal-error-title": "Data Corruption Detected",
     "fatal-error-notice": "The application must exit now to protect your data. No changes will be saved.",
-    "fatal-error-exit": "Exit Application"
+    "fatal-error-exit": "Exit Application",
+    "about": "About",
+    "about-title": "About I-Net",
+    "about-version": "Version",
+    "about-author": "Author",
+    "about-repository": "GitHub Repository",
+    "about-rust-version": "Rust Version",
+    "about-tauri-version": "Tauri Version",
+    "about-vue-version": "Vue Version",
+    "about-vuetify-version": "Vuetify Version",
+    "about-description": "I-Net is a personal sensitive data manager that visually organizes your sensitive data as directed acyclic graphs. All data is encrypted and stored locally.",
+    "about-load-failed": "Failed to load application information"
   }
 }

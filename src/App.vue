@@ -1,7 +1,7 @@
 <!--
   应用根组件。
 
-  在所有页面中保持可见的全局元素：右上角的语言切换与主题切换入口。
+  在所有页面中保持可见的全局元素：右上角的语言切换、剪贴板设置、主题切换与关于入口。
   主题菜单区分内置主题与自定义主题，并提供主题管理入口
   （新建/编辑/导出/导入/删除自定义主题）。
   自身样式直接消费 :root 上的 --v-theme-* 主题变量（随主题切换自动更新）。
@@ -14,6 +14,7 @@ import AppSnackbarQueue from "@/components/AppSnackbarQueue.vue";
 import FatalErrorDialog from "@/components/FatalErrorDialog.vue";
 import ThemeManagerDialog from "@/components/ThemeManagerDialog.vue";
 import ClipboardSettingsDialog from "@/components/ClipboardSettingsDialog.vue";
+import AboutDialog from "@/components/AboutDialog.vue";
 import { useClipboardClear } from "@/composables/use-clipboard-clear";
 
 /** 主题菜单显示状态 */
@@ -24,6 +25,7 @@ const themeManagerRef = useTemplateRef<InstanceType<typeof ThemeManagerDialog>>(
 const clipboardSettingsRef = useTemplateRef<InstanceType<typeof ClipboardSettingsDialog>>(
   "clipboardSettingsRef",
 );
+const aboutRef = useTemplateRef<InstanceType<typeof AboutDialog>>("aboutRef");
 const { refreshKey, timeoutSeconds } = useClipboardClear();
 
 /** 内置主题选项 */
@@ -129,11 +131,18 @@ function openThemeManager() {
             />
           </VList>
         </VMenu>
+        <VIconBtn
+          icon="mdi-information-outline"
+          variant="text"
+          :aria-label="t('app.about')"
+          @click="aboutRef?.open()"
+        />
       </div>
     </div>
     <RouterView />
     <ThemeManagerDialog ref="themeManagerRef" />
     <ClipboardSettingsDialog ref="clipboardSettingsRef" />
+    <AboutDialog ref="aboutRef" />
   </div>
 </template>
 

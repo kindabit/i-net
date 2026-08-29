@@ -987,4 +987,28 @@ export async function fatalExit(detail: string): Promise<void> {
   await invoke("fatal_exit", { detail });
 }
 
+// ==================== app_info ====================
+
+/** 应用信息（对应后端 AppInfo 结构体） */
+export interface AppInfo {
+  /** 应用版本号 */
+  app_version: string;
+  /** 作者 */
+  author: string;
+  /** 源代码仓库地址 */
+  repository: string;
+  /** 编译所用的 Rust 编译器版本 */
+  rust_version: string;
+  /** Tauri 框架版本 */
+  tauri_version: string;
+}
+
+/**
+ * 获取应用信息（应用版本、作者、仓库地址、Rust 版本、Tauri 版本）。
+ * @returns 应用信息
+ */
+export async function appInfoGet(): Promise<AppInfo> {
+  return invoke<AppInfo>("app_info_get");
+}
+
 
