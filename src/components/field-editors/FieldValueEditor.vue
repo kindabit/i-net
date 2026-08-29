@@ -103,6 +103,7 @@ async function copyFieldValue(): Promise<void> {
       variant="text"
       density="compact"
       :disabled="props.modelValue?.data == null"
+      tabindex="-1"
       @click="copyFieldValue"
     />
   </div>

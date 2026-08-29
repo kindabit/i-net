@@ -54,6 +54,7 @@ async function openPasswordGenerator() {
         v-if="!readonly"
         icon="mdi-auto-fix"
         class="cursor-pointer ms-1"
+        tabindex="-1"
         @click="openPasswordGenerator()"
       />
     </template>

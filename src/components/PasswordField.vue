@@ -90,6 +90,7 @@ defineExpose({ focus });
       <VIcon
         :icon="eyeIcon"
         class="password-eye"
+        tabindex="-1"
         @click="toggleVisible"
       />
       <slot name="append-inner" />

@@ -185,6 +185,7 @@ function onPrecisionChange(val: unknown) {
         :icon="row.expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
         variant="text"
         density="compact"
+        tabindex="-1"
         @click="row.expanded = !row.expanded"
       />
       <VBtn
@@ -193,6 +194,7 @@ function onPrecisionChange(val: unknown) {
         variant="text"
         density="compact"
         color="error"
+        tabindex="-1"
         @click="emit('remove', row.uid)"
       />
     </div>
