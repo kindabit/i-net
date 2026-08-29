@@ -26,7 +26,8 @@ pub fn list(canvas_id: &str, deleted: bool) -> Result<Vec<NodeVO>, ErrorCode> {
 }
 
 /// 将 Node 转换为 NodeVO：影子节点沿产生边链解析到根本体节点，合并根本体的展示数据
-/// （title / sub_title / color）；canvas_ref_id 恒为 None 不合并。
+/// （title / sub_title / color）；canvas_ref_id 恒为 None 不合并（出向影子根本体引用的
+/// 子画布 id 改由 shadow_origin_canvas_ref_id 单独携带，仅出向影子有值）。
 ///
 /// 影子链由 resolve_root 内部防环保证完整；悬空、端点缺失或成环即数据损坏，
 /// 返回 DataCorruption* 错误；根本体节点类型与影子方向矛盾时返回
@@ -46,6 +47,7 @@ pub(crate) fn to_vo(connection: &Connection, node: Node) -> Result<NodeVO, Error
             shadow_origin_id: None,
             shadow_origin_deleted: None,
             shadow_direction: None,
+            shadow_origin_canvas_ref_id: None,
         });
     }
     let direction = shadow_direction(connection, &node)?;
@@ -66,6 +68,9 @@ pub(crate) fn to_vo(connection: &Connection, node: Node) -> Result<NodeVO, Error
         shadow_origin_id: Some(root.id.clone()),
         shadow_origin_deleted: Some(root.deleted),
         shadow_direction: Some(direction),
+        // 出向影子的根本体必为画布节点（上方 DataCorruptionShadowRootTypeMismatch 校验保证），
+        // 其 canvas_ref_id 必然为 Some；入向影子根本体是普通节点，无对应子画布。
+        shadow_origin_canvas_ref_id: if root_is_canvas { root.canvas_ref_id.clone() } else { None },
     })
 }
 
@@ -144,6 +149,7 @@ mod tests {
         assert!(vo.shadow_origin_id.is_none());
         assert!(vo.shadow_origin_deleted.is_none());
         assert!(vo.shadow_direction.is_none());
+        assert!(vo.shadow_origin_canvas_ref_id.is_none());
     }
 
     /// 单层入向影子：title/sub_title/color 沿产生边链合并自根本体；
@@ -171,6 +177,7 @@ mod tests {
         assert_eq!(vo.shadow_origin_id.as_deref(), Some("origin-x"));
         assert_eq!(vo.shadow_origin_deleted, Some(false));
         assert_eq!(vo.shadow_direction, Some(ShadowDirection::Inflow));
+        assert!(vo.shadow_origin_canvas_ref_id.is_none());
     }
 
     /// 嵌套入向影子沿产生边链合并到根本体：S2.shadow_id=edge-inner（S1 → canvas_b1）→
@@ -199,6 +206,36 @@ mod tests {
         assert_eq!(vo.title, "root-title");
         assert_eq!(vo.shadow_origin_id.as_deref(), Some("origin-x"));
         assert_eq!(vo.shadow_direction, Some(ShadowDirection::Inflow));
+        assert!(vo.shadow_origin_canvas_ref_id.is_none());
+    }
+
+    /// 出向影子：展示数据合并自根本体画布节点；shadow_origin_canvas_ref_id 填入根本体引用的
+    /// 子画布 id；canvas_ref_id 保持不合并（恒为 None）。
+    #[test]
+    fn test_to_vo_outflow_shadow_carries_canvas_ref_id() {
+        let connection = Connection::open_in_memory().unwrap();
+        let canvas_id = setup_canvas(&connection);
+        // 根本体：画布节点 B2（引用子画布 sub-canvas-b2）。
+        let mut origin = make_node("origin-b2", &canvas_id);
+        origin.title = "origin-b2-title".to_string();
+        origin.canvas_ref_id = Some("sub-canvas-b2".to_string());
+        node_dao::insert(&connection, &origin).unwrap();
+        // 产生边 source 端为画布节点 B1：shadow_direction 推导为 Outflow，
+        // resolve_root 沿 target 侧终止于 origin-b2。
+        let mut source_canvas = make_node("source-b1", &canvas_id);
+        source_canvas.canvas_ref_id = Some("sub-canvas-b1".to_string());
+        node_dao::insert(&connection, &source_canvas).unwrap();
+        insert_edge(&connection, &canvas_id, "edge-b1b2", &source_canvas.id, &origin.id);
+        let mut shadow = make_node("shadow-out", &canvas_id);
+        shadow.shadow_id = Some("edge-b1b2".to_string());
+        node_dao::insert(&connection, &shadow).unwrap();
+
+        let vo = to_vo(&connection, shadow).unwrap();
+        assert_eq!(vo.title, "origin-b2-title");
+        assert_eq!(vo.shadow_origin_id.as_deref(), Some("origin-b2"));
+        assert_eq!(vo.shadow_direction, Some(ShadowDirection::Outflow));
+        assert_eq!(vo.shadow_origin_canvas_ref_id.as_deref(), Some("sub-canvas-b2"));
+        assert!(vo.canvas_ref_id.is_none());
     }
 
     /// 根本体类型与影子方向矛盾：影子产生边源端是普通节点（Inflow），但沿 source 侧递归到的

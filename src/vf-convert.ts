@@ -12,7 +12,7 @@ export interface DataNodeData {
   title: string;
   /** 节点副标题 */
   subTitle: string;
-  /** 引用的子画布 id，仅画布节点有值；影子节点恒为 null（影子的原始节点只能是普通节点） */
+  /** 引用的子画布 id，仅画布节点有值；影子节点恒为 null（后端不合并根本体的 canvas_ref_id，出向影子的跳转目标见 shadowOriginCanvasRefId） */
   canvasRefId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;
@@ -22,6 +22,8 @@ export interface DataNodeData {
   shadowOriginDeleted: boolean;
   /** 影子节点的方向（inflow=入向，只有出度；outflow=出向，只有入度）；普通节点为 null */
   shadowDirection: "inflow" | "outflow" | null;
+  /** 影子节点根本体（画布节点）引用的子画布 id；仅出向影子有值，双击出向影子时的跳转目标 */
+  shadowOriginCanvasRefId: string | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
       shadowId: vo.shadow_origin_id ?? null,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
       shadowDirection: vo.shadow_direction ?? null,
+      shadowOriginCanvasRefId: vo.shadow_origin_canvas_ref_id ?? null,
     } satisfies DataNodeData,
   };
 }

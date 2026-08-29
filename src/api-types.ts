@@ -76,8 +76,9 @@ export interface Node {
 }
 
 /** 节点列表（user_database_node_list）的返回项：在 Node 基础上附带影子节点的展示信息。
- * 影子节点的 title / sub_title / color / canvas_ref_id 已被后端合并为原始节点的值；
- * 普通节点的两个扩展字段均为 null。 */
+ * 影子节点的 title / sub_title / color 已被后端合并为根本体节点的值（canvas_ref_id 不合并，恒为 null；
+ * 出向影子根本体引用的子画布 id 由 shadow_origin_canvas_ref_id 单独携带）；
+ * 普通节点的扩展字段均为 null。 */
 export interface NodeVO extends Node {
   /** 影子节点根本体节点的 id；仅影子节点有值（沿产生边链解析到非影子节点） */
   shadow_origin_id: string | null;
@@ -85,6 +86,8 @@ export interface NodeVO extends Node {
   shadow_origin_deleted: boolean | null;
   /** 影子节点的方向；仅影子节点有值 */
   shadow_direction: "inflow" | "outflow" | null;
+  /** 影子节点根本体（画布节点）引用的子画布 id；仅出向影子有值，供双击影子节点时跳转定位 */
+  shadow_origin_canvas_ref_id: string | null;
 }
 
 /** 边（对应后端 Edge 实体） */

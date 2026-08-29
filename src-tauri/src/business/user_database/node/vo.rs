@@ -25,8 +25,8 @@ pub enum ShadowDirection {
 
 /// 节点列表（node_list）的返回项：在 Node 基础上附带影子节点的展示信息。
 /// 影子节点的 title / sub_title / color 沿产生边链合并自根本体节点；canvas_ref_id 恒为 None
-/// （影子节点本身不能是画布节点；出向影子的根本体是画布节点，其 canvas_ref_id 不合并给影子）；
-/// 普通节点的三个扩展字段均为 None。
+/// （影子节点本身不能是画布节点；出向影子的根本体是画布节点，其 canvas_ref_id 不合并给影子，
+/// 改由 shadow_origin_canvas_ref_id 单独携带）；普通节点的四个扩展字段均为 None。
 #[derive(Debug, Clone, Serialize)]
 pub struct NodeVO {
     /// 节点本体（serde flatten 展开）。
@@ -38,6 +38,9 @@ pub struct NodeVO {
     pub shadow_origin_deleted: Option<bool>,
     /// 影子节点的方向；仅影子节点有值。
     pub shadow_direction: Option<ShadowDirection>,
+    /// 影子节点根本体（画布节点）引用的子画布 id，仅出向影子有值；供前端双击影子节点时跳转定位。
+    /// 普通节点与入向影子为 None。
+    pub shadow_origin_canvas_ref_id: Option<String>,
 }
 
 impl std::ops::Deref for NodeVO {

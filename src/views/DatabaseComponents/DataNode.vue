@@ -16,8 +16,9 @@
     表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
     点击该虚拟边可快捷跳转至父画布并尽量定位原始节点。
   - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
-  - data.canvasRefId 对影子节点恒为 null（影子的原始节点只能是普通节点），
-    因此双击影子节点走 canvasRefId === null 分支（打开编辑对话框）。
+  - data.canvasRefId 对影子节点恒为 null（后端不合并根本体的 canvas_ref_id）。
+  - 双击行为按影子方向分流：入向影子打开根本体的只读编辑对话框；出向影子（画布节点的影子）
+    钻入根本体画布节点引用的子画布（shadowOriginCanvasRefId），根本体已逻辑删除时静默不跳转。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
@@ -75,9 +76,20 @@ const dropState = computed(() => {
   return nodeMoveAndRelocate.nodeSetRelocatingLegality.value === "legal" ? "allow" : "forbid";
 });
 
+/**
+ * 双击节点卡片：出向影子（画布节点的影子）钻入根本体画布节点引用的子画布，
+ * 根本体已被逻辑删除时（卡片灰化）静默不跳转；普通节点与入向影子打开编辑对话框
+ * （入向影子在 CanvasView 侧以只读模式打开根本体）；画布节点进入子画布。
+ * 输入：无。
+ * 返回：无返回值。
+ */
 function onDblClick() {
-  // 普通节点双击打开编辑对话框，画布节点双击进入子画布
-  // 影子节点的 canvasRefId 恒为 null（影子的原始节点只能是普通节点），因此走 canvasRefId === null 分支（打开编辑对话框）
+  if (props.data.shadowOriginCanvasRefId !== null) {
+    if (props.data.shadowOriginDeleted) return;
+    setCanvasNavIntent("drill-in");
+    router.push({ name: "canvas", params: { canvasId: props.data.shadowOriginCanvasRefId } });
+    return;
+  }
   if (props.data.canvasRefId === null) {
     emit("edit", props.id);
     return;
