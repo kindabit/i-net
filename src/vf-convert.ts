@@ -16,7 +16,7 @@ export interface DataNodeData {
   canvasRefId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;
-  /** 原始节点 id；null 表示普通节点 */
+  /** 影子节点根本体节点的 id；null 表示普通节点（用于判断是否影子节点、以及影子节点点击跳转/迁移落点时的定位锚点） */
   shadowId: string | null;
   /** 影子节点的原始节点是否已被逻辑删除（普通节点恒为 false） */
   shadowOriginDeleted: boolean;
@@ -44,7 +44,7 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
       subTitle: node.sub_title,
       canvasRefId: node.canvas_ref_id,
       color: node.color,
-      shadowId: node.shadow_id,
+      shadowId: vo.shadow_origin_id ?? null,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
       shadowDirection: vo.shadow_direction ?? null,
     } satisfies DataNodeData,

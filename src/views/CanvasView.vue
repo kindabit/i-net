@@ -446,10 +446,11 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
- * 连接合法性校验：不允许自环；影子节点之间不能互相连接（后端 ShadowToShadowEdge 兜底）；
- * 画布节点之间不能互相连接（后端 CanvasToCanvasEdge 兜底）；
- * 不允许两端连接桩相同；方向守卫要求出向影子只能作为目标（只有入度），
- * 入向影子只能作为源（只有出度），后端有 InvalidShadowEdge 兜底。
+ * 连接合法性校验：不允许自环；画布节点不能直接作为源连接普通节点（后端 CanvasToPlainNodeEdge 兜底）；
+ * 入向影子（普通节点的影子）只能作为源（后端 InvalidShadowEdge 兜底，目标为 inflow 时拒绝）；
+ * 出向影子（画布节点的影子）只能作为目标（后端 InvalidShadowEdge 兜底，源为 outflow 时拒绝）；
+ * 入向影子→出向影子（两者本体都可在父画布中直接连接，后端 ShadowToShadowEdge 兜底拒绝）；
+ * 不允许两端连接桩相同。
  * @param connection vue-flow 连接对象
  * @returns 是否允许建立该连接
  */
@@ -458,14 +459,18 @@ function isValidConnection(connection: Connection): boolean {
   const source = nodes.value.find((n) => n.id === connection.source);
   const target = nodes.value.find((n) => n.id === connection.target);
   if (!source || !target) return false;
-  if (source.data.shadowId !== null && target.data.shadowId !== null) return false;
-  // 画布节点之间不能互相连接（后端 CanvasToCanvasEdge 兜底）；
-  // 判断需排除影子：影子不是画布节点，其 canvasRefId 不参与本判断。
+  // 画布节点不能直接作为源连接普通节点（后端 CanvasToPlainNodeEdge 兜底）。
+  // 画布节点的判定需排除影子：影子不是画布节点，其 canvasRefId 不参与本判断。
+  // 普通节点的判定：canvasRefId === null 且 shadowId === null。
   const sourceIsCanvas = source.data.canvasRefId !== null && source.data.shadowId === null;
-  const targetIsCanvas = target.data.canvasRefId !== null && target.data.shadowId === null;
-  if (sourceIsCanvas && targetIsCanvas) return false;
-  if (source.data.shadowDirection === "outflow") return false;
+  const targetIsPlain = target.data.canvasRefId === null && target.data.shadowId === null;
+  if (sourceIsCanvas && targetIsPlain) return false;
+  // 入向影子（普通节点的影子）只能作为源：拒绝 target 为入向影子（后端 InvalidShadowEdge 兜底）。
   if (target.data.shadowDirection === "inflow") return false;
+  // 出向影子（画布节点的影子）只能作为目标：拒绝 source 为出向影子（后端 InvalidShadowEdge 兜底）。
+  if (source.data.shadowDirection === "outflow") return false;
+  // 入向影子→出向影子：两者本体都可在父画布中直接连接，拒绝此连接（后端 ShadowToShadowEdge 兜底）。
+  if (source.data.shadowDirection === "inflow" && target.data.shadowDirection === "outflow") return false;
   // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 port 即合法"）。
   if ((connection.sourceHandle ?? "") === (connection.targetHandle ?? "")) return false;
   return true;

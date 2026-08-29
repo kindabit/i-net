@@ -14,8 +14,8 @@ pub enum ErrorCode {
     AttachmentDeleted,
     /// 画布名称已经存在，包含重复的画布名称。
     CanvasNameAlreadyExists { name: String },
-    /// 画布节点之间不能互相连接。
-    CanvasToCanvasEdge,
+    /// 画布节点不能直接作为源连接普通节点（应先经子画布中转，避免依赖项散落各画布）。
+    CanvasToPlainNodeEdge,
     /// 数据库操作失败，包含详细错误信息，仅限 dao 层使用。
     DatabaseError { detail: String },
     /// 数据库名称已经存在，包含重复的数据库名称。
@@ -28,20 +28,18 @@ pub enum ErrorCode {
     DataCorruptionDanglingShadow { shadow_id: String, missing_id: String },
     /// 边的端点节点不存在，包含边 id 与缺失的节点 id。
     DataCorruptionEdgeEndpointMissing { edge_id: String, node_id: String },
-    /// 影子应当存在但不存在：边或嵌套关系指向的影子缺失，包含原始节点 id（shadow_id 列的值）与影子应在的画布 id。
-    DataCorruptionMissingShadow { origin_id: String, canvas_id: String },
+    /// 按连接规则应当产生影子的边缺失其影子节点，包含该边的 id。
+    DataCorruptionMissingShadow { edge_id: String },
     /// 推导影子方向时发现节点不是影子（无 shadow_id），包含节点 id。属于程序缺陷。
     DataCorruptionNodeNotShadow { id: String },
-    /// 影子所在画布没有被任何画布节点引用，包含影子节点 id 与其所在画布 id。
-    DataCorruptionShadowCanvasUnreferenced { shadow_id: String, canvas_id: String },
     /// 影子链成环，包含检测到成环的节点 id。
     DataCorruptionShadowChainCycle { id: String },
     /// 影子节点存在与其方向不匹配的边，包含影子节点 id 与边 id。
     DataCorruptionShadowEdgeDirectionMismatch { shadow_id: String, edge_id: String },
     /// 影子节点与另一个影子节点相连（影子之间不允许相连），包含两个影子节点的 id。
     DataCorruptionShadowNeighborIsShadow { shadow_id: String, neighbor_id: String },
-    /// 影子的原始节点与引用其所在画布的画布节点之间不存在边，包含影子节点 id、原始节点 id 与画布节点 id。
-    DataCorruptionShadowWithoutOriginEdge { shadow_id: String, origin_id: String, canvas_node_id: String },
+    /// 影子沿产生边链解析出的根本体节点类型与影子方向矛盾（入向影子的根本体应为普通节点，出向影子的根本体应为画布节点），包含影子节点 id 与根本体节点 id。
+    DataCorruptionShadowRootTypeMismatch { shadow_id: String, root_id: String },
     /// 数据版本不匹配，包含期望的版本和实际的版本。
     DataVersionMismatch {
         expected: DataVersion,

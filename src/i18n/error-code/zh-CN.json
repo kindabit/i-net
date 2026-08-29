@@ -26,15 +26,11 @@
     },
     "DataCorruptionMissingShadow": {
       "title": "影子节点缺失",
-      "text": "应当存在的影子节点不存在（原始节点 {origin_id}，画布 {canvas_id}）"
+      "text": "按连接规则应当存在影子节点的边（{edge_id}）缺失其影子节点"
     },
     "DataCorruptionNodeNotShadow": {
       "title": "节点类型异常",
       "text": "预期为影子节点，但该节点（{id}）不是影子"
-    },
-    "DataCorruptionShadowCanvasUnreferenced": {
-      "title": "影子所在画布失去引用",
-      "text": "影子节点（{shadow_id}）所在画布（{canvas_id}）没有被任何画布节点引用"
     },
     "DataCorruptionShadowChainCycle": {
       "title": "影子链成环",
@@ -48,9 +44,9 @@
       "title": "影子节点互连",
       "text": "影子节点（{shadow_id}）与另一个影子节点（{neighbor_id}）相连"
     },
-    "DataCorruptionShadowWithoutOriginEdge": {
-      "title": "影子失去原始连线",
-      "text": "影子节点（{shadow_id}）的原始节点（{origin_id}）与画布节点（{canvas_node_id}）之间不存在边"
+    "DataCorruptionShadowRootTypeMismatch": {
+      "title": "影子根本体类型异常",
+      "text": "影子节点（{shadow_id}）的根本体节点（{root_id}）类型与影子方向矛盾"
     },
     "DataVersionMismatch": {
       "title": "数据版本不匹配",
@@ -150,9 +146,9 @@
       "title": "画布名称已存在",
       "text": "名为\u201c{name}\u201d的画布已存在，请更换名称"
     },
-    "CanvasToCanvasEdge": {
-      "title": "画布节点不能互相连接",
-      "text": "画布节点之间不能建立连接，只有普通节点才能产生影子节点"
+    "CanvasToPlainNodeEdge": {
+      "title": "画布节点不能直接连接普通节点",
+      "text": "目标节点需要依赖画布中的节点时，请先新建子画布并迁移目标节点，再将画布节点与新的子画布节点相连，以避免依赖项散落在各个画布中"
     },
     "NoCanvasWithSuchId": {
       "title": "未找到画布",
@@ -196,7 +192,7 @@
     },
     "ShadowToShadowEdge": {
       "title": "影子节点不能互相连接",
-      "text": "影子节点是连接关系的象征，影子节点之间不能互相连接"
+      "text": "影子节点是连接关系的象征，两者不能直接相连；两者的本体（或上级影子）都直接或间接存在于父画布中，如需连接请直接在父画布中进行"
     },
     "UserDatabaseNotOpen": {
       "title": "用户数据库未打开",
@@ -305,7 +301,7 @@
     },
     "InvalidShadowEdge": {
       "title": "影子节点连线无效",
-      "text": "入向影子只能作为连线的起点，出向影子只能作为连线的终点"
+      "text": "入向影子（普通节点的影子）只能作为连线的起点，出向影子（画布节点的影子）只能作为连线的终点"
     },
     "NodeIsCanvasNode": {
       "title": "不允许操作画布节点",

@@ -5,14 +5,14 @@ use crate::error_code::ErrorCode;
 
 /// 物理删除指定边（边没有逻辑删除字段）。
 ///
-/// 影子节点联动：如果边的某个端点是画布节点，则被引用子画布内另一端节点的影子节点
-/// 随边一并物理删除（影子节点自身相连的边由外键级联删除）；两端都是画布节点时
-/// 两个影子都会被删除。影子支持嵌套（影子的影子），嵌套影子会由 node.shadow_id
-/// 自引用外键与 edge.source_id/target_id 外键在 SQLite 层逐层级联删除，应用层
-/// 禁止手写递归删除。受影响节点的收集通过 [`node::service::collect_shadow_disconnected`]
-/// 递归覆盖下游各级画布：影子方向必然可推导，邻居必然是非影子节点（数据不一致时
-/// collect_shadow_disconnected 返回 DataCorruption* 错误）。存在受影响节点且调用方未确认时
-/// 返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端向用户确认后以 `confirmed = true` 重调。
+/// 影子节点联动：边被删除后，其产生的影子节点经 node.shadow_id 外键级联删除；
+/// 影子的相连边经 edge.source_id/target_id 外键级联删除；这些相连边若也是产生影子节点的边，
+/// 其影子递归级联删除（嵌套影子沿外键链递归坍塌），应用层不再手动删除影子。
+/// 受影响节点的收集通过 [`node::service::collect_edge_disconnected`] 沿同一外键链
+/// 预收集（须在删除边之前完成）：影子方向必然可推导，
+/// 邻居必然是非影子节点，任何不一致都返回 DataCorruption* 错误。存在受影响节点且
+/// 调用方未确认时返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端向用户确认后
+/// 以 `confirmed = true` 重调。
 ///
 /// 产生 EdgePhysicalDelete 日志，载荷为源节点的标题和目标节点的标题。
 ///
@@ -44,25 +44,16 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
             node_id: edge.target_id.clone(),
         }
     })?;
-    // 找到这条边关联的影子节点：复用 edge::service::shadows_of_edge。
-    let shadows = super::shadows_of_edge(&connection, &source, &target)?;
-    // 收集受影响节点（须在删除边之前完成，影子方向推导依赖这条边）。
-    // 嵌套影子的断连递归覆盖到下游各级画布。
-    let mut affected: Vec<String> = Vec::new();
-    for shadow in &shadows {
-        affected.extend(node::service::collect_shadow_disconnected(
-            &connection,
-            shadow,
-        )?);
-    }
+    // 断连预收集须在删除边之前完成（收集依赖产生边链完好）；
+    // 受影响节点非空且未确认时返回 EdgeDeleteDisconnectsNodes，由前端确认后重调。
+    let affected = node::service::collect_edge_disconnected(&connection, &edge)?;
     if !affected.is_empty() && !confirmed {
         return Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected });
     }
+    // 删除边：其产生的影子经 node.shadow_id 外键级联删除，影子的相连边经
+    // edge.source_id/target_id 外键级联删除，下游嵌套影子沿外键链递归坍塌，
+    // 应用层禁止手写递归删除。
     dao::delete_by_id(&connection, id)?;
-    // 物理删除影子节点：影子自身相连的边由 edge 外键随节点行的删除级联删除。
-    for shadow in &shadows {
-        node::dao::delete_by_id(&connection, &shadow.id)?;
-    }
     log::service::create(
         id,
         Action::EdgePhysicalDelete {

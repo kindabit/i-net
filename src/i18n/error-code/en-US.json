@@ -26,15 +26,11 @@
     },
     "DataCorruptionMissingShadow": {
       "title": "Shadow node missing",
-      "text": "An expected shadow node does not exist (origin node {origin_id}, canvas {canvas_id})"
+      "text": "The edge ({edge_id}) that should have produced a shadow node is missing its shadow node"
     },
     "DataCorruptionNodeNotShadow": {
       "title": "Unexpected node type",
       "text": "Expected a shadow node, but this node ({id}) is not a shadow"
-    },
-    "DataCorruptionShadowCanvasUnreferenced": {
-      "title": "Shadow canvas unreferenced",
-      "text": "The canvas ({canvas_id}) containing shadow node ({shadow_id}) is not referenced by any canvas node"
     },
     "DataCorruptionShadowChainCycle": {
       "title": "Shadow chain cycle",
@@ -48,9 +44,9 @@
       "title": "Shadow-to-shadow connection",
       "text": "Shadow node ({shadow_id}) is connected to another shadow node ({neighbor_id})"
     },
-    "DataCorruptionShadowWithoutOriginEdge": {
-      "title": "Shadow missing origin edge",
-      "text": "No edge exists between origin node ({origin_id}) of shadow node ({shadow_id}) and canvas node ({canvas_node_id})"
+    "DataCorruptionShadowRootTypeMismatch": {
+      "title": "Shadow root type mismatch",
+      "text": "The root origin node ({root_id}) of shadow node ({shadow_id}) has a type that contradicts the shadow direction"
     },
     "DataVersionMismatch": {
       "title": "Data Version Mismatch",
@@ -150,9 +146,9 @@
       "title": "Canvas Name Exists",
       "text": "A canvas named \"{name}\" already exists, please use a different name"
     },
-    "CanvasToCanvasEdge": {
-      "title": "Canvas nodes cannot connect to each other",
-      "text": "Connections between canvas nodes are not allowed; only regular nodes can have shadow nodes"
+    "CanvasToPlainNodeEdge": {
+      "title": "Canvas node cannot connect to a regular node",
+      "text": "To make the target node depend on nodes inside a canvas, first create a new sub-canvas and move the target node into it, then connect the canvas node to the new sub-canvas node, so that dependencies stay centralized instead of being scattered across canvases"
     },
     "NoCanvasWithSuchId": {
       "title": "Canvas Not Found",
@@ -196,7 +192,7 @@
     },
     "ShadowToShadowEdge": {
       "title": "Shadow nodes cannot connect to each other",
-      "text": "Shadow nodes symbolize connections between nodes; connecting one shadow node to another is not meaningful"
+      "text": "Shadow nodes symbolize connections and cannot connect to each other; both origins (or their ancestor shadows) reside directly or indirectly in the parent canvas, so connect them directly in the parent canvas instead"
     },
     "UserDatabaseNotOpen": {
       "title": "User Database Not Open",
@@ -305,7 +301,7 @@
     },
     "InvalidShadowEdge": {
       "title": "Invalid shadow node connection",
-      "text": "An inflow shadow can only be the source of a connection, and an outflow shadow can only be the target"
+      "text": "An inflow shadow (shadow of a regular node) can only be the source of a connection, and an outflow shadow (shadow of a canvas node) can only be the target"
     },
     "NodeIsCanvasNode": {
       "title": "Operation not allowed on canvas node",

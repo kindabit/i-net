@@ -433,7 +433,7 @@ export async function userDatabaseNodePhysicalDelete(
 
 /**
  * 查询指定画布内的节点列表。
- * 影子节点（返回项中 `shadow_id` 非 null 的项）的 title / sub_title / color /
+ * 影子节点（返回项中 `shadow_origin_id` 非 null 的项）的 title / sub_title / color /
  * canvas_ref_id 已被后端合并为原始节点的值；调用方无需另行解析原始节点。
  * @param canvasId 画布 id
  * @param deleted false 查询正常节点，true 查询已逻辑删除的节点

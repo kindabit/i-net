@@ -41,7 +41,7 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 canvas_ref_id TEXT UNIQUE REFERENCES canvas(id) ON DELETE CASCADE,
                 deleted INTEGER NOT NULL,
                 color TEXT NOT NULL,
-                shadow_id TEXT REFERENCES node(id) ON DELETE CASCADE,
+                shadow_id TEXT REFERENCES edge(id) ON DELETE CASCADE,
                 UNIQUE (canvas_id, shadow_id)
             ) STRICT",
             [],
@@ -235,61 +235,27 @@ pub fn select_by_canvas_ref_id(
         })
 }
 
-/// 按原始节点 id 和所在画布 id 查询影子节点。
+/// 按产生边 id 查询其产生的影子节点（一条边至多产生一个影子）。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
-/// - `shadow_id`: 原始节点 id（即影子节点 shadow_id 列的值）。
-/// - `canvas_id`: 影子节点所在画布的 id。
+/// - `edge_id`: 产生边的 id（即影子节点 shadow_id 列的值）。
 ///
 /// # 返回值
 /// 返回查询到的影子节点，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
-pub fn select_by_shadow_id_and_canvas_id(
+pub fn select_by_producing_edge_id(
     connection: &Connection,
-    shadow_id: &str,
-    canvas_id: &str,
+    edge_id: &str,
 ) -> Result<Option<Node>, ErrorCode> {
     connection
         .query_row(
             "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
             FROM node
-            WHERE shadow_id = :shadow_id AND canvas_id = :canvas_id",
-            rusqlite::named_params! {":shadow_id": shadow_id, ":canvas_id": canvas_id},
+            WHERE shadow_id = :edge_id",
+            rusqlite::named_params! {":edge_id": edge_id},
             map_row,
         )
         .optional()
-        .map_err(|e| ErrorCode::DatabaseError {
-            detail: e.to_string(),
-        })
-}
-
-/// 按原始节点 id 查询其全部直接影子节点（跨所有画布）。
-///
-/// # 参数
-/// - `connection`: 数据库连接。
-/// - `shadow_id`: 原始节点 id（即影子节点 shadow_id 列的值）。
-///
-/// # 返回值
-/// 返回查询到的影子节点列表（可能为空）；若发生错误则返回对应的 `ErrorCode`。
-pub fn select_by_shadow_id(
-    connection: &Connection,
-    shadow_id: &str,
-) -> Result<Vec<Node>, ErrorCode> {
-    let mut statement = connection
-        .prepare(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
-            FROM node
-            WHERE shadow_id = :shadow_id",
-        )
-        .map_err(|e| ErrorCode::DatabaseError {
-            detail: e.to_string(),
-        })?;
-    let rows = statement
-        .query_map(rusqlite::named_params! {":shadow_id": shadow_id}, map_row)
-        .map_err(|e| ErrorCode::DatabaseError {
-            detail: e.to_string(),
-        })?;
-    rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })
@@ -882,26 +848,17 @@ mod tests {
         normal_node.shadow_id = None;
         insert(&connection, &normal_node).unwrap();
 
-        // select_by_shadow_id_and_canvas_id 命中：正确 canvas_id 时能查到对应影子节点。
-        let found = select_by_shadow_id_and_canvas_id(
-            &connection,
-            "shadow-origin-1",
-            "canvas-shadow-1",
-        )
-        .unwrap()
-        .unwrap();
+        // select_by_producing_edge_id 命中：按产生边 id 查到的影子节点等于 shadow-node-1，且
+        // shadow_id 列的值与传入的产生边 id 一致（影子由产生边联动创建后即固化该引用）。
+        let found = select_by_producing_edge_id(&connection, "shadow-origin-1")
+            .unwrap()
+            .unwrap();
         assert_eq!(found.id, "shadow-node-1");
         assert_eq!(found.shadow_id.as_deref(), Some("shadow-origin-1"));
 
-        // select_by_shadow_id_and_canvas_id 未命中：错误 canvas_id 时返回 None。
+        // select_by_producing_edge_id 未命中：传入不存在的产生边 id 时返回 None。
         assert!(
-            select_by_shadow_id_and_canvas_id(&connection, "shadow-origin-1", "no-such-canvas")
-                .unwrap()
-                .is_none()
-        );
-        // select_by_shadow_id_and_canvas_id 未命中：错误 shadow_id 时返回 None。
-        assert!(
-            select_by_shadow_id_and_canvas_id(&connection, "no-such-origin", "canvas-shadow-1")
+            select_by_producing_edge_id(&connection, "no-such-edge-id")
                 .unwrap()
                 .is_none()
         );
@@ -930,19 +887,29 @@ mod tests {
         assert!(!results.iter().any(|n| n.id == "shadow-searchable"));
     }
 
-    /// 独立测试：影子节点通过 ON DELETE CASCADE 跟随原始节点被物理删除。
+    /// 独立测试：影子节点沿产生边外键级联链在物理删除边 / 节点时被一并清理。
     ///
-    /// 与 `test_node_dao_all_functions` 不同，本测试开启外键约束以验证级联删除行为。
+    /// 新机制下 `node.shadow_id REFERENCES edge(id) ON DELETE CASCADE`、`edge.source_id/target_id
+    /// REFERENCES node(id) ON DELETE CASCADE`：本测试开启外键约束并建齐 canvas / edge / node
+    /// 三张表，沿两条级联链路验证：(a) 删除产生边 → 影子经 shadow_id 外键级联消失；(b) 删除
+    /// 节点 → 相连边经 source_id / target_id 外键级联消失 → 这些边若也是产生边则其影子随之
+    /// 级联消失。最后再验证一条三层嵌套影子（影子连接画布节点再产生影子）随最上游边删除时
+    /// 整套递归坍塌。
     #[test]
     fn test_node_shadow_cascade_delete() {
         let connection = Connection::open_in_memory().unwrap();
-        // 开启外键约束以触发 ON DELETE CASCADE。
+
+        // 先关闭外键约束以便无序建表与插入数据，所有数据备齐后再开启外键以验证级联删除行为。
         connection
-            .execute_batch("PRAGMA foreign_keys = ON;")
+            .execute_batch("PRAGMA foreign_keys = OFF;")
             .unwrap();
 
-        // 先建 canvas 表（node 表通过 canvas_id / shadow_id 外键依赖 canvas 表与 node 表自身）。
+        // 建表：node 表与 edge 表互为外键依赖，建表顺序由 SQLite 推迟到 FK 启用后再检查。
         crate::business::user_database::canvas::dao::create_table(&connection).unwrap();
+        crate::business::user_database::edge::dao::create_table(&connection).unwrap();
+        create_table(&connection).unwrap();
+
+        // 插入画布行。
         let canvas = crate::business::user_database::entity::Canvas {
             id: "cascade-canvas-1".to_string(),
             parent_id: None,
@@ -954,24 +921,168 @@ mod tests {
         };
         crate::business::user_database::canvas::dao::insert(&connection, &canvas).unwrap();
 
-        // 建 node 表。
-        create_table(&connection).unwrap();
+        // ===== 第 1 阶段：删除产生边 → 影子经 node.shadow_id 外键级联消失 =====
+        // 准备边 e1 与影子 s1（s1.shadow_id = e1.id）。
+        let source_1 = node("cascade-source-1", "cascade-canvas-1");
+        insert(&connection, &source_1).unwrap();
+        let target_1 = node("cascade-target-1", "cascade-canvas-1");
+        insert(&connection, &target_1).unwrap();
+        let e1 = crate::business::user_database::entity::Edge {
+            id: "cascade-edge-1".to_string(),
+            canvas_id: "cascade-canvas-1".to_string(),
+            source_id: source_1.id.clone(),
+            source_port: "right".to_string(),
+            target_id: target_1.id.clone(),
+            target_port: "left".to_string(),
+            title: String::new(),
+            description: String::new(),
+        };
+        crate::business::user_database::edge::dao::insert(&connection, &e1).unwrap();
+        let mut s1 = node("cascade-shadow-1", "cascade-canvas-1");
+        s1.shadow_id = Some(e1.id.clone());
+        insert(&connection, &s1).unwrap();
 
-        // 插入原始节点与指向它的影子节点。
-        let mut origin = node("cascade-origin", "cascade-canvas-1");
-        origin.title = "Cascade Origin".to_string();
-        insert(&connection, &origin).unwrap();
-        let mut shadow = node("cascade-shadow", "cascade-canvas-1");
-        shadow.shadow_id = Some("cascade-origin".to_string());
-        insert(&connection, &shadow).unwrap();
+        // 确认数据落库后再开启外键以验证级联删除行为。
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
+        assert!(select_by_id(&connection, "cascade-shadow-1").unwrap().is_some());
 
-        // 确认两者都已落库。
-        assert!(select_by_id(&connection, "cascade-origin").unwrap().is_some());
-        assert!(select_by_id(&connection, "cascade-shadow").unwrap().is_some());
+        // 删除产生边 → 影子经 node.shadow_id 外键级联消失。
+        crate::business::user_database::edge::dao::delete_by_id(&connection, &e1.id).unwrap();
+        assert!(select_by_id(&connection, "cascade-shadow-1").unwrap().is_none());
 
-        // 删除原始节点，影子节点应被级联删除。
-        delete_by_id(&connection, "cascade-origin").unwrap();
-        assert!(select_by_id(&connection, "cascade-origin").unwrap().is_none());
-        assert!(select_by_id(&connection, "cascade-shadow").unwrap().is_none());
+        // ===== 第 2 阶段：删除节点 → 相连边级联 → 影子级联（递归） =====
+        // 关闭外键以便继续插入数据。
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+
+        // 准备边 e2 与影子 s2（s2.shadow_id = e2.id）。
+        let source_2 = node("cascade-source-2", "cascade-canvas-1");
+        insert(&connection, &source_2).unwrap();
+        let target_2 = node("cascade-target-2", "cascade-canvas-1");
+        insert(&connection, &target_2).unwrap();
+        let e2 = crate::business::user_database::entity::Edge {
+            id: "cascade-edge-2".to_string(),
+            canvas_id: "cascade-canvas-1".to_string(),
+            source_id: source_2.id.clone(),
+            source_port: "right".to_string(),
+            target_id: target_2.id.clone(),
+            target_port: "left".to_string(),
+            title: String::new(),
+            description: String::new(),
+        };
+        crate::business::user_database::edge::dao::insert(&connection, &e2).unwrap();
+        let mut s2 = node("cascade-shadow-2", "cascade-canvas-1");
+        s2.shadow_id = Some(e2.id.clone());
+        insert(&connection, &s2).unwrap();
+
+        // 开启外键后删除 source_2：相连边 e2 经 source_id 外键级联 → 影子 s2 经 shadow_id 外键级联。
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
+        delete_by_id(&connection, &source_2.id).unwrap();
+        assert!(select_by_id(&connection, &source_2.id).unwrap().is_none());
+        assert!(
+            crate::business::user_database::edge::dao::select_by_id(&connection, &e2.id)
+                .unwrap()
+                .is_none()
+        );
+        assert!(select_by_id(&connection, "cascade-shadow-2").unwrap().is_none());
+
+        // ===== 第 3 阶段：嵌套影子随最上游边删除时整套递归坍塌 =====
+        // 拓扑：e_top（产生顶级影子 s_top）；s_top 通过边 e_inner 连接画布节点 canvas_n；e_inner
+        // 产生嵌套影子 s_inner。删除 e_top 后整套：s_top 经 e_top 级联 → e_inner 经 s_top
+        // （target_id）级联 → s_inner 经 e_inner 级联。
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+
+        // 画布节点 canvas_n 引用子画布 canvas_inner。
+        let canvas_inner = crate::business::user_database::entity::Canvas {
+            id: "cascade-canvas-inner".to_string(),
+            parent_id: None,
+            name: "Cascade Canvas Inner".to_string(),
+            x: 0.0,
+            y: 0.0,
+            deleted: false,
+            color: String::new(),
+        };
+        crate::business::user_database::canvas::dao::insert(&connection, &canvas_inner).unwrap();
+        let mut canvas_n = node("cascade-canvas-n", "cascade-canvas-1");
+        canvas_n.canvas_ref_id = Some(canvas_inner.id.clone());
+        insert(&connection, &canvas_n).unwrap();
+        // 普通节点 target_top 作为 e_top 的目标。
+        let target_top = node("cascade-target-top", "cascade-canvas-1");
+        insert(&connection, &target_top).unwrap();
+        // e_top：source_top 普通节点 → canvas_n（画布节点），按新规则在 canvas_inner 内产生顶级影子 s_top。
+        let source_top = node("cascade-source-top", "cascade-canvas-1");
+        insert(&connection, &source_top).unwrap();
+        let e_top = crate::business::user_database::entity::Edge {
+            id: "cascade-edge-top".to_string(),
+            canvas_id: "cascade-canvas-1".to_string(),
+            source_id: source_top.id.clone(),
+            source_port: "right".to_string(),
+            target_id: canvas_n.id.clone(),
+            target_port: "left".to_string(),
+            title: String::new(),
+            description: String::new(),
+        };
+        crate::business::user_database::edge::dao::insert(&connection, &e_top).unwrap();
+        // 顶级影子 s_top（位于 canvas_inner，shadow_id = e_top.id）。
+        let mut s_top = node("cascade-shadow-top", "cascade-canvas-inner");
+        s_top.shadow_id = Some(e_top.id.clone());
+        insert(&connection, &s_top).unwrap();
+        // canvas_inner 内普通节点 inner_target。
+        let inner_target = node("cascade-inner-target", "cascade-canvas-inner");
+        insert(&connection, &inner_target).unwrap();
+        // e_inner：s_top → inner_target（普通节点），按新规则不产生影子——为构造嵌套影子，改用
+        // s_top → canvas_n2（画布节点）使其在 canvas_inner 嵌套产生影子 s_inner。
+        let mut canvas_n2 = node("cascade-canvas-n2", "cascade-canvas-inner");
+        canvas_n2.canvas_ref_id = Some("cascade-canvas-inner2".to_string());
+        insert(&connection, &canvas_n2).unwrap();
+        let canvas_inner2 = crate::business::user_database::entity::Canvas {
+            id: "cascade-canvas-inner2".to_string(),
+            parent_id: None,
+            name: "Cascade Canvas Inner 2".to_string(),
+            x: 0.0,
+            y: 0.0,
+            deleted: false,
+            color: String::new(),
+        };
+        crate::business::user_database::canvas::dao::insert(&connection, &canvas_inner2).unwrap();
+        let e_inner = crate::business::user_database::entity::Edge {
+            id: "cascade-edge-inner".to_string(),
+            canvas_id: "cascade-canvas-inner".to_string(),
+            source_id: s_top.id.clone(),
+            source_port: "top".to_string(),
+            target_id: canvas_n2.id.clone(),
+            target_port: "bottom".to_string(),
+            title: String::new(),
+            description: String::new(),
+        };
+        crate::business::user_database::edge::dao::insert(&connection, &e_inner).unwrap();
+        let mut s_inner = node("cascade-shadow-inner", "cascade-canvas-inner2");
+        s_inner.shadow_id = Some(e_inner.id.clone());
+        insert(&connection, &s_inner).unwrap();
+
+        // 开启外键后删除最上游的 e_top。
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
+        crate::business::user_database::edge::dao::delete_by_id(&connection, &e_top.id).unwrap();
+        // 顶级影子 s_top 消失；相连边 e_inner 因 s_top 是其 source 端而被 source_id 外键级联；
+        // 嵌套影子 s_inner 随之消失。
+        assert!(select_by_id(&connection, &s_top.id).unwrap().is_none());
+        assert!(
+            crate::business::user_database::edge::dao::select_by_id(&connection, &e_inner.id)
+                .unwrap()
+                .is_none()
+        );
+        assert!(select_by_id(&connection, &s_inner.id).unwrap().is_none());
+        // 普通节点 inner_target 与画布节点 canvas_n2 不受影响（它们没有依赖任何被删除的边）。
+        assert!(select_by_id(&connection, &inner_target.id).unwrap().is_some());
+        assert!(select_by_id(&connection, &canvas_n2.id).unwrap().is_some());
     }
 }

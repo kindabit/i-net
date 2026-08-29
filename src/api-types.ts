@@ -79,6 +79,8 @@ export interface Node {
  * 影子节点的 title / sub_title / color / canvas_ref_id 已被后端合并为原始节点的值；
  * 普通节点的两个扩展字段均为 null。 */
 export interface NodeVO extends Node {
+  /** 影子节点根本体节点的 id；仅影子节点有值（沿产生边链解析到非影子节点） */
+  shadow_origin_id: string | null;
   /** 影子节点的原始节点是否已被逻辑删除；仅影子节点有值 */
   shadow_origin_deleted: boolean | null;
   /** 影子节点的方向；仅影子节点有值 */

@@ -257,6 +257,7 @@ pub fn batch_update_canvas_id(
 ///
 /// # 返回值
 /// 返回边是否存在的布尔值；若发生错误则返回对应的 `ErrorCode`。
+#[allow(dead_code)]
 pub fn exists_between(
     connection: &Connection,
     source_id: &str,
