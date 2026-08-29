@@ -88,7 +88,11 @@ defineExpose({
 
 <template>
   <Transition name="recycle-panel">
-    <div v-if="visible" class="recycle-bin-panel frosted-glass">
+    <div
+      v-if="visible"
+      v-click-outside="close"
+      class="recycle-bin-panel frosted-glass"
+    >
       <div class="recycle-bin-header">
         <span class="recycle-bin-title">
           {{ t("database.canvas.recycle-bin") }}
