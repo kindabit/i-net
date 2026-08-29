@@ -2,7 +2,6 @@
  * 后端实体（api-types）与 vue-flow 视图模型（VFNode/VFEdge）之间的转换。
  * 视图层与后端实体之间的结构换算统一收敛于此模块，组件内禁止内联构造。
  */
-import { MarkerType } from "@vue-flow/core";
 import type { Node as VFNode, Edge as VFEdge } from "@vue-flow/core";
 import type { Node, NodeVO, Edge } from "@/api-types";
 
@@ -54,7 +53,7 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
   };
 }
 
-/** 后端 Edge 转 VFEdge（含箭头端点）。data 中包含 title 和 description 供 CustomEdge 使用。 */
+/** 后端 Edge 转 VFEdge。data 中包含 title 和 description 供 CustomEdge 使用；箭头由 CustomEdge 自绘，无需声明 markerEnd。 */
 export function toVFEdge(edge: Edge): VFEdge {
   return {
     id: edge.id,
@@ -67,7 +66,6 @@ export function toVFEdge(edge: Edge): VFEdge {
       title: edge.title,
       description: edge.description,
     },
-    markerEnd: { type: MarkerType.ArrowClosed },
   };
 }
 

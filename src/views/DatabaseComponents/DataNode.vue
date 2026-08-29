@@ -28,6 +28,7 @@ import { isString } from "lodash";
 import { t } from "@/i18n";
 import { userDatabaseCanvasList } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
+import { highlightedNodeIds } from "@/composables/use-neighbor-highlight";
 import type { DataNodeData } from "@/vf-convert";
 import nodeMoveAndRelocate from "@/composables/use-node-move-and-relocate";
 import { setCanvasNavIntent } from "./canvas-route-transition";
@@ -75,6 +76,9 @@ const dropState = computed(() => {
   if (target.nodeId !== props.id) return null;
   return nodeMoveAndRelocate.nodeSetRelocatingLegality.value === "legal" ? "allow" : "forbid";
 });
+
+/** 邻居高亮状态：本节点是某条选中边的端点时为 true（与 selected 状态正交，可叠加） */
+const isNeighborHighlighted = computed(() => highlightedNodeIds.value.has(props.id));
 
 /**
  * 双击节点卡片：出向影子（画布节点的影子）钻入根本体画布节点引用的子画布，
@@ -129,6 +133,7 @@ async function onShadowVirtualEdgeClick() {
     class="data-node-card"
     :class="{
       'data-node-card--selected': selected,
+      'data-node-card--neighbor-highlighted': isNeighborHighlighted,
       'data-node-card--shadow': !!data.shadowId,
       'data-node-card--origin-deleted': !!data.shadowOriginDeleted,
       'data-node-card--drop-allow': dropState === 'allow',
@@ -288,6 +293,14 @@ async function onShadowVirtualEdgeClick() {
   &--selected {
     border-color: rgb(var(--v-theme-primary));
     box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.2);
+  }
+
+  // 邻居高亮（选中边的端点）：primary 半透明光晕。规则位于 --selected 之后，
+  // 同时选中且被邻居高亮时本规则的 box-shadow 覆盖 --selected 的纯阴影，呈现"选中边框 + 光晕"叠加态
+  &--neighbor-highlighted {
+    box-shadow:
+      0 0 0 0.25rem rgba(var(--v-theme-primary), 0.35),
+      0 0.25rem 1rem rgba(0, 0, 0, 0.2);
   }
 
   // 影子节点：虚线边框 + 略降透明度，dashed 与选中边框色正交

@@ -39,6 +39,7 @@ import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { isErrorCode } from "@/error-code";
 import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
+import { setupNeighborHighlight } from "@/composables/use-neighbor-highlight";
 import nodeMoveAndRelocate, { type Mode, type RelocatingLegality, type RelocatingTarget } from "@/composables/use-node-move-and-relocate.ts";
 import { blurOutRelocated } from "@/composables/use-relocate-animation";
 import { useRecycleBin } from "@/composables/use-recycle-bin";
@@ -104,6 +105,8 @@ const edges: Ref<VFEdge[]> = ref([]);
 const viewport = useViewportPersistence(canvasId, containerRef);
 const recycleBin = useRecycleBin(canvasId);
 const loaded = ref(false);
+// 邻居高亮：同步 vue-flow 选中状态到模块级，驱动 DataNode/CustomEdge 的高亮样式
+setupNeighborHighlight(edges);
 
 // 加载和卸载
 onMounted(async () => {

@@ -5,10 +5,14 @@
    标题始终显示在边的中点位置，鼠标悬浮时显示详情 tooltip。
    当标题和详情均为空时不渲染任何标签。
    使用 De Casteljau 算法在 t=0.5 处拆分曲线，实现标题打断边的效果。
+   箭头为组件自绘（vue-flow 的 markerEnd 在 EdgeProps 中已序列化为 SVG url，无法在组件层改色，
+   故忽略该 prop 并自绘 polygon 箭头，使箭头颜色随选中/高亮状态与边线同步变化）。
+   选中（selected）时边线与箭头为实色 primary 并加粗；被邻居高亮（选中节点的相连边）时为半透明 primary 并加粗。
   -->
 <script setup lang="ts">
 import { EdgeLabelRenderer, type EdgeProps } from "@vue-flow/core";
 import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { highlightedEdgeIds } from "@/composables/use-neighbor-highlight";
 
 const props = defineProps<EdgeProps>();
 
@@ -155,6 +159,65 @@ const midPoint = computed(() => {
   return point;
 });
 
+/** 是否被直接选中（EdgeProps.selected 为可选，undefined 视为未选中） */
+const isSelected = computed(() => props.selected === true);
+
+/** 是否被邻居高亮（本边与某个选中节点相连，由模块级邻居高亮状态驱动） */
+const isNeighborHighlighted = computed(() => highlightedEdgeIds.value.has(props.id));
+
+/** 边线宽度（SVG 用户单位，随画布缩放）：选中或高亮时加粗 */
+const strokeWidth = computed(() => (isSelected.value || isNeighborHighlighted.value ? 3 : 2));
+
+/**
+ * g 元素的颜色样式：currentColor 由此派生；选中实色 primary，高亮半透明 primary。
+ * 默认显式沿用 vue-flow 主题灰 #b1b1b7（原外观：线段由 style.css 锁定该色，箭头由 defaultMarkerColor 默认该色），
+ * 不继承文本色，保证非选中非高亮时外观与改动前一致。
+ */
+const edgeColorStyle = computed(() => {
+  if (isSelected.value) return { color: "rgb(var(--v-theme-primary))" };
+  if (isNeighborHighlighted.value) return { color: "rgba(var(--v-theme-primary), 0.55)" };
+  return { color: "#b1b1b7" };
+});
+
+/**
+ * 边线内联样式：vue-flow 的 style.css 用 CSS 规则锁定了 .vue-flow__edge-path 的 stroke/stroke-width
+ * （含选中态 #555），presentation attribute 优先级不足无法生效，故改用内联样式（特异性最高）驱动。
+ * 颜色沿用 currentColor 机制，由 g 元素的 color 样式派生，与自绘箭头保持一致。
+ */
+const edgePathStyle = computed(() => ({
+  stroke: "currentColor",
+  strokeWidth: strokeWidth.value,
+}));
+
+/**
+ * 自绘箭头路径：实心三角形，尖端在 path2 终点，朝向由曲线末端控制点（cp2）指向终点（p1）的向量决定。
+ * 箭头尺寸为 SVG 用户单位（随画布缩放），颜色由 fill="currentColor" 继承 g 元素的 color 样式。
+ * 输入：无（依赖 props 中的坐标与 handle 方位）。
+ * 返回：SVG path 字符串；曲线退化（控制点与终点重合）时返回空串不渲染。
+ */
+const arrowPath = computed(() => {
+  const { cp2, p1 } = computeControlPoints();
+  const dx = p1.x - cp2.x;
+  const dy = p1.y - cp2.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return "";
+  const ux = dx / len;
+  const uy = dy / len;
+  // 箭头长度与半宽（SVG 用户单位，视觉尺寸对齐 vue-flow 的 ArrowClosed marker）
+  const size = 10;
+  const halfWidth = 6;
+  // 垂直于箭头朝向的单位向量（用于展开两翼）
+  const px = -uy;
+  const py = ux;
+  const baseX = p1.x - ux * size;
+  const baseY = p1.y - uy * size;
+  const leftX = baseX + px * halfWidth;
+  const leftY = baseY + py * halfWidth;
+  const rightX = baseX - px * halfWidth;
+  const rightY = baseY - py * halfWidth;
+  return `M ${p1.x},${p1.y} L ${leftX},${leftY} L ${rightX},${rightY} Z`;
+});
+
 /** 测量标题标签的实际宽度 */
 function measureLabel(): void {
   if (labelRef.value) {
@@ -188,7 +251,7 @@ export default {
 </script>
 
 <template>
-  <g>
+  <g :style="edgeColorStyle">
     <path
       :d="hitAreaPath"
       fill="none"
@@ -200,18 +263,16 @@ export default {
     <path
       :d="path1"
       fill="none"
-      stroke="currentColor"
-      stroke-width="2"
+      :style="edgePathStyle"
       class="vue-flow__edge-path"
     />
     <path
       :d="path2"
       fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      :marker-end="markerEnd"
+      :style="edgePathStyle"
       class="vue-flow__edge-path"
     />
+    <path v-if="arrowPath" :d="arrowPath" fill="currentColor" stroke="none" />
   </g>
 
   <EdgeLabelRenderer>
