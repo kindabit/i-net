@@ -2078,6 +2078,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "rand",
  "reed-solomon-erasure",
+ "rfd",
  "rusqlite",
  "serde",
  "serde_json",

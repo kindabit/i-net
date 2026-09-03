@@ -3,6 +3,7 @@ mod business;
 mod common;
 mod error_code;
 mod security;
+mod startup_error;
 mod state;
 #[cfg(test)]
 mod test;
@@ -192,8 +193,13 @@ pub fn run(argv: argv::ArgV) {
             initialize_logging(&path.log_directory);
             // tauri 不再托管状态，路径状态与数据库连接状态由各模块手动管理。
             state::set_path(path);
-            business::preference::service::initialize().expect("failed to initialize preference database");
-            business::metadata::service::initialize().expect("failed to initialize metadata database");
+            // 启动期初始化失败时错误无法到达前端，由 startup_error 模块弹原生阻塞对话框提示后退出进程。
+            if let Err(error) = business::preference::service::initialize() {
+                startup_error::abort(startup_error::Database::Preference, &error);
+            }
+            if let Err(error) = business::metadata::service::initialize() {
+                startup_error::abort(startup_error::Database::Metadata, &error);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

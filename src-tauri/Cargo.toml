@@ -36,6 +36,9 @@ sysinfo = "0.39.2"
 rusqlite = { version = "0.40.1", features = ["bundled", "serialize"] }
 rand = "0.10.1"
 tauri-plugin-dialog = "2"
+# 启动期错误提示使用 rfd 原生阻塞对话框（tauri-plugin-dialog 的对话框派发依赖
+# 事件循环，setup 阶段事件循环尚未启动不可用）；feature 与 tauri-plugin-dialog 保持一致。
+rfd = { version = "0.16", default-features = false, features = ["common-controls-v6"] }
 uuid = { version = "1", features = ["v4"] }
 arboard = "3"
 clap = { version = "4", features = ["derive"] }
