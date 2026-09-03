@@ -18,9 +18,8 @@ fn map_field_row(row: &Row) -> rusqlite::Result<TemplateField> {
         template_id: row.get(0)?,
         name: row.get(1)?,
         field_type: row.get(2)?,
-        type_config: row.get(3)?,
-        order: row.get(4)?,
-        dictionary_id: row.get(5)?,
+        order: row.get(3)?,
+        dictionary_id: row.get(4)?,
     })
 }
 
@@ -50,7 +49,6 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 template_id TEXT NOT NULL REFERENCES template(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 field_type TEXT NOT NULL,
-                type_config TEXT,
                 \"order\" INTEGER NOT NULL,
                 dictionary_id TEXT,
                 PRIMARY KEY (template_id, name)
@@ -267,13 +265,12 @@ pub fn max_order(connection: &Connection) -> Result<i64, ErrorCode> {
 pub fn insert_field(connection: &Connection, field: &TemplateField) -> Result<(), ErrorCode> {
     connection
         .execute(
-            "INSERT INTO template_field (template_id, name, field_type, type_config, \"order\", dictionary_id)
-            VALUES (:template_id, :name, :field_type, :type_config, :order, :dictionary_id)",
+            "INSERT INTO template_field (template_id, name, field_type, \"order\", dictionary_id)
+            VALUES (:template_id, :name, :field_type, :order, :dictionary_id)",
             rusqlite::named_params! {
                 ":template_id": field.template_id,
                 ":name": field.name,
                 ":field_type": field.field_type,
-                ":type_config": field.type_config,
                 ":order": field.order,
                 ":dictionary_id": field.dictionary_id,
             },
@@ -298,7 +295,7 @@ pub fn select_fields_by_template_id(
 ) -> Result<Vec<TemplateField>, ErrorCode> {
     let mut statement = connection
         .prepare(
-            "SELECT template_id, name, field_type, type_config, \"order\", dictionary_id
+            "SELECT template_id, name, field_type, \"order\", dictionary_id
             FROM template_field
             WHERE template_id = :template_id
             ORDER BY \"order\" ASC",
@@ -384,8 +381,7 @@ mod tests {
         TemplateField {
             template_id: template_id.to_string(),
             name: name.to_string(),
-            field_type: "text".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             order,
             dictionary_id: None,
         }
@@ -494,9 +490,8 @@ mod tests {
         assert_eq!(fields[1].name, "f2");
         assert_eq!(fields[2].name, "f3");
 
-        // type_config / dictionary_id 为 Some 和 None 的往返一致。
+        // dictionary_id 为 Some 和 None 的往返一致。
         let mut rich = tf("t3", "rich", 1);
-        rich.type_config = Some(r#"{"precision":"day"}"#.to_string());
         rich.dictionary_id = Some("dict-1".to_string());
         let t3 = tmpl("t3-x", "tpl-3-x", 40);
         insert(&connection, &t3).unwrap();
@@ -505,7 +500,6 @@ mod tests {
         insert_field(&connection, &rich).unwrap();
         let selected = select_fields_by_template_id(&connection, "t3-x").unwrap();
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].type_config.as_deref(), Some(r#"{"precision":"day"}"#));
         assert_eq!(selected[0].dictionary_id.as_deref(), Some("dict-1"));
 
         // insert_field 失败路径：联合主键重复报 DatabaseError。

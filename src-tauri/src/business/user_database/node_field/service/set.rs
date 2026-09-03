@@ -1,16 +1,39 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::business::user_database::entity::{Action, NodeField, NodeFieldChange};
-use crate::business::user_database::field_type::{self, FieldValue};
 use crate::business::user_database::node::dao as node_dao;
 use crate::business::user_database::node_field::dao;
 use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::{dictionary, log, state};
 use crate::error_code::ErrorCode;
 
+/// 将字段值密文解密为明文字符串；blob 为 None 时返回 None。
+/// 解密成功但明文不是合法 UTF-8 时返回 `ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8`。
+fn decrypt_value(
+    node_id: &str,
+    name: &str,
+    blob: Option<Vec<u8>>,
+    key: &[u8; 32],
+) -> Result<Option<String>, ErrorCode> {
+    let blob = match blob {
+        Some(b) => b,
+        None => return Ok(None),
+    };
+    let plaintext = crate::security::aes::decrypt(blob, *key)?;
+    let value = String::from_utf8(plaintext).map_err(|_| {
+        ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8 {
+            node_id: node_id.to_string(),
+            name: name.to_string(),
+        }
+    })?;
+    Ok(Some(value))
+}
+
 /// 设置指定节点的字段集合（全量覆盖）：先删除旧字段再逐条插入新字段。
 /// 生成 NodeFieldsModify 日志记录逐字段变更（Added / Modified / Removed），
-/// 无变更时不产生日志。type_config / dictionary_id / order 的变化不纳入 diff。
+/// 无变更时不产生日志。dictionary_id / order 的变化不纳入 diff。
+///
+/// 字段类型与字段值的内容对后端不透明，此处仅校验字段名唯一性与字典引用存在性。
 ///
 /// # 参数
 /// - `node_id`: 节点 id。
@@ -42,16 +65,7 @@ pub fn set(node_id: &str, fields: &[NodeFieldVO]) -> Result<(), ErrorCode> {
     }
 
     for f in fields {
-        let def = field_type::field_type_def(&f.field_type)?;
-        field_type::validate_type_config(def, &f.type_config)?;
-        field_type::validate_field_value(def, &f.name, &f.value)?;
-
         if let Some(ref dict_id) = f.dictionary_id {
-            if !def.supports_dictionary {
-                return Err(ErrorCode::FieldTypeNotSupportDictionary {
-                    field_type: f.field_type.clone(),
-                });
-            }
             if !dictionary::dao::exist_by_id(&connection, dict_id)? {
                 return Err(ErrorCode::NoDictionaryEntryWithSuchId {
                     id: dict_id.clone(),
@@ -62,31 +76,23 @@ pub fn set(node_id: &str, fields: &[NodeFieldVO]) -> Result<(), ErrorCode> {
 
     let key = state::key();
     let old_fields = dao::select_by_node_id(&connection, node_id)?;
-    let mut old_map: HashMap<&str, (String, FieldValue)> = HashMap::new();
+    let mut old_map: HashMap<&str, (String, Option<String>)> = HashMap::new();
     for old in &old_fields {
-        let value = field_type::decode(&old.field_type, old.field_value.clone(), &key)?;
+        let value = decrypt_value(node_id, &old.name, old.field_value.clone(), &key)?;
         old_map.insert(old.name.as_str(), (old.field_type.clone(), value));
     }
 
     dao::delete_by_node_id(&connection, node_id)?;
 
     for (i, f) in fields.iter().enumerate() {
-        let field_value = field_type::encode(&f.value, &key)?;
-        let type_config = match &f.type_config {
-            Some(v) => {
-                Some(serde_json::to_string(v).map_err(|e| {
-                    ErrorCode::FailToDeserializeNodeFieldValue {
-                        detail: format!("Failed to serialize type_config: {e}"),
-                    }
-                })?)
-            }
+        let field_value = match &f.value {
+            Some(s) => Some(crate::security::aes::encrypt(s.as_bytes().to_vec(), key)?),
             None => None,
         };
         let node_field = NodeField {
             node_id: node_id.to_string(),
             name: f.name.clone(),
             field_type: f.field_type.clone(),
-            type_config,
             field_value,
             order: i as i64,
             dictionary_id: f.dictionary_id.clone(),

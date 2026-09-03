@@ -7,7 +7,6 @@ use crate::business::user_database::canvas::dao as canvas_dao;
 use crate::business::user_database::edge::dao as edge_dao;
 use crate::business::user_database::entity::{Canvas, Edge, Node};
 use crate::business::user_database::export::service::i18n::{text_for, ExportText};
-use crate::business::user_database::field_type::FieldValue;
 use crate::business::user_database::node::dao as node_dao;
 use crate::business::user_database::node_field;
 use crate::business::user_database::state;
@@ -196,11 +195,8 @@ fn handle_node(
     if mode != ExportMode::ExcludeFields {
         let fields = node_field::service::get(&node.id)?;
         if !fields.is_empty() {
-            md.push_str(&format!(
-                "| {} | {} | {} |\n",
-                text.field_name, text.field_type, text.field_value
-            ));
-            md.push_str("| --- | --- | --- |\n");
+            md.push_str(&format!("| {} | {} |\n", text.field_name, text.field_value));
+            md.push_str("| --- | --- |\n");
             for field in &fields {
                 let value_str = format_field_value(&field.value);
                 let display_value = match mode {
@@ -209,9 +205,8 @@ fn handle_node(
                     ExportMode::ExcludeFields => unreachable!(),
                 };
                 md.push_str(&format!(
-                    "| {} | {} | {} |\n",
+                    "| {} | {} |\n",
                     escape_cell(&field.name),
-                    escape_cell(&field.field_type),
                     escape_cell(&display_value),
                 ));
             }
@@ -251,26 +246,10 @@ fn write_edge_line(md: &mut String, edge: &Edge, node_map: &HashMap<&str, &Node>
     }
 }
 
-/// 将字段值格式化为可读字符串：None 显示空字符串，Instant/InstantRange 格式化为本地时间。
-fn format_field_value(value: &FieldValue) -> String {
-    match value {
-        FieldValue::String(None) | FieldValue::Decimal(None) => String::new(),
-        FieldValue::String(Some(s)) | FieldValue::Decimal(Some(s)) => s.clone(),
-        FieldValue::Instant(None) | FieldValue::InstantRange(None) => String::new(),
-        FieldValue::Instant(Some(ts)) => format_timestamp(*ts),
-        FieldValue::InstantRange(Some((start, end))) => {
-            format!("{} - {}", format_timestamp(*start), format_timestamp(*end))
-        }
-    }
-}
-
-/// 将毫秒时间戳格式化为本地时区的 YYYY-MM-DD HH:mm:ss 字符串。
-fn format_timestamp(millis: i64) -> String {
-    use chrono::{Local, TimeZone};
-    match Local.timestamp_millis_opt(millis).single() {
-        Some(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
-        None => String::new(),
-    }
+/// 将字段值格式化为可读字符串：None 显示空字符串，Some 时原样输出。
+/// 字段值内容对后端不透明，此处不做任何解析。
+fn format_field_value(value: &Option<String>) -> String {
+    value.clone().unwrap_or_default()
 }
 
 /// 对表格单元格内容转义：`|` 转义为 `\|`，换行替换为 `<br>`。
@@ -306,7 +285,6 @@ pub fn mask(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::business::metadata;
-    use crate::business::user_database::field_type::FieldValue;
     use crate::business::user_database::node_field::vo::NodeFieldVO;
     use crate::test;
     use crate::util::file_system_util;
@@ -408,22 +386,20 @@ mod tests {
         )
         .unwrap();
 
-        // 为 Node A 设置字段：String 明文值 + None 值。
+        // 为 Node A 设置字段：明文字段值 + None 值。
         crate::business::user_database::node_field::service::set(
             &node_a.id,
             &[
                 NodeFieldVO {
                     name: "secret".to_string(),
-                    field_type: "TextSingleLine".to_string(),
-                    type_config: None,
-                    value: FieldValue::String(Some("plaintext-secret".to_string())),
+                    field_type: "string:password".to_string(),
+                    value: Some("plaintext-secret".to_string()),
                     dictionary_id: None,
                 },
                 NodeFieldVO {
                     name: "empty-field".to_string(),
-                    field_type: "TextSingleLine".to_string(),
-                    type_config: None,
-                    value: FieldValue::String(None),
+                    field_type: "string:single-line".to_string(),
+                    value: None,
                     dictionary_id: None,
                 },
             ],
@@ -435,9 +411,8 @@ mod tests {
             &node_c.id,
             &[NodeFieldVO {
                 name: "note".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("child-note".to_string())),
+                field_type: "string:single-line".to_string(),
+                value: Some("child-note".to_string()),
                 dictionary_id: None,
             }],
         )
@@ -504,8 +479,10 @@ mod tests {
         assert!(file_system_util::try_exists(&mask_path).unwrap());
         let content =
             String::from_utf8(file_system_util::read(&mask_path).unwrap()).unwrap();
-        // 包含字段表格。
-        assert!(content.contains("| 字段名 |"));
+        // 包含字段表格（仅字段名与值两列，不含字段类型）。
+        assert!(content.contains("| 字段名 | 值 |"));
+        assert!(!content.contains("string:password"));
+        assert!(!content.contains("string:single-line"));
         // 字段值已打码：plaintext-secret（16 字符）→ 保留前 3 后 3，中间 10 个 *。
         assert!(content.contains("pla**********ret"));
         // 不含原明文。
@@ -556,7 +533,8 @@ mod tests {
         assert!(en_content.contains("Canvas: root"));
         assert!(en_content.contains("Node: Node A"));
         assert!(en_content.contains("Subtitle: sub-a"));
-        assert!(en_content.contains("| Name | Type | Value |"));
+        assert!(en_content.contains("| Name | Value |"));
+        assert!(!en_content.contains("string:password"));
         assert!(en_content.contains("Relationships"));
         assert!(en_content.contains("plaintext-secret"));
         assert!(en_content.contains("Node A --[]--> Node B"));

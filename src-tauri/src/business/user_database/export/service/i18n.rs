@@ -25,8 +25,6 @@ pub struct ExportText {
     pub relationships: &'static str,
     /// 字段表格"字段名"列表头。
     pub field_name: &'static str,
-    /// 字段表格"类型"列表头。
-    pub field_type: &'static str,
     /// 字段表格"值"列表头。
     pub field_value: &'static str,
     /// 边行内详情前的分隔符（中文用全角冒号，英文用半角冒号加空格）。
@@ -54,7 +52,6 @@ pub fn text_for(locale: &str) -> ExportText {
             sub_title: "副标题：",
             relationships: "关系",
             field_name: "字段名",
-            field_type: "类型",
             field_value: "值",
             edge_desc_sep: "：",
         }
@@ -71,7 +68,6 @@ pub fn text_for(locale: &str) -> ExportText {
             sub_title: "Subtitle: ",
             relationships: "Relationships",
             field_name: "Name",
-            field_type: "Type",
             field_value: "Value",
             edge_desc_sep: ": ",
         }

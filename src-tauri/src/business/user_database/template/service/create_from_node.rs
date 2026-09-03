@@ -40,7 +40,6 @@ pub fn create_from_node(node_id: &str, name: String) -> Result<Template, ErrorCo
             template_id: template_id.clone(),
             name: nf.name.clone(),
             field_type: nf.field_type.clone(),
-            type_config: nf.type_config.clone(),
             order: i as i64,
             dictionary_id: nf.dictionary_id.clone(),
         };

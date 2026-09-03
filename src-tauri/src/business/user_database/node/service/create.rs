@@ -131,7 +131,6 @@ fn copy_template_fields(
             node_id: node_id.to_string(),
             name: tpl_field.name,
             field_type: tpl_field.field_type,
-            type_config: tpl_field.type_config,
             field_value: None,
             order: tpl_field.order,
             dictionary_id: tpl_field.dictionary_id,

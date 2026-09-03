@@ -35,11 +35,9 @@ sha2 = "0.11"
 sysinfo = "0.39.2"
 rusqlite = { version = "0.40.1", features = ["bundled", "serialize"] }
 rand = "0.10.1"
-regex = "1"
 tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4"] }
 arboard = "3"
-bigdecimal = "0.4"
 clap = { version = "4", features = ["derive"] }
 parking_lot = "0.12"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

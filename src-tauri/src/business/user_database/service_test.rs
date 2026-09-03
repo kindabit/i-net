@@ -1,7 +1,6 @@
 use super::*;
 use crate::business::metadata;
 use crate::business::user_database::entity::Dictionary;
-use crate::business::user_database::field_type::FieldValue;
 use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::template::vo::TemplateFieldVO;
 use crate::error_code::ErrorCode;
@@ -1044,16 +1043,14 @@ fn test_user_database_service_all_functions() {
     let dup_fields = vec![
         NodeFieldVO {
             name: "dup".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("a".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("a".to_string()),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "dup".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("b".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("b".to_string()),
             dictionary_id: None,
         },
     ];
@@ -1062,133 +1059,57 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::DuplicateNodeFieldName { .. })
     ));
 
-    // == node_field::set 失败路径：非法 field_type → InvalidNodeFieldType ==
-    assert!(matches!(
-        node_field::service::set(
-            &node.id,
-            &[NodeFieldVO {
-                name: "bad-type".to_string(),
-                field_type: "NoSuchType".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("x".to_string())),
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::InvalidNodeFieldType { .. })
-    ));
-
-    // == node_field::set 失败路径：kind 不匹配（String 值配 Date 类型）→ NodeFieldValueKindMismatch ==
-    assert!(matches!(
-        node_field::service::set(
-            &node.id,
-            &[NodeFieldVO {
-                name: "kind-mismatch".to_string(),
-                field_type: "Date".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("2024-01-01".to_string())),
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::NodeFieldValueKindMismatch { .. })
-    ));
-
-    // == node_field::set 失败路径：值非法（"abc" 配 Number 类型）→ NodeFieldValueValidationFailed ==
-    assert!(matches!(
-        node_field::service::set(
-            &node.id,
-            &[NodeFieldVO {
-                name: "bad-value".to_string(),
-                field_type: "Number".to_string(),
-                type_config: None,
-                value: FieldValue::Decimal(Some("abc".to_string())),
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::NodeFieldValueValidationFailed { .. })
-    ));
-
-    // == node_field::set 失败路径：type_config 非法（Date 配 {"precision":"week"}）→ InvalidNodeFieldTypeConfig ==
-    assert!(matches!(
-        node_field::service::set(
-            &node.id,
-            &[NodeFieldVO {
-                name: "bad-config".to_string(),
-                field_type: "Date".to_string(),
-                type_config: Some(serde_json::json!({"precision": "week"})),
-                value: FieldValue::Instant(Some(1000)),
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::InvalidNodeFieldTypeConfig { .. })
-    ));
-
     // == node_field::set 失败路径：dictionary_id 不存在 → NoDictionaryEntryWithSuchId ==
     assert!(matches!(
         node_field::service::set(
             &node.id,
             &[NodeFieldVO {
                 name: "dict-missing".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("x".to_string())),
+                field_type: "string:single-line".to_string(),
+                value: Some("x".to_string()),
                 dictionary_id: Some(uuid::Uuid::new_v4().to_string()),
             }]
         ),
         Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
     ));
 
-    // == node_field::set 失败路径：Password 不支持字典 → FieldTypeNotSupportDictionary ==
-    assert!(matches!(
-        node_field::service::set(
-            &node.id,
-            &[NodeFieldVO {
-                name: "password-dict".to_string(),
-                field_type: "Password".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("pw".to_string())),
-                dictionary_id: Some(dict_a.id.clone()),
-            }]
-        ),
-        Err(ErrorCode::FieldTypeNotSupportDictionary { .. })
-    ));
-
-    // == node_field::set 成功路径：覆盖 string/decimal/instant/instantRange 四种值、
-    //    带 type_config 的 Date、带 dictionary_id 的 TextSingleLine ==
-    let now = 1712345678000i64;
+    // == node_field::set 成功路径：覆盖多种字段类型的字段值字符串与带 dictionary_id 的字段。
+    //    后端不校验字段类型与值内容，value 原样加密存取 ==
     let fields = vec![
         NodeFieldVO {
             name: "文本".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("hello".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("hello".to_string()),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "数字".to_string(),
-            field_type: "Number".to_string(),
-            type_config: None,
-            value: FieldValue::Decimal(Some("123.456".to_string())),
+            field_type: "decimal:decimal".to_string(),
+            value: Some("123.456".to_string()),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "日期".to_string(),
-            field_type: "Date".to_string(),
-            type_config: Some(serde_json::json!({"precision": "day"})),
-            value: FieldValue::Instant(Some(now)),
+            field_type: "instant:instant".to_string(),
+            value: Some(
+                "2024-04-05 12:34:38.000|+8"
+                    .to_string(),
+            ),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "日期区间".to_string(),
-            field_type: "DateRange".to_string(),
-            type_config: None,
-            value: FieldValue::InstantRange(Some((1000, 2000))),
+            field_type: "instant-range:instant-range".to_string(),
+            value: Some(
+                "2024-01-01 00:00:00.000 ~ 2024-12-31 23:59:59.999|+8"
+                    .to_string(),
+            ),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "字典引用".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("x".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("x".to_string()),
             dictionary_id: Some(dict_a.id.clone()),
         },
     ];
@@ -1203,40 +1124,24 @@ fn test_user_database_service_all_functions() {
     assert_eq!(got[3], fields[3]);
     assert_eq!(got[4], fields[4]);
 
-    // == set 成功路径：四种类型的无值字段（各变体 None）set/get 往返 ==
+    // == set 成功路径：无值字段（value 为 None）set/get 往返 ==
     let none_fields = vec![
         NodeFieldVO {
             name: "空文本".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(None),
-            dictionary_id: None,
-        },
-        NodeFieldVO {
-            name: "空数字".to_string(),
-            field_type: "Number".to_string(),
-            type_config: None,
-            value: FieldValue::Decimal(None),
+            field_type: "string:single-line".to_string(),
+            value: None,
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "空日期".to_string(),
-            field_type: "Date".to_string(),
-            type_config: None,
-            value: FieldValue::Instant(None),
-            dictionary_id: None,
-        },
-        NodeFieldVO {
-            name: "空日期区间".to_string(),
-            field_type: "DateRange".to_string(),
-            type_config: None,
-            value: FieldValue::InstantRange(None),
+            field_type: "instant:instant".to_string(),
+            value: None,
             dictionary_id: None,
         },
     ];
     node_field::service::set(&node.id, &none_fields).unwrap();
     let got_none = node_field::service::get(&node.id).unwrap();
-    assert_eq!(got_none.len(), 4);
+    assert_eq!(got_none.len(), 2);
     for (i, f) in none_fields.iter().enumerate() {
         assert_eq!(got_none[i], *f);
     }
@@ -1289,9 +1194,8 @@ fn test_user_database_service_all_functions() {
         &node.id,
         &[NodeFieldVO {
             name: "引用A".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("y".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("y".to_string()),
             dictionary_id: Some(dict_a.id.clone()),
         }],
     )
@@ -1305,9 +1209,8 @@ fn test_user_database_service_all_functions() {
     // == node_field::set 覆盖写语义：先删后插，get 只剩新集合 ==
     let overwrite = vec![NodeFieldVO {
         name: "覆盖字段".to_string(),
-        field_type: "TextSingleLine".to_string(),
-        type_config: None,
-        value: FieldValue::String(Some("overwritten".to_string())),
+        field_type: "string:single-line".to_string(),
+        value: Some("overwritten".to_string()),
         dictionary_id: None,
     }];
     node_field::service::set(&node.id, &overwrite).unwrap();
@@ -1332,16 +1235,14 @@ fn test_user_database_service_all_functions() {
     // 首次给无字段节点 set 两个字段 → 一条 NodeFieldsModify，changes 为两个 Added。
     let f1 = NodeFieldVO {
         name: "f1".to_string(),
-        field_type: "TextSingleLine".to_string(),
-        type_config: None,
-        value: FieldValue::String(Some("hello".to_string())),
+        field_type: "string:single-line".to_string(),
+        value: Some("hello".to_string()),
         dictionary_id: None,
     };
     let f2 = NodeFieldVO {
         name: "f2".to_string(),
-        field_type: "Number".to_string(),
-        type_config: None,
-        value: FieldValue::Decimal(Some("13.5".to_string())),
+        field_type: "decimal:decimal".to_string(),
+        value: Some("13.5".to_string()),
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1.clone(), f2.clone()]).unwrap();
@@ -1366,10 +1267,10 @@ fn test_user_database_service_all_functions() {
     assert_eq!(first_changes.len(), 2);
     assert!(matches!(&first_changes[0],
         entity::NodeFieldChange::Added { name, field_type, value }
-        if name == "f1" && field_type == "TextSingleLine" && value == &FieldValue::String(Some("hello".to_string()))));
+        if name == "f1" && field_type == "string:single-line" && value == &Some("hello".to_string())));
     assert!(matches!(&first_changes[1],
         entity::NodeFieldChange::Added { name, field_type, value }
-        if name == "f2" && field_type == "Number" && value == &FieldValue::Decimal(Some("13.5".to_string()))));
+        if name == "f2" && field_type == "decimal:decimal" && value == &Some("13.5".to_string())));
 
     // 再次 set 完全相同的内容 → 不产生新的 NodeFieldsModify 日志（日志总数不变）。
     node_field::service::set(&log_node.id, &[f1.clone(), f2.clone()]).unwrap();
@@ -1379,9 +1280,8 @@ fn test_user_database_service_all_functions() {
     // 修改 f1 的值 → 一条 Modified（old_value / new_value 正确）。
     let f1_modified = NodeFieldVO {
         name: "f1".to_string(),
-        field_type: "TextSingleLine".to_string(),
-        type_config: None,
-        value: FieldValue::String(Some("updated".to_string())),
+        field_type: "string:single-line".to_string(),
+        value: Some("updated".to_string()),
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_modified, f2.clone()]).unwrap();
@@ -1403,16 +1303,15 @@ fn test_user_database_service_all_functions() {
     assert!(matches!(&value_changes[0],
         entity::NodeFieldChange::Modified { name, old_field_type, new_field_type, old_value, new_value }
         if name == "f1"
-        && old_field_type == "TextSingleLine" && new_field_type == "TextSingleLine"
-        && old_value == &FieldValue::String(Some("hello".to_string()))
-        && new_value == &FieldValue::String(Some("updated".to_string()))));
+        && old_field_type == "string:single-line" && new_field_type == "string:single-line"
+        && old_value == &Some("hello".to_string())
+        && new_value == &Some("updated".to_string())));
 
-    // 修改 f1 的类型（TextSingleLine → Number）→ 一条 Modified（old/new field_type 正确）。
+    // 修改 f1 的类型（string:single-line → decimal:decimal）→ 一条 Modified（old/new field_type 正确）。
     let f1_type_change = NodeFieldVO {
         name: "f1".to_string(),
-        field_type: "Number".to_string(),
-        type_config: None,
-        value: FieldValue::Decimal(Some("42".to_string())),
+        field_type: "decimal:decimal".to_string(),
+        value: Some("42".to_string()),
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_type_change.clone(), f2.clone()]).unwrap();
@@ -1434,9 +1333,9 @@ fn test_user_database_service_all_functions() {
     assert!(matches!(&type_changes[0],
         entity::NodeFieldChange::Modified { name, old_field_type, new_field_type, old_value, new_value }
         if name == "f1"
-        && old_field_type == "TextSingleLine" && new_field_type == "Number"
-        && old_value == &FieldValue::String(Some("updated".to_string()))
-        && new_value == &FieldValue::Decimal(Some("42".to_string()))));
+        && old_field_type == "string:single-line" && new_field_type == "decimal:decimal"
+        && old_value == &Some("updated".to_string())
+        && new_value == &Some("42".to_string())));
 
     // 删除 f2 → 一条 Removed。
     node_field::service::set(&log_node.id, &[f1_type_change.clone()]).unwrap();
@@ -1457,14 +1356,13 @@ fn test_user_database_service_all_functions() {
     assert_eq!(remove_changes.len(), 1);
     assert!(matches!(&remove_changes[0],
         entity::NodeFieldChange::Removed { name, field_type, old_value }
-        if name == "f2" && field_type == "Number" && old_value == &FieldValue::Decimal(Some("13.5".to_string()))));
+        if name == "f2" && field_type == "decimal:decimal" && old_value == &Some("13.5".to_string())));
 
     // 字段改名（f1 → f1-renamed）→ 一条 Removed（旧名）+ 一条 Added（新名）。
     let f1_renamed = NodeFieldVO {
         name: "f1-renamed".to_string(),
-        field_type: "Number".to_string(),
-        type_config: None,
-        value: FieldValue::Decimal(Some("42".to_string())),
+        field_type: "decimal:decimal".to_string(),
+        value: Some("42".to_string()),
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_renamed]).unwrap();
@@ -1485,10 +1383,10 @@ fn test_user_database_service_all_functions() {
     assert_eq!(rename_changes.len(), 2);
     assert!(matches!(&rename_changes[0],
         entity::NodeFieldChange::Removed { name, field_type, old_value }
-        if name == "f1" && field_type == "Number" && old_value == &FieldValue::Decimal(Some("42".to_string()))));
+        if name == "f1" && field_type == "decimal:decimal" && old_value == &Some("42".to_string())));
     assert!(matches!(&rename_changes[1],
         entity::NodeFieldChange::Added { name, field_type, value }
-        if name == "f1-renamed" && field_type == "Number" && value == &FieldValue::Decimal(Some("42".to_string()))));
+        if name == "f1-renamed" && field_type == "decimal:decimal" && value == &Some("42".to_string())));
 
     // == 清理 ==
     lifecycle::service::save().unwrap();
@@ -1559,23 +1457,23 @@ fn test_user_database_service_all_functions() {
     let node_fields = vec![
         NodeFieldVO {
             name: "文本字段".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("hello".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("hello".to_string()),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "日期字段".to_string(),
-            field_type: "Date".to_string(),
-            type_config: Some(serde_json::json!({"precision": "day"})),
-            value: FieldValue::Instant(Some(1712345678000)),
+            field_type: "instant:instant".to_string(),
+            value: Some(
+                "2024-04-05 12:34:38.000|+8"
+                    .to_string(),
+            ),
             dictionary_id: None,
         },
         NodeFieldVO {
             name: "字典字段".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("v".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("v".to_string()),
             dictionary_id: Some(dict_d.id.clone()),
         },
     ];
@@ -1583,17 +1481,15 @@ fn test_user_database_service_all_functions() {
     let tpl_c = template::service::create_from_node(&src_node.id, "模板C".to_string()).unwrap();
     let tpl_c_fields = template::service::get_fields(&tpl_c.id).unwrap();
     assert_eq!(tpl_c_fields.len(), 3);
-    // 字段名、类型、配置、字典引用与源节点一致
+    // 字段名、类型、字典引用与源节点一致
     assert_eq!(tpl_c_fields[0].name, "文本字段");
-    assert_eq!(tpl_c_fields[0].field_type, "TextSingleLine");
-    assert!(tpl_c_fields[0].type_config.is_none());
+    assert_eq!(tpl_c_fields[0].field_type, "string:single-line");
     assert!(tpl_c_fields[0].dictionary_id.is_none());
     assert_eq!(tpl_c_fields[1].name, "日期字段");
-    assert_eq!(tpl_c_fields[1].field_type, "Date");
-    assert_eq!(tpl_c_fields[1].type_config, Some(serde_json::json!({"precision": "day"})));
+    assert_eq!(tpl_c_fields[1].field_type, "instant:instant");
     assert!(tpl_c_fields[1].dictionary_id.is_none());
     assert_eq!(tpl_c_fields[2].name, "字典字段");
-    assert_eq!(tpl_c_fields[2].field_type, "TextSingleLine");
+    assert_eq!(tpl_c_fields[2].field_type, "string:single-line");
     assert_eq!(tpl_c_fields[2].dictionary_id.as_deref(), Some(dict_d.id.as_str()));
 
     // == rename 失败路径：模板不存在 → NoTemplateWithSuchId ==
@@ -1626,8 +1522,7 @@ fn test_user_database_service_all_functions() {
             &uuid::Uuid::new_v4().to_string(),
             &[TemplateFieldVO {
                 name: "f".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
+                field_type: "string:single-line".to_string(),
                 dictionary_id: None,
             }]
         ),
@@ -1641,61 +1536,17 @@ fn test_user_database_service_all_functions() {
             &[
                 TemplateFieldVO {
                     name: "dup".to_string(),
-                    field_type: "TextSingleLine".to_string(),
-                    type_config: None,
+                    field_type: "string:single-line".to_string(),
                     dictionary_id: None,
                 },
                 TemplateFieldVO {
                     name: "dup".to_string(),
-                    field_type: "TextSingleLine".to_string(),
-                    type_config: None,
+                    field_type: "string:single-line".to_string(),
                     dictionary_id: None,
                 },
             ]
         ),
         Err(ErrorCode::DuplicateNodeFieldName { .. })
-    ));
-
-    // == set_fields 失败路径：非法 field_type → InvalidNodeFieldType ==
-    assert!(matches!(
-        template::service::set_fields(
-            &tpl_a.id,
-            &[TemplateFieldVO {
-                name: "bad-type".to_string(),
-                field_type: "NoSuchType".to_string(),
-                type_config: None,
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::InvalidNodeFieldType { .. })
-    ));
-
-    // == set_fields 失败路径：Date 配非法 precision → InvalidNodeFieldTypeConfig ==
-    assert!(matches!(
-        template::service::set_fields(
-            &tpl_a.id,
-            &[TemplateFieldVO {
-                name: "bad-config".to_string(),
-                field_type: "Date".to_string(),
-                type_config: Some(serde_json::json!({"precision": "week"})),
-                dictionary_id: None,
-            }]
-        ),
-        Err(ErrorCode::InvalidNodeFieldTypeConfig { .. })
-    ));
-
-    // == set_fields 失败路径：Password 配字典 → FieldTypeNotSupportDictionary ==
-    assert!(matches!(
-        template::service::set_fields(
-            &tpl_a.id,
-            &[TemplateFieldVO {
-                name: "pw-dict".to_string(),
-                field_type: "Password".to_string(),
-                type_config: None,
-                dictionary_id: Some(dict_d.id.clone()),
-            }]
-        ),
-        Err(ErrorCode::FieldTypeNotSupportDictionary { .. })
     ));
 
     // == set_fields 失败路径：字典引用不存在 → NoDictionaryEntryWithSuchId ==
@@ -1704,32 +1555,28 @@ fn test_user_database_service_all_functions() {
             &tpl_a.id,
             &[TemplateFieldVO {
                 name: "missing-dict".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
+                field_type: "string:single-line".to_string(),
                 dictionary_id: Some(uuid::Uuid::new_v4().to_string()),
             }]
         ),
         Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
     ));
 
-    // == set_fields / get_fields 成功往返 ==
+    // == set_fields / get_fields 成功往返（后端不校验字段类型，原样存取） ==
     let tpl_fields = vec![
         TemplateFieldVO {
             name: "模板字段1".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             dictionary_id: None,
         },
         TemplateFieldVO {
             name: "模板字段2".to_string(),
-            field_type: "Date".to_string(),
-            type_config: Some(serde_json::json!({"precision": "month"})),
+            field_type: "instant:instant".to_string(),
             dictionary_id: None,
         },
         TemplateFieldVO {
             name: "模板字段3".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             dictionary_id: Some(dict_d.id.clone()),
         },
     ];
@@ -1767,12 +1614,11 @@ fn test_user_database_service_all_functions() {
     let tpl_node_fields = node_field::service::get(&tpl_node.id).unwrap();
     assert_eq!(tpl_node_fields.len(), 3);
     assert_eq!(tpl_node_fields[0].name, "模板字段1");
-    assert_eq!(tpl_node_fields[0].field_type, "TextSingleLine");
-    assert!(matches!(tpl_node_fields[0].value, FieldValue::String(None)));
+    assert_eq!(tpl_node_fields[0].field_type, "string:single-line");
+    assert_eq!(tpl_node_fields[0].value, None);
     assert_eq!(tpl_node_fields[1].name, "模板字段2");
-    assert_eq!(tpl_node_fields[1].field_type, "Date");
-    assert_eq!(tpl_node_fields[1].type_config, Some(serde_json::json!({"precision": "month"})));
-    assert!(matches!(tpl_node_fields[1].value, FieldValue::Instant(None)));
+    assert_eq!(tpl_node_fields[1].field_type, "instant:instant");
+    assert_eq!(tpl_node_fields[1].value, None);
     assert_eq!(tpl_node_fields[2].name, "模板字段3");
     assert_eq!(tpl_node_fields[2].dictionary_id.as_deref(), Some(dict_d.id.as_str()));
 
@@ -1823,9 +1669,8 @@ fn test_user_database_service_all_functions() {
         &cascade_node.id,
         &[NodeFieldVO {
             name: "cf".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("v".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("v".to_string()),
             dictionary_id: None,
         }],
     ).unwrap();
@@ -1849,8 +1694,7 @@ fn test_user_database_service_all_functions() {
         &tpl_a.id,
         &[TemplateFieldVO {
             name: "引用E".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             dictionary_id: Some(dict_e.id.clone()),
         }],
     ).unwrap();
@@ -2269,9 +2113,8 @@ fn test_user_database_service_all_functions() {
         &node_a.id,
         &[NodeFieldVO {
             name: "cf".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("v".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("v".to_string()),
             dictionary_id: None,
         }],
     )
@@ -2318,9 +2161,8 @@ fn test_user_database_service_all_functions() {
         &cv_node.id,
         &[NodeFieldVO {
             name: "cf".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
-            value: FieldValue::String(Some("v".to_string())),
+            field_type: "string:single-line".to_string(),
+            value: Some("v".to_string()),
             dictionary_id: None,
         }],
     )
@@ -2456,16 +2298,17 @@ fn test_user_database_service_all_functions() {
         &[
             NodeFieldVO {
                 name: "文本".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("secret".to_string())),
+                field_type: "string:single-line".to_string(),
+                value: Some("secret".to_string()),
                 dictionary_id: None,
             },
             NodeFieldVO {
                 name: "日期".to_string(),
-                field_type: "Date".to_string(),
-                type_config: Some(serde_json::json!({"precision": "day"})),
-                value: FieldValue::Instant(Some(1712345678000)),
+                field_type: "instant:instant".to_string(),
+                value: Some(
+                    "2024-04-05 12:34:38.000|+8"
+                        .to_string(),
+                ),
                 dictionary_id: None,
             },
         ],
@@ -2482,23 +2325,21 @@ fn test_user_database_service_all_functions() {
     assert!(copied.canvas_ref_id.is_none());
     assert!(copied.shadow_id.is_none());
 
-    // 字段结构随副本复制且顺序保持，但字段值一律为 None（各变体的无值形态）。
+    // 字段结构随副本复制且顺序保持，但字段值一律为 None。
     let copied_fields = node_field::service::get(&copied.id).unwrap();
     assert_eq!(copied_fields.len(), 2);
     assert_eq!(copied_fields[0].name, "文本");
-    assert_eq!(copied_fields[0].field_type, "TextSingleLine");
-    assert_eq!(copied_fields[0].type_config, None);
-    assert_eq!(copied_fields[0].value, FieldValue::String(None));
+    assert_eq!(copied_fields[0].field_type, "string:single-line");
+    assert_eq!(copied_fields[0].value, None);
     assert_eq!(copied_fields[1].name, "日期");
-    assert_eq!(copied_fields[1].field_type, "Date");
-    assert_eq!(
-        copied_fields[1].type_config,
-        Some(serde_json::json!({"precision": "day"}))
-    );
-    assert_eq!(copied_fields[1].value, FieldValue::Instant(None));
+    assert_eq!(copied_fields[1].field_type, "instant:instant");
+    assert_eq!(copied_fields[1].value, None);
     // 源节点字段不受复制影响，值仍在。
     let source_fields = node_field::service::get(&copy_source.id).unwrap();
-    assert_eq!(source_fields[0].value, FieldValue::String(Some("secret".to_string())));
+    assert_eq!(
+        source_fields[0].value,
+        Some("secret".to_string())
+    );
 
     // == canvas::color_list 成功路径：根画布已带色；另建无色画布与已删除带色画布，验证只返回未删除带色画布 ==
     let plain_canvas = canvas::service::create(root_id, "plain-canvas".to_string()).unwrap();

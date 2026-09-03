@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::business::user_database::field_type::FieldValue;
-
 /// 节点字段变更，记录一次字段编辑中单个字段的变化。
+/// 字段值为前端定义的字符串（后端不解析其内容），None 表示无值。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "variant", content = "data")]
 pub enum NodeFieldChange {
@@ -10,21 +9,21 @@ pub enum NodeFieldChange {
     Added {
         name: String,
         field_type: String,
-        value: FieldValue,
+        value: Option<String>,
     },
     /// 修改字段，包含字段名称、新旧字段类型和新旧值。
     Modified {
         name: String,
         old_field_type: String,
         new_field_type: String,
-        old_value: FieldValue,
-        new_value: FieldValue,
+        old_value: Option<String>,
+        new_value: Option<String>,
     },
     /// 删除字段，包含字段名称、字段类型和旧值。
     Removed {
         name: String,
         field_type: String,
-        old_value: FieldValue,
+        old_value: Option<String>,
     },
 }
 

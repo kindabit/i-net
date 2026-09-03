@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use crate::business::user_database::entity::{Action, TemplateField};
-use crate::business::user_database::field_type;
 use crate::business::user_database::template::dao;
 use crate::business::user_database::template::vo::TemplateFieldVO;
 use crate::business::user_database::{dictionary, log, state};
@@ -10,6 +9,7 @@ use crate::error_code::ErrorCode;
 /// 设置指定模板的字段集合（全量覆盖）：先删除旧字段再逐条插入新字段。
 ///
 /// 产生 TemplateFieldsSet 日志，载荷为模板名称和字段名称列表。
+/// 字段类型与字段配置对后端不透明，此处仅校验字段名唯一性与字典引用存在性。
 ///
 /// # 参数
 /// - `template_id`: 模板 id。
@@ -37,15 +37,7 @@ pub fn set_fields(template_id: &str, fields: &[TemplateFieldVO]) -> Result<(), E
     }
 
     for f in fields {
-        let def = field_type::field_type_def(&f.field_type)?;
-        field_type::validate_type_config(def, &f.type_config)?;
-
         if let Some(ref dict_id) = f.dictionary_id {
-            if !def.supports_dictionary {
-                return Err(ErrorCode::FieldTypeNotSupportDictionary {
-                    field_type: f.field_type.clone(),
-                });
-            }
             if !dictionary::dao::exist_by_id(&connection, dict_id)? {
                 return Err(ErrorCode::NoDictionaryEntryWithSuchId {
                     id: dict_id.clone(),
@@ -57,21 +49,10 @@ pub fn set_fields(template_id: &str, fields: &[TemplateFieldVO]) -> Result<(), E
     dao::delete_fields_by_template_id(&connection, template_id)?;
 
     for (i, f) in fields.iter().enumerate() {
-        let type_config = match &f.type_config {
-            Some(v) => {
-                Some(serde_json::to_string(v).map_err(|e| {
-                    ErrorCode::FailToDeserializeNodeFieldValue {
-                        detail: format!("Failed to serialize type_config: {e}"),
-                    }
-                })?)
-            }
-            None => None,
-        };
         let field = TemplateField {
             template_id: template_id.to_string(),
             name: f.name.clone(),
             field_type: f.field_type.clone(),
-            type_config,
             order: i as i64,
             dictionary_id: f.dictionary_id.clone(),
         };

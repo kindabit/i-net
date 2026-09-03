@@ -28,6 +28,10 @@
       "title": "影子节点缺失",
       "text": "按连接规则应当存在影子节点的边（{edge_id}）缺失其影子节点"
     },
+    "DataCorruptionNodeFieldValueInvalidUtf8": {
+      "title": "字段值编码异常",
+      "text": "节点（{node_id}）的字段（{name}）的值明文不是合法的 UTF-8 编码"
+    },
     "DataCorruptionNodeNotShadow": {
       "title": "节点类型异常",
       "text": "预期为影子节点，但该节点（{id}）不是影子"
@@ -215,37 +219,13 @@
     "EmptyTemplateName": {
       "title": "模板名称为空"
     },
-    "FailToDeserializeNodeFieldValue": {
-      "title": "读取节点字段数据失败",
-      "text": "{detail}"
-    },
-    "FieldTypeNotSupportDictionary": {
-      "title": "该字段类型不支持字典",
-      "text": "类型：{field_type}"
-    },
     "InvalidDictionaryId": {
       "title": "无效的字典条目 id",
       "text": "id：{id}"
     },
-    "InvalidNodeFieldType": {
-      "title": "未知的字段类型",
-      "text": "类型：{field_type}"
-    },
-    "InvalidNodeFieldTypeConfig": {
-      "title": "字段类型配置无效",
-      "text": "{detail}"
-    },
     "InvalidTemplateId": {
       "title": "无效的模板 id",
       "text": "id：{id}"
-    },
-    "NodeFieldValueKindMismatch": {
-      "title": "字段值的数据类型不匹配",
-      "text": "期望 {expected}，实际 {actual}"
-    },
-    "NodeFieldValueValidationFailed": {
-      "title": "字段值未通过校验",
-      "text": "字段：{name}"
     },
     "NodeDeleteDisconnectsNodes": {
       "title": "永久删除节点将断开连接",

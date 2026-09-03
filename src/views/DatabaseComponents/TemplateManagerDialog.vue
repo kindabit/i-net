@@ -13,8 +13,8 @@ import {
 } from "@/api";
 import type { Template } from "@/api-types";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
-import { useFieldList } from "@/composables/use-field-list";
-import FieldDefinitionRow from "@/components/FieldDefinitionRow.vue";
+import { useTemplateFieldList } from "@/composables/use-template-field-list";
+import TemplateField from "@/components/TemplateField.vue";
 import NameInputDialog from "@/components/NameInputDialog.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
@@ -27,7 +27,7 @@ const loadingData = ref(false);
 const draggingUid = ref<number | null>(null);
 const confirmingClose = ref(false);
 
-const fieldList = useFieldList({ withValues: false });
+const fieldList = useTemplateFieldList();
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
 
@@ -304,10 +304,9 @@ defineExpose({ open });
                     :key="row.uid"
                     class="mb-3"
                   >
-                    <FieldDefinitionRow
+                    <TemplateField
                       :row="row"
-                      :with-values="false"
-                      :name-error="fieldList.errors.value.get(row.uid)?.name"
+                      :errors="fieldList.errors.value"
                       @remove="fieldList.removeRow"
                       @drag-start="onDragStart"
                       @drop-on="onDropOn"

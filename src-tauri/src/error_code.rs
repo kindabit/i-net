@@ -30,6 +30,8 @@ pub enum ErrorCode {
     DataCorruptionEdgeEndpointMissing { edge_id: String, node_id: String },
     /// 按连接规则应当产生影子的边缺失其影子节点，包含该边的 id。
     DataCorruptionMissingShadow { edge_id: String },
+    /// 节点字段值密文解密成功，但明文不是合法 UTF-8（字段值明文约定为 UTF-8 字符串），包含节点 id 与字段名称。
+    DataCorruptionNodeFieldValueInvalidUtf8 { node_id: String, name: String },
     /// 推导影子方向时发现节点不是影子（无 shadow_id），包含节点 id。属于程序缺陷。
     DataCorruptionNodeNotShadow { id: String },
     /// 影子链成环，包含检测到成环的节点 id。
@@ -77,8 +79,6 @@ pub enum ErrorCode {
     FailToDeserializeAction,
     /// 反序列化数据库失败，包含详细错误信息，仅限 connection 业务模块使用。
     FailToDeserializeDatabase { detail: String },
-    /// 反序列化节点字段数据失败，包含详细错误信息。
-    FailToDeserializeNodeFieldValue { detail: String },
     /// 打开数据库连接失败，包含详细错误信息，仅限 connection 业务模块使用。
     FailToOpenConnection { detail: String },
     /// 序列化日志行为失败。
@@ -107,8 +107,6 @@ pub enum ErrorCode {
     FailToTryExists { path: String, detail: String },
     /// 写入文件失败，包含目标路径和详细错误信息。
     FailToWriteFile { path: String, detail: String },
-    /// 该字段类型不支持引用字典，包含字段类型。
-    FieldTypeNotSupportDictionary { field_type: String },
     /// 附件 id 无效，包含附件 id。
     InvalidAttachmentId { id: String },
     /// 密文无效。
@@ -125,10 +123,6 @@ pub enum ErrorCode {
     InvalidExportMode { mode: String },
     /// 节点 id 无效，包含节点 id。
     InvalidNodeId { id: String },
-    /// 节点字段类型不存在，包含字段类型。
-    InvalidNodeFieldType { field_type: String },
-    /// 节点字段类型配置无效，包含字段类型和详细错误信息。
-    InvalidNodeFieldTypeConfig { field_type: String, detail: String },
     /// 节点连接桩无效，包含连接桩。
     InvalidNodePort { port: String },
     /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
@@ -157,10 +151,6 @@ pub enum ErrorCode {
     NoNodeWithSuchId { id: String },
     /// 不存在指定 id 的模板，包含模板 id。
     NoTemplateWithSuchId { id: String },
-    /// 节点字段值的底层数据类型与字段类型声明的不匹配，包含字段类型、期望的底层数据类型和实际的底层数据类型。
-    NodeFieldValueKindMismatch { field_type: String, expected: String, actual: String },
-    /// 节点字段值未通过校验，包含字段名称。
-    NodeFieldValueValidationFailed { name: String },
     /// 物理删除该节点会级联删除其在其它画布中的影子节点并使所列节点失去连接，包含受影响节点的标题列表。
     NodeDeleteDisconnectsNodes { nodes: Vec<String> },
     /// 该操作不允许作用于画布节点。

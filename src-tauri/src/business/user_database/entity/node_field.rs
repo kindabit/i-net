@@ -7,11 +7,9 @@ pub struct NodeField {
     pub node_id: String,
     /// 字段名称，与节点 id 构成联合主键。
     pub name: String,
-    /// 字段类型 key（字段类型 schema 中的顶层类型）。
+    /// 字段类型 key。后端不校验其合法性，仅作为不透明标签存取。
     pub field_type: String,
-    /// 字段类型配置（JSON 文本，如 {"precision":"day"}），无配置为 None。
-    pub type_config: Option<String>,
-    /// 加密后的字段值，无值为 None。
+    /// 加密后的字段值（明文为字段值字符串，格式由前端定义，后端不解析其内容），无值为 None。
     pub field_value: Option<Vec<u8>>,
     /// 字段在节点内的排序序号。
     pub order: i64,

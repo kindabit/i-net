@@ -1,8 +1,15 @@
+<!--
+  string:multiple-line 字段值编辑器。
+
+  多行文本域。
+-->
 <script setup lang="ts">
 import { ref, watch } from "vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  /** 值错误高亮：输入控件进入错误高亮状态（不显示错误信息）。 */
+  errorHighlight?: boolean;
   readonly?: boolean;
 }>();
 
@@ -25,9 +32,12 @@ function onInput() {
 </script>
 
 <template>
-  <VTextField
+  <VTextarea
     v-model="text"
+    :error="errorHighlight"
     :readonly="readonly"
+    rows="3"
+    auto-grow
     variant="outlined"
     density="compact"
     hide-details="auto"

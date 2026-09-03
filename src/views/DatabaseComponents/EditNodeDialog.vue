@@ -2,7 +2,8 @@
   编辑节点对话框。
 
   通过 defineExpose 的 open() 以 Promise 形式获取编辑结果：
-  确认返回 { title, subTitle }（trim 后的新值），取消或关闭（遮罩 / ESC）返回 null。
+  确认返回 { title, subTitle }（trim 后的新值），取消返回 null
+  （对话框为 persistent，Esc 与点击遮罩均不关闭，Esc 语义保留给对话框内部控件，如字段名编辑的取消）。
   支持字段编辑与保存为模板。
   支持以只读形式查看节点（open 的 options.readonly）：只读模式下隐藏编辑类控件，
   只保留关闭按钮，因此永远不会 resolve 出非 null 值。
@@ -17,8 +18,8 @@ import {
   userDatabaseTemplateCreateFromNode,
 } from "@/api";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
-import { useFieldList } from "@/composables/use-field-list";
-import FieldDefinitionRow from "@/components/FieldDefinitionRow.vue";
+import { useNodeFieldList } from "@/composables/use-node-field-list";
+import NodeField from "@/components/NodeField.vue";
 import NameInputDialog from "@/components/NameInputDialog.vue";
 
 /** 对话框显示状态 */
@@ -49,7 +50,7 @@ const draggingUid = ref<number | null>(null);
 /** 等待 Promise 结算的 resolve */
 let resolveOpen: ((value: { title: string; subTitle: string } | null) => void) | null = null;
 
-const fieldList = useFieldList({ withValues: true });
+const fieldList = useNodeFieldList();
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
 
 /**
@@ -173,7 +174,7 @@ async function saveAsTemplate() {
   }
 }
 
-// 任何途径的关闭（取消按钮、遮罩、ESC）都按取消结算
+// 任何途径的关闭（取消按钮、提交完成）都按取消/成功结算（对话框为 persistent，Esc 与遮罩不会触发关闭）
 watch(dialog, (value) => {
   if (!value) settle(null);
 });
@@ -182,7 +183,9 @@ defineExpose({ open });
 </script>
 
 <template>
-  <VDialog v-model="dialog" max-width="54rem" :persistent="submitting">
+  <VDialog v-model="dialog" max-width="54rem" persistent>
+    <!-- persistent：Esc 与点击遮罩均不关闭本对话框，只能通过对话框内的按钮关闭，
+         避免与对话框内部控件的 Esc 语义（如字段名编辑的 Esc 取消）冲突，也防止误触遮罩丢失编辑内容。 -->
     <VCard>
       <VCardTitle>{{ readonly ? t("database.canvas.view-node-readonly") : t("database.canvas.edit-node") }}</VCardTitle>
       <VCardText :class="{ 'fields-scroll': !loading }">
@@ -214,12 +217,10 @@ defineExpose({ open });
           </v-row>
           <VDivider class="my-4" />
           <div v-for="row in fieldList.rows.value" :key="row.uid" class="mb-4">
-            <FieldDefinitionRow
+            <NodeField
               :row="row"
-              :with-values="true"
               :readonly="readonly"
-              :name-error="fieldList.errors.value.get(row.uid)?.name"
-              :value-error="fieldList.errors.value.get(row.uid)?.value"
+              :errors="fieldList.errors.value"
               @remove="fieldList.removeRow"
               @drag-start="onDragStart"
               @drop-on="onDropOn"

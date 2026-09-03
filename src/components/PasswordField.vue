@@ -18,6 +18,8 @@ withDefaults(
     label?: string;
     /** 错误提示文本 */
     errorMessages?: string | string[];
+    /** 手动错误高亮状态（不显示错误信息）。 */
+    error?: boolean;
     /** 输入框密度 */
     density?: "default" | "comfortable" | "compact";
     /** 输入框变体样式 */
@@ -80,6 +82,7 @@ defineExpose({ focus });
     :type="inputType"
     :label="label"
     :error-messages="errorMessages"
+    :error="error"
     :variant="variant"
     :density="density"
     :readonly="readonly"

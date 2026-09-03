@@ -9,10 +9,9 @@ fn map_row(row: &Row) -> rusqlite::Result<NodeField> {
         node_id: row.get(0)?,
         name: row.get(1)?,
         field_type: row.get(2)?,
-        type_config: row.get(3)?,
-        field_value: row.get(4)?,
-        order: row.get(5)?,
-        dictionary_id: row.get(6)?,
+        field_value: row.get(3)?,
+        order: row.get(4)?,
+        dictionary_id: row.get(5)?,
     })
 }
 
@@ -30,7 +29,6 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 node_id TEXT NOT NULL REFERENCES node(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 field_type TEXT NOT NULL,
-                type_config TEXT,
                 field_value BLOB,
                 \"order\" INTEGER NOT NULL,
                 dictionary_id TEXT,
@@ -55,13 +53,12 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 pub fn insert(connection: &Connection, node_field: &NodeField) -> Result<(), ErrorCode> {
     connection
         .execute(
-            "INSERT INTO node_field (node_id, name, field_type, type_config, field_value, \"order\", dictionary_id)
-            VALUES (:node_id, :name, :field_type, :type_config, :field_value, :order, :dictionary_id)",
+            "INSERT INTO node_field (node_id, name, field_type, field_value, \"order\", dictionary_id)
+            VALUES (:node_id, :name, :field_type, :field_value, :order, :dictionary_id)",
             rusqlite::named_params! {
                 ":node_id": node_field.node_id,
                 ":name": node_field.name,
                 ":field_type": node_field.field_type,
-                ":type_config": node_field.type_config,
                 ":field_value": node_field.field_value,
                 ":order": node_field.order,
                 ":dictionary_id": node_field.dictionary_id,
@@ -87,7 +84,7 @@ pub fn select_by_node_id(
 ) -> Result<Vec<NodeField>, ErrorCode> {
     let mut statement = connection
         .prepare(
-            "SELECT node_id, name, field_type, type_config, field_value, \"order\", dictionary_id
+            "SELECT node_id, name, field_type, field_value, \"order\", dictionary_id
             FROM node_field
             WHERE node_id = :node_id
             ORDER BY \"order\" ASC",
@@ -161,8 +158,7 @@ mod tests {
         NodeField {
             node_id: node_id.to_string(),
             name: name.to_string(),
-            field_type: "text".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             field_value: None,
             order,
             dictionary_id: None,
@@ -221,15 +217,13 @@ mod tests {
         assert_eq!(fields[1].name, "f2");
         assert_eq!(fields[2].name, "f3");
 
-        // type_config / field_value / dictionary_id 为 Some 和 None 的往返一致。
+        // field_value / dictionary_id 为 Some 和 None 的往返一致。
         let mut rich = nf("n2", "rich", 1);
-        rich.type_config = Some(r#"{"precision":"day"}"#.to_string());
         rich.field_value = Some(vec![0x01, 0x02, 0x03]);
         rich.dictionary_id = Some("dict-1".to_string());
         insert(&connection, &rich).unwrap();
         let selected = select_by_node_id(&connection, "n2").unwrap();
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].type_config.as_deref(), Some(r#"{"precision":"day"}"#));
         assert_eq!(selected[0].field_value.as_deref(), Some(&vec![0x01, 0x02, 0x03][..]));
         assert_eq!(selected[0].dictionary_id.as_deref(), Some("dict-1"));
         assert!(selected[0].order == 1);

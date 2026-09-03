@@ -20,18 +20,9 @@ pub fn get_fields(template_id: &str) -> Result<Vec<TemplateFieldVO>, ErrorCode> 
     let fields = dao::select_fields_by_template_id(&connection, template_id)?;
     let mut vos = Vec::with_capacity(fields.len());
     for field in fields {
-        let type_config = match field.type_config {
-            Some(s) => Some(serde_json::from_str(&s).map_err(|e| {
-                ErrorCode::FailToDeserializeNodeFieldValue {
-                    detail: format!("Failed to deserialize type_config: {e}"),
-                }
-            })?),
-            None => None,
-        };
         vos.push(TemplateFieldVO {
             name: field.name,
             field_type: field.field_type,
-            type_config,
             dictionary_id: field.dictionary_id,
         });
     }

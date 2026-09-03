@@ -56,7 +56,6 @@ pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
             node_id: node.id.clone(),
             name: source_field.name,
             field_type: source_field.field_type,
-            type_config: source_field.type_config,
             field_value: None,
             order: source_field.order,
             dictionary_id: source_field.dictionary_id,

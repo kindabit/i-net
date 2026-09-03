@@ -4,7 +4,6 @@ pub mod dictionary;
 pub mod edge;
 pub mod entity;
 pub mod export;
-pub mod field_type;
 pub mod lifecycle;
 pub mod log;
 pub mod node;

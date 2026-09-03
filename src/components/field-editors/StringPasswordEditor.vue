@@ -1,5 +1,5 @@
 <!--
-  密码字段值编辑器。
+  string:password 字段值编辑器。
 
   基于 PasswordField 提供常驻的可见性切换图标，并通过其 append-inner
   插槽追加密码生成器入口图标。
@@ -11,6 +11,8 @@ import PasswordGeneratorDialog from "./PasswordGeneratorDialog.vue";
 
 const props = defineProps<{
   modelValue: string | null;
+  /** 值错误高亮：输入控件进入错误高亮状态（不显示错误信息）。 */
+  errorHighlight?: boolean;
   readonly?: boolean;
 }>();
 
@@ -45,6 +47,7 @@ async function openPasswordGenerator() {
 <template>
   <PasswordField
     v-model="text"
+    :error="errorHighlight"
     :readonly="readonly"
     density="compact"
     @update:model-value="onInput()"

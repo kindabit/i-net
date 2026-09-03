@@ -28,6 +28,10 @@
       "title": "Shadow node missing",
       "text": "The edge ({edge_id}) that should have produced a shadow node is missing its shadow node"
     },
+    "DataCorruptionNodeFieldValueInvalidUtf8": {
+      "title": "Field value encoding anomaly",
+      "text": "The plaintext of field ({name}) of node ({node_id}) is not valid UTF-8"
+    },
     "DataCorruptionNodeNotShadow": {
       "title": "Unexpected node type",
       "text": "Expected a shadow node, but this node ({id}) is not a shadow"
@@ -215,37 +219,13 @@
     "EmptyTemplateName": {
       "title": "Empty template name"
     },
-    "FailToDeserializeNodeFieldValue": {
-      "title": "Failed to read node field data",
-      "text": "{detail}"
-    },
-    "FieldTypeNotSupportDictionary": {
-      "title": "This field type does not support dictionaries",
-      "text": "Type: {field_type}"
-    },
     "InvalidDictionaryId": {
       "title": "Invalid dictionary entry id",
       "text": "id: {id}"
     },
-    "InvalidNodeFieldType": {
-      "title": "Unknown field type",
-      "text": "Type: {field_type}"
-    },
-    "InvalidNodeFieldTypeConfig": {
-      "title": "Invalid field type config",
-      "text": "{detail}"
-    },
     "InvalidTemplateId": {
       "title": "Invalid template id",
       "text": "id: {id}"
-    },
-    "NodeFieldValueKindMismatch": {
-      "title": "Field value kind mismatch",
-      "text": "Expected {expected}, got {actual}"
-    },
-    "NodeFieldValueValidationFailed": {
-      "title": "Field value validation failed",
-      "text": "Field: {name}"
     },
     "NodeDeleteDisconnectsNodes": {
       "title": "Deleting node permanently will disconnect nodes",

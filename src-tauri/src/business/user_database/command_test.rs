@@ -1,7 +1,6 @@
 use super::*;
 use crate::business::metadata;
 use crate::business::user_database::entity::Dictionary;
-use crate::business::user_database::field_type::FieldValue;
 use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::template::vo::TemplateFieldVO;
 use crate::error_code::ErrorCode;
@@ -579,9 +578,8 @@ fn test_user_database_command_all_functions() {
             uuid::Uuid::new_v4().to_string(),
             vec![NodeFieldVO {
                 name: "  ".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("v".to_string())),
+                field_type: "string:single-line".to_string(),
+                value: Some("v".to_string()),
                 dictionary_id: None,
             }]
         ),
@@ -594,9 +592,8 @@ fn test_user_database_command_all_functions() {
             uuid::Uuid::new_v4().to_string(),
             vec![NodeFieldVO {
                 name: "f".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
-                value: FieldValue::String(Some("v".to_string())),
+                field_type: "string:single-line".to_string(),
+                value: Some("v".to_string()),
                 dictionary_id: Some("not-a-uuid".to_string()),
             }]
         ),
@@ -672,9 +669,8 @@ fn test_user_database_command_all_functions() {
     .unwrap();
     let field = NodeFieldVO {
         name: " cmd-field ".to_string(),
-        field_type: "TextSingleLine".to_string(),
-        type_config: None,
-        value: FieldValue::String(Some("cmd-value".to_string())),
+        field_type: "string:single-line".to_string(),
+        value: Some("cmd-value".to_string()),
         dictionary_id: None,
     };
     node_field::command::set::preprocess(node.id.clone(), vec![field]).unwrap();
@@ -683,7 +679,7 @@ fn test_user_database_command_all_functions() {
     assert_eq!(got[0].name, "cmd-field");
     assert_eq!(
         got[0].value,
-        FieldValue::String(Some("cmd-value".to_string()))
+        Some("cmd-value".to_string())
     );
 
     lifecycle::command::save::preprocess().unwrap();
@@ -784,8 +780,7 @@ fn test_user_database_command_all_functions() {
             tpl.id.clone(),
             vec![TemplateFieldVO {
                 name: "  ".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
+                field_type: "string:single-line".to_string(),
                 dictionary_id: None,
             }]
         ),
@@ -798,8 +793,7 @@ fn test_user_database_command_all_functions() {
             tpl.id.clone(),
             vec![TemplateFieldVO {
                 name: "f".to_string(),
-                field_type: "TextSingleLine".to_string(),
-                type_config: None,
+                field_type: "string:single-line".to_string(),
                 dictionary_id: Some("not-a-uuid".to_string()),
             }]
         ),
@@ -811,8 +805,7 @@ fn test_user_database_command_all_functions() {
         tpl.id.clone(),
         vec![TemplateFieldVO {
             name: " f1 ".to_string(),
-            field_type: "TextSingleLine".to_string(),
-            type_config: None,
+            field_type: "string:single-line".to_string(),
             dictionary_id: None,
         }],
     ).unwrap();
@@ -859,7 +852,7 @@ fn test_user_database_command_all_functions() {
     let nf = node_field::service::get(&node.id).unwrap();
     assert_eq!(nf.len(), 1);
     assert_eq!(nf[0].name, "f1");
-    assert!(matches!(nf[0].value, FieldValue::String(None)));
+    assert_eq!(nf[0].value, None);
 
     lifecycle::command::save::preprocess().unwrap();
     lifecycle::command::close::preprocess().unwrap();

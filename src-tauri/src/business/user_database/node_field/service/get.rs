@@ -1,9 +1,30 @@
-use crate::business::user_database::field_type;
 use crate::business::user_database::node::dao as node_dao;
 use crate::business::user_database::node_field::dao;
 use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
+
+/// 将字段值密文解密为明文字符串；blob 为 None 时返回 None。
+/// 解密成功但明文不是合法 UTF-8 时返回 `ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8`。
+fn decrypt_value(
+    node_id: &str,
+    name: &str,
+    blob: Option<Vec<u8>>,
+    key: &[u8; 32],
+) -> Result<Option<String>, ErrorCode> {
+    let blob = match blob {
+        Some(b) => b,
+        None => return Ok(None),
+    };
+    let plaintext = crate::security::aes::decrypt(blob, *key)?;
+    let value = String::from_utf8(plaintext).map_err(|_| {
+        ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8 {
+            node_id: node_id.to_string(),
+            name: name.to_string(),
+        }
+    })?;
+    Ok(Some(value))
+}
 
 /// 获取指定节点的全部字段，按存储顺序返回。
 ///
@@ -24,19 +45,10 @@ pub fn get(node_id: &str) -> Result<Vec<NodeFieldVO>, ErrorCode> {
     let key = state::key();
     let mut vos = Vec::with_capacity(fields.len());
     for field in fields {
-        let value = field_type::decode(&field.field_type, field.field_value, &key)?;
-        let type_config = match field.type_config {
-            Some(s) => Some(serde_json::from_str(&s).map_err(|e| {
-                ErrorCode::FailToDeserializeNodeFieldValue {
-                    detail: format!("Failed to deserialize type_config: {e}"),
-                }
-            })?),
-            None => None,
-        };
+        let value = decrypt_value(node_id, &field.name, field.field_value, &key)?;
         vos.push(NodeFieldVO {
             name: field.name,
             field_type: field.field_type,
-            type_config,
             value,
             dictionary_id: field.dictionary_id,
         });

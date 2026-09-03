@@ -138,25 +138,17 @@ export interface LogPageResponse {
   total: number;
 }
 
-/** 字段值，前后端传输的值载体。variant 名与字段类型 schema 中的底层数据类型 key 一致。 */
-export type FieldValue =
-  | { variant: "string"; data: string | null }
-  | { variant: "decimal"; data: string | null }
-  | { variant: "instant"; data: number | null }
-  | { variant: "instantRange"; data: [number, number] | null };
-
-/** 节点字段变更，记录一次字段编辑中单个字段的变化。 */
+/** 节点字段变更，记录一次字段编辑中单个字段的变化。value 为字段值字符串（格式见 field-types 模块），null 表示无值。 */
 export type NodeFieldChange =
-  | { variant: "Added"; data: { name: string; field_type: string; value: FieldValue } }
-  | { variant: "Modified"; data: { name: string; old_field_type: string; new_field_type: string; old_value: FieldValue; new_value: FieldValue } }
-  | { variant: "Removed"; data: { name: string; field_type: string; old_value: FieldValue } };
+  | { variant: "Added"; data: { name: string; field_type: string; value: string | null } }
+  | { variant: "Modified"; data: { name: string; old_field_type: string; new_field_type: string; old_value: string | null; new_value: string | null } }
+  | { variant: "Removed"; data: { name: string; field_type: string; old_value: string | null } };
 
-/** 节点字段值对象。字段顺序由数组位置表达。 */
+/** 节点字段值对象。字段顺序由数组位置表达。value 为字段值字符串（格式由前端字段类型系统定义，后端不解析其内容），null 表示无值。 */
 export interface NodeFieldVO {
   name: string;
   field_type: string;
-  type_config: Record<string, unknown> | null;
-  value: FieldValue;
+  value: string | null;
   dictionary_id: string | null;
 }
 
@@ -164,7 +156,6 @@ export interface NodeFieldVO {
 export interface TemplateFieldVO {
   name: string;
   field_type: string;
-  type_config: Record<string, unknown> | null;
   dictionary_id: string | null;
 }
 
