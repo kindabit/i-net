@@ -2,10 +2,9 @@ use rusqlite::Connection;
 
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::dao;
-use crate::business::user_database::node::service::resolve_root;
-use crate::business::user_database::node::service::shadow_direction;
 use crate::business::user_database::node::vo::NodeVO;
-use crate::business::user_database::node::vo::ShadowDirection;
+use crate::business::user_database::shadow::service::{resolve_root, shadow_direction};
+use crate::business::user_database::shadow::vo::ShadowDirection;
 use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
 

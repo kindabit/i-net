@@ -1,6 +1,6 @@
 use crate::business::user_database::edge::dao;
 use crate::business::user_database::entity::Action;
-use crate::business::user_database::{log, node, state};
+use crate::business::user_database::{log, node, shadow, state};
 use crate::error_code::ErrorCode;
 
 /// 物理删除指定边（边没有逻辑删除字段）。
@@ -8,7 +8,7 @@ use crate::error_code::ErrorCode;
 /// 影子节点联动：边被删除后，其产生的影子节点经 node.shadow_id 外键级联删除；
 /// 影子的相连边经 edge.source_id/target_id 外键级联删除；这些相连边若也是产生影子节点的边，
 /// 其影子递归级联删除（嵌套影子沿外键链递归坍塌），应用层不再手动删除影子。
-/// 受影响节点的收集通过 [`node::service::collect_edge_disconnected`] 沿同一外键链
+/// 受影响节点的收集通过 [`shadow::service::collect_edge_disconnected`] 沿同一外键链
 /// 预收集（须在删除边之前完成）：影子方向必然可推导，
 /// 邻居必然是非影子节点，任何不一致都返回 DataCorruption* 错误。存在受影响节点且
 /// 调用方未确认时返回 `ErrorCode::EdgeDeleteDisconnectsNodes`，由前端向用户确认后
@@ -46,10 +46,14 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     })?;
     // 断连预收集须在删除边之前完成（收集依赖产生边链完好）；
     // 受影响节点非空且未确认时返回 EdgeDeleteDisconnectsNodes，由前端确认后重调。
-    let affected = node::service::collect_edge_disconnected(&connection, &edge)?;
+    let affected = shadow::service::collect_edge_disconnected(&connection, &edge)?;
     if !affected.is_empty() && !confirmed {
         return Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected });
     }
+    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析根本体标题；
+    // 解析须在删除边之前完成（影子链解析依赖产生边链完好）。
+    let source_title = shadow::service::display_title(&connection, &source)?;
+    let target_title = shadow::service::display_title(&connection, &target)?;
     // 删除边：其产生的影子经 node.shadow_id 外键级联删除，影子的相连边经
     // edge.source_id/target_id 外键级联删除，下游嵌套影子沿外键链递归坍塌，
     // 应用层禁止手写递归删除。
@@ -57,8 +61,8 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     log::service::create(
         id,
         Action::EdgePhysicalDelete {
-            source_title: source.title,
-            target_title: target.title,
+            source_title,
+            target_title,
         },
     )?;
     Ok(())

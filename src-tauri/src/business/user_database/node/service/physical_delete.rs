@@ -47,7 +47,7 @@ pub fn physical_delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     )?;
     let mut affected: Vec<String> = Vec::new();
     for edge_record in edges.iter().filter(|e| e.source_id == id || e.target_id == id) {
-        for title in crate::business::user_database::node::service::collect_edge_disconnected(
+        for title in crate::business::user_database::shadow::service::collect_edge_disconnected(
             &connection,
             edge_record,
         )? {

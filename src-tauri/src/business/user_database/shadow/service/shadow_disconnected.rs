@@ -4,8 +4,9 @@ use crate::business::user_database::edge;
 use crate::business::user_database::entity::Edge;
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::dao;
-use crate::business::user_database::node::service::shadow_direction;
-use crate::business::user_database::node::vo::ShadowDirection;
+use crate::business::user_database::shadow::dao as shadow_dao;
+use crate::business::user_database::shadow::service::shadow_direction;
+use crate::business::user_database::shadow::vo::ShadowDirection;
 use crate::error_code::ErrorCode;
 
 /// 收集一条边被物理删除时，因其产生的影子节点级联删除而失去连接的节点标题（去重）。
@@ -52,7 +53,7 @@ fn collect_edge_into(
     edge: &Edge,
     affected: &mut Vec<String>,
 ) -> Result<(), ErrorCode> {
-    let Some(shadow) = dao::select_by_producing_edge_id(connection, &edge.id)? else {
+    let Some(shadow) = shadow_dao::select_by_producing_edge_id(connection, &edge.id)? else {
         let source = dao::select_by_id(connection, &edge.source_id)?.ok_or_else(|| {
             ErrorCode::DataCorruptionEdgeEndpointMissing {
                 edge_id: edge.id.clone(),

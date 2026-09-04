@@ -1,6 +1,6 @@
 use crate::business::user_database::edge::dao;
 use crate::business::user_database::entity::Action;
-use crate::business::user_database::{log, node, state};
+use crate::business::user_database::{log, node, shadow, state};
 use crate::error_code::ErrorCode;
 
 /// 更新指定边的标题和详情。
@@ -37,12 +37,15 @@ pub fn update(id: &str, title: String, description: String) -> Result<(), ErrorC
     })?;
     let old_title = edge.title.clone();
     let old_description = edge.description.clone();
+    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析根本体标题。
+    let source_title = shadow::service::display_title(&connection, &source)?;
+    let target_title = shadow::service::display_title(&connection, &target)?;
     dao::update_title_and_description(&connection, id, &title, &description)?;
     log::service::create(
         id,
         Action::EdgeUpdate {
-            source_title: source.title,
-            target_title: target.title,
+            source_title,
+            target_title,
             old_title,
             old_description,
             new_title: title,

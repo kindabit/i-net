@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use crate::business::user_database::edge;
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::dao;
-use crate::business::user_database::node::vo::ShadowDirection;
+use crate::business::user_database::shadow::vo::ShadowDirection;
 use crate::error_code::ErrorCode;
 
 /// 推导影子节点在其所在画布内的方向：方向由影子的产生边决定——

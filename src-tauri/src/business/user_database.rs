@@ -9,6 +9,7 @@ pub mod log;
 pub mod node;
 pub mod node_field;
 pub mod registry;
+pub mod shadow;
 pub mod state;
 pub mod template;
 pub mod viewport;

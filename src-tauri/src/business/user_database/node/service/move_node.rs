@@ -1,5 +1,6 @@
 use crate::business::user_database::entity::Action;
 use crate::business::user_database::node::dao;
+use crate::business::user_database::shadow::service::display_title;
 use crate::business::user_database::{log, state};
 use crate::error_code::ErrorCode;
 
@@ -14,6 +15,7 @@ use crate::error_code::ErrorCode;
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
+/// 影子链解析失败时返回对应的 `DataCorruption*` 错误，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn move_node(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
@@ -28,10 +30,12 @@ pub fn move_node(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     node.x = x;
     node.y = y;
     dao::update(&connection, &node)?;
+    // 日志载荷的标题取展示标题：影子节点的标题落库为空串，须沿产生边链解析根本体标题。
+    let title = display_title(&connection, &node)?;
     log::service::create(
         id,
         Action::NodeMove {
-            title: node.title,
+            title,
             old_x,
             old_y,
             new_x: x,
