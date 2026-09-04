@@ -74,7 +74,7 @@ export function useNodeFieldList() {
   }
 
   /**
-   * 从节点字段 VO 列表装入行并记录初始快照。
+   * 从节点字段 VO 列表装入行并记录初始快照；同时清空校验错误（装载即状态重置，供对话框每次打开时复用）。
    * @param vos 节点字段 VO 列表
    */
   function loadFromNodeFields(vos: NodeFieldVO[]): void {
@@ -86,6 +86,7 @@ export function useNodeFieldList() {
       value: vo.value,
       dictionaryId: vo.dictionary_id,
     }));
+    errors.value = new Map();
     initialSnapshot.value = normalizedJson(rows.value);
   }
 

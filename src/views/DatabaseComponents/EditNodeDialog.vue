@@ -72,6 +72,7 @@ function open(
   originalSubTitle.value = node.subTitle;
   titleError.value = "";
   submitting.value = false;
+  draggingUid.value = null;
   loading.value = true;
   dialog.value = true;
   loadData();

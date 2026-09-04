@@ -73,7 +73,7 @@ export function useTemplateFieldList() {
   }
 
   /**
-   * 从模板字段 VO 列表装入行并记录初始快照。
+   * 从模板字段 VO 列表装入行并记录初始快照；同时清空校验错误（装载即状态重置，供对话框每次打开或切换模板时复用）。
    * @param vos 模板字段 VO 列表
    */
   function loadFromTemplateFields(vos: TemplateFieldVO[]): void {
@@ -85,6 +85,7 @@ export function useTemplateFieldList() {
       dictionaryId: vo.dictionary_id,
       expanded: false,
     }));
+    errors.value = new Map();
     initialSnapshot.value = normalizedJson(rows.value);
   }
 

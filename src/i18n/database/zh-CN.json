@@ -160,7 +160,7 @@
       "name-required": "字段名不能为空",
       "name-duplicated": "字段名重复",
       "name-empty": "未命名字段",
-      "name-edit-hint": "双击编辑字段名"
+      "name-edit-hint": "点击编辑字段名称"
     },
     "field-type": {
       "string-single-line": "单行文本",
@@ -172,6 +172,10 @@
       "decimal-decimal": "数字",
       "instant-instant": "时间点",
       "instant-range-instant-range": "时间区间",
+      "kind-string": "字符串",
+      "kind-decimal": "数字",
+      "kind-instant": "时间点",
+      "kind-instant-range": "时间区间",
       "invalid-email": "邮箱地址格式不正确",
       "invalid-url": "网址格式不正确",
       "invalid-number": "数字格式不正确",

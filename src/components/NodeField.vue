@@ -2,8 +2,9 @@
   节点字段行组件。
 
   以卡片形式编辑单个节点字段的定义：字段名、字段类型、字段值与字典绑定，并支持拖拽排序。
-  拖拽手柄位于卡片左侧并纵跨两行；字段名默认展示、双击进入编辑态，失焦或回车提交、Esc 取消。
+  拖拽手柄位于卡片左侧并纵跨两行；字段名默认展示（名称右侧铅笔图标提示可编辑）、单击进入编辑态，失焦或回车提交、Esc 取消。
   字段名与操作按钮位于第一行，字段类型下拉与值编辑器位于第二行，两行之间以分隔线隔开。
+  字段类型下拉按底层数据类型分组为两级结构：底层类型作分组标题，顶层类型缩进平铺在组内。
   字典绑定收纳在齿轮按钮的悬浮扩展面板中，通过 TreeSelect 选择。
   值编辑器固定独占新行展示；instant 系列的精度由其值编辑器自行维护（由值本身的格式表达）。
   readonly 模式（影子节点只读查看）下隐藏删除按钮与拖拽手柄，所有输入控件只读。
@@ -13,19 +14,41 @@
 import { computed } from "vue";
 import { t } from "@/i18n";
 import { FIELD_TYPES } from "@/field-types";
+import type { ValueKind } from "@/field-types";
+
+/** 字段类型下拉条目：subheader 分组标题（底层类型）或可选项（顶层类型）。 */
+type FieldTypeItem =
+  | { type: "subheader"; title: string }
+  | { title: string; value: string };
 
 /**
  * 字段类型下拉选项（所有组件实例共享一份）。
  *
+ * 两级结构：每种底层数据类型（valueKind）先占一行不可选的 subheader 分组
+ * 标题（Vuetify 原生支持的 type: "subheader" 条目），随后平铺组内全部顶层
+ * 类型；分组顺序与组内顺序均由 FIELD_TYPES 的声明顺序决定。
  * 仅依赖静态类型表与当前语言：t 内部对 locale 的响应式读取使该
  * computed 追踪语言，切换语言时自动重算；模块作用域只创建一次。
  */
-const typeItems = computed(() =>
-  FIELD_TYPES.map((ft) => ({
-    title: t("database.field-type." + ft.i18nKey),
-    value: ft.key,
-  })),
-);
+const typeItems = computed(() => {
+  // 先按底层类型归组（Map 保持首次出现顺序），再扁平化为 分组标题 + 可选项 的列表。
+  const groups = new Map<ValueKind, { title: string; value: string }[]>();
+  for (const ft of FIELD_TYPES) {
+    const item = { title: t("database.field-type." + ft.i18nKey), value: ft.key };
+    const group = groups.get(ft.valueKind);
+    if (group) {
+      group.push(item);
+    } else {
+      groups.set(ft.valueKind, [item]);
+    }
+  }
+  const items: FieldTypeItem[] = [];
+  for (const [kind, children] of groups) {
+    items.push({ type: "subheader", title: t(`database.field-type.kind-${kind}`) });
+    items.push(...children);
+  }
+  return items;
+});
 </script>
 
 <script setup lang="ts">
@@ -171,13 +194,20 @@ function submitNameEditOnEnter(event: KeyboardEvent): void {
             v-if="!editingName"
             class="field-name-display"
             :class="{ 'field-name-display--error': ownError?.highlight === 'name' }"
-            :title="t('database.field.name-edit-hint')"
+            :title="readonly ? undefined : t('database.field.name-edit-hint')"
             @click="startNameEdit"
           >
             <span v-if="row.name.trim() !== ''">{{ row.name }}</span>
             <span v-else class="field-name-placeholder">
               {{ t("database.field.name-empty") }}
             </span>
+            <!-- 可编辑提示图标：与名称同属一个点击区域，点击同样进入编辑态；只读模式下无编辑能力，不展示。 -->
+            <VIcon
+              v-if="!readonly"
+              icon="mdi-pencil-outline"
+              size="x-small"
+              class="field-name-edit-icon"
+            />
           </div>
           <!-- 编辑态使用原生 input 而非 VTextField：需要与展示态精确等高（1.75rem），避免状态切换时行高跳动。 -->
           <input
@@ -243,7 +273,15 @@ function submitNameEditOnEnter(event: KeyboardEvent): void {
             hide-details="auto"
             no-auto-scroll
             class="field-type-select"
-          />
+          >
+            <!-- 顶层类型条目缩进展示，与分组标题拉开层级；插槽内容携带本组件的 scoped 属性，菜单 teleport 后样式仍生效。 -->
+            <template #item="{ props: itemProps }">
+              <VListItem
+                v-bind="itemProps"
+                class="field-type-leaf"
+              />
+            </template>
+          </VSelect>
           <FieldValueEditor
             v-model="row.value"
             :field-type="row.fieldType"
@@ -331,6 +369,12 @@ function submitNameEditOnEnter(event: KeyboardEvent): void {
   color: rgba(var(--v-theme-on-surface), 0.6);
 }
 
+/* 可编辑提示图标：弱化展示以免喧宾夺主，与名称保持 0.25rem 间距。 */
+.field-name-edit-icon {
+  margin-left: 0.25rem;
+  color: rgba(var(--v-theme-on-surface), 0.45);
+}
+
 .field-name-edit {
   flex: 0 1 12rem;
   min-width: 0;
@@ -357,7 +401,12 @@ function submitNameEditOnEnter(event: KeyboardEvent): void {
 
 .field-type-select {
   flex: none;
-  width: 9rem;
+  width: 11rem;
+}
+
+/* 顶层类型条目相对分组标题缩进一级，表达两级层级。 */
+.field-type-leaf {
+  padding-inline-start: 2rem;
 }
 
 .field-value-editor {

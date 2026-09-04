@@ -131,7 +131,7 @@ function onPrecisionChange(val: Precision): void {
 
 .precision-select {
   flex: none;
-  width: 7.5rem;
+  width: 6rem;
 }
 
 .endpoint {

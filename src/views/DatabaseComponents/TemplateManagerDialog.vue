@@ -37,6 +37,7 @@ const selectedTemplate = computed(() =>
 
 function open() {
   selectedId.value = null;
+  draggingUid.value = null;
   dialog.value = true;
   loadData();
 }

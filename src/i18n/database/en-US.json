@@ -160,7 +160,7 @@
       "name-required": "Field name is required",
       "name-duplicated": "Field name is duplicated",
       "name-empty": "Unnamed field",
-      "name-edit-hint": "Double-click to edit the field name"
+      "name-edit-hint": "Click to edit the field name"
     },
     "field-type": {
       "string-single-line": "Single-line Text",
@@ -172,6 +172,10 @@
       "decimal-decimal": "Number",
       "instant-instant": "Instant",
       "instant-range-instant-range": "Time Range",
+      "kind-string": "String",
+      "kind-decimal": "Number",
+      "kind-instant": "Instant",
+      "kind-instant-range": "Time Range",
       "invalid-email": "Invalid email address",
       "invalid-url": "Invalid URL",
       "invalid-number": "Invalid number",
