@@ -4,15 +4,25 @@
    在画布中渲染带标题的贝塞尔曲线边。
    标题始终显示在边的中点位置，鼠标悬浮时显示详情 tooltip。
    当标题和详情均为空时不渲染任何标签。
-   使用 De Casteljau 算法在 t=0.5 处拆分曲线，实现标题打断边的效果。
+   使用 De Casteljau 算法在 t=0.5 处拆分曲线，实现标题打断边的效果；
+   缺口大小取标签矩形沿曲线中点切向的弦长（水平边打断宽度、垂直边只打断高度）。
    箭头为组件自绘（vue-flow 的 markerEnd 在 EdgeProps 中已序列化为 SVG url，无法在组件层改色，
    故忽略该 prop 并自绘 polygon 箭头，使箭头颜色随选中/高亮状态与边线同步变化）。
    选中（selected）时边线与箭头为实色 primary 并加粗；被邻居高亮（选中节点的相连边）时为半透明 primary 并加粗。
   -->
 <script setup lang="ts">
-import { EdgeLabelRenderer, type EdgeProps } from "@vue-flow/core";
+import { EdgeLabelRenderer, useVueFlow, type EdgeProps } from "@vue-flow/core";
 import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { highlightedEdgeIds } from "@/composables/use-neighbor-highlight";
+import {
+  arrowDirection,
+  computeControlPoints,
+  midpointSpeed,
+  midpointTangent,
+  rectChordHalfLength,
+  splitBezierAtT,
+  toPathString,
+} from "@/utils/custom-edge-geometry";
 
 const props = defineProps<EdgeProps>();
 
@@ -21,108 +31,49 @@ const emit = defineEmits<{ contextmenu: [payload: { id: string; x: number; y: nu
 /** 标题标签 DOM 引用 */
 const labelRef = ref<HTMLElement | null>(null);
 
-/** 标签实际像素宽度（默认 60px 避免首帧闪烁） */
+/** 标签实际宽度（flow 坐标单位，默认 60 避免首帧闪烁） */
 const labelWidth = ref(60);
 
-/** 二维向量 */
-interface Vec2 {
-  x: number;
-  y: number;
-}
+/** 标签实际高度（flow 坐标单位，默认 20 避免首帧闪烁） */
+const labelHeight = ref(20);
 
-/** 线性插值 */
-function lerp(a: Vec2, b: Vec2, t: number): Vec2 {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
+/** 画布视口：用于把 getBoundingClientRect 测得的屏幕像素换算为 flow 坐标单位 */
+const { viewport } = useVueFlow();
 
-/** 根据 handle 位置计算控制点 */
-function computeControlPoint(pos: Vec2, handlePosition: string, distance: number): Vec2 {
-  const cp = { x: pos.x, y: pos.y };
-  switch (handlePosition) {
-    case "right":
-      cp.x += distance;
-      break;
-    case "left":
-      cp.x -= distance;
-      break;
-    case "bottom":
-      cp.y += distance;
-      break;
-    case "top":
-      cp.y -= distance;
-      break;
-  }
-  return cp;
-}
+/**
+ * 贝塞尔曲线控制点：端点为源/目标连接桩坐标，控制点沿各自 handle 轴向偏移 |dx|/2。
+ * 垂直边（dx=0）时控制点与端点重合，曲线退化为直线。
+ */
+const bezPoints = computed(() =>
+  computeControlPoints(
+    props.sourceX ?? 0,
+    props.sourceY ?? 0,
+    props.targetX ?? 0,
+    props.targetY ?? 0,
+    props.sourcePosition ?? "right",
+    props.targetPosition ?? "left",
+  ),
+);
 
-/** 计算贝塞尔曲线的控制点 */
-function computeControlPoints(): { p0: Vec2; cp1: Vec2; cp2: Vec2; p1: Vec2 } {
-  const curvature = 0.5;
-  const sx = props.sourceX ?? 0;
-  const sy = props.sourceY ?? 0;
-  const tx = props.targetX ?? 0;
-  const ty = props.targetY ?? 0;
-  const dx = tx - sx;
-
-  const p0: Vec2 = { x: sx, y: sy };
-  const p1: Vec2 = { x: tx, y: ty };
-
-  const cp1 = computeControlPoint(p0, props.sourcePosition ?? "right", Math.abs(dx) * curvature);
-  const cp2 = computeControlPoint(p1, props.targetPosition ?? "left", Math.abs(dx) * curvature);
-
-  return { p0, cp1, cp2, p1 };
-}
-
-/** 在任意 t 处拆分三次贝塞尔曲线 */
-function splitBezierAtT(
-  p0: Vec2,
-  cp1: Vec2,
-  cp2: Vec2,
-  p1: Vec2,
-  t: number,
-): { first: [Vec2, Vec2, Vec2, Vec2]; second: [Vec2, Vec2, Vec2, Vec2]; point: Vec2 } {
-  // Level 1
-  const q0 = lerp(p0, cp1, t);
-  const q1 = lerp(cp1, cp2, t);
-  const q2 = lerp(cp2, p1, t);
-
-  // Level 2
-  const r0 = lerp(q0, q1, t);
-  const r1 = lerp(q1, q2, t);
-
-  // Level 3
-  const s = lerp(r0, r1, t);
-
-  return {
-    first: [p0, q0, r0, s],
-    second: [s, r1, q2, p1],
-    point: s,
-  };
-}
-
-/** 将控制点转换为 SVG 路径字符串 */
-function toPathString(p0: Vec2, cp1: Vec2, cp2: Vec2, p3: Vec2): string {
-  return `M ${p0.x},${p0.y} C ${cp1.x},${cp1.y} ${cp2.x},${cp2.y} ${p3.x},${p3.y}`;
-}
-
-/** 估算贝塞尔曲线的近似弧长 */
-function estimateCurveLength(): number {
-  const { p0, cp1, cp2, p1 } = computeControlPoints();
-  const d1 = Math.hypot(cp1.x - p0.x, cp1.y - p0.y);
-  const d2 = Math.hypot(cp2.x - cp1.x, cp2.y - cp1.y);
-  const d3 = Math.hypot(p1.x - cp2.x, p1.y - cp2.y);
-  return d1 + d2 + d3;
-}
-
-/** 拆分参数 t1 和 t2，在曲线中点创建与标签宽度匹配的缺口 */
+/**
+ * 拆分参数 t1 和 t2，在曲线中点创建与标签尺寸匹配的缺口。
+ * 缺口沿曲线的半长取标签矩形沿中点切向的弦半长加 padding 的一半：
+ * 水平边覆盖标签宽度、垂直边只覆盖标签高度、对角边取两者的过渡；
+ * 再用中点参数速度换算为参数间隔（缺口弧长 ≈ 2δ·speed），保证换算与边的朝向无关。
+ * speed 为 0（两端点重合的病理场景）时按 0.08 兜底。
+ */
 const splitParams = computed(() => {
   if (!props.data?.title && !props.data?.description) {
     return { t1: 0.5, t2: 0.5 };
   }
-  const curveLength = estimateCurveLength();
   const padding = 12;
-  const halfGapWidth = (labelWidth.value + padding) / 2;
-  const rawDelta = curveLength > 0 ? halfGapWidth / curveLength : 0.08;
+  const speed = midpointSpeed(bezPoints.value);
+  const halfChord = rectChordHalfLength(
+    labelWidth.value / 2,
+    labelHeight.value / 2,
+    midpointTangent(bezPoints.value),
+  );
+  const rawDelta = speed > 0 ? (halfChord + padding / 2) / speed : 0.08;
   const delta = Math.min(Math.max(rawDelta, 0.02), 0.4);
   return {
     t1: 0.5 - delta,
@@ -132,30 +83,27 @@ const splitParams = computed(() => {
 
 /** 前半段路径：从 t=0 到 t=0.5-δ */
 const path1 = computed(() => {
-  const { p0, cp1, cp2, p1 } = computeControlPoints();
   const { t1 } = splitParams.value;
-  const { first } = splitBezierAtT(p0, cp1, cp2, p1, t1);
+  const { first } = splitBezierAtT(bezPoints.value, t1);
   return toPathString(first[0], first[1], first[2], first[3]);
 });
 
 /** 后半段路径：从 t=0.5+δ 到 t=1 */
 const path2 = computed(() => {
-  const { p0, cp1, cp2, p1 } = computeControlPoints();
   const { t2 } = splitParams.value;
-  const { second } = splitBezierAtT(p0, cp1, cp2, p1, t2);
+  const { second } = splitBezierAtT(bezPoints.value, t2);
   return toPathString(second[0], second[1], second[2], second[3]);
 });
 
 /** 完整的边路径（无缺口），用作透明命中区域 */
 const hitAreaPath = computed(() => {
-  const { p0, cp1, cp2, p1 } = computeControlPoints();
+  const { p0, cp1, cp2, p1 } = bezPoints.value;
   return toPathString(p0, cp1, cp2, p1);
 });
 
 /** 中点坐标（标签位置） */
 const midPoint = computed(() => {
-  const { p0, cp1, cp2, p1 } = computeControlPoints();
-  const { point } = splitBezierAtT(p0, cp1, cp2, p1, 0.5);
+  const { point } = splitBezierAtT(bezPoints.value, 0.5);
   return point;
 });
 
@@ -190,19 +138,15 @@ const edgePathStyle = computed(() => ({
 }));
 
 /**
- * 自绘箭头路径：实心三角形，尖端在 path2 终点，朝向由曲线末端控制点（cp2）指向终点（p1）的向量决定。
+ * 自绘箭头路径：实心三角形，尖端在 path2 终点，朝向为曲线末端切向
+ * （切向退化为零向量时按目标 handle 轴向兜底，见 custom-edge-geometry.arrowDirection）。
  * 箭头尺寸为 SVG 用户单位（随画布缩放），颜色由 fill="currentColor" 继承 g 元素的 color 样式。
- * 输入：无（依赖 props 中的坐标与 handle 方位）。
- * 返回：SVG path 字符串；曲线退化（控制点与终点重合）时返回空串不渲染。
  */
 const arrowPath = computed(() => {
-  const { cp2, p1 } = computeControlPoints();
-  const dx = p1.x - cp2.x;
-  const dy = p1.y - cp2.y;
-  const len = Math.hypot(dx, dy);
-  if (len === 0) return "";
-  const ux = dx / len;
-  const uy = dy / len;
+  const { p1 } = bezPoints.value;
+  const dir = arrowDirection(bezPoints.value, props.targetPosition ?? "left");
+  const ux = dir.x;
+  const uy = dir.y;
   // 箭头长度与半宽（SVG 用户单位，视觉尺寸对齐 vue-flow 的 ArrowClosed marker）
   const size = 10;
   const halfWidth = 6;
@@ -218,11 +162,17 @@ const arrowPath = computed(() => {
   return `M ${p1.x},${p1.y} L ${leftX},${leftY} L ${rightX},${rightY} Z`;
 });
 
-/** 测量标题标签的实际宽度 */
+/**
+ * 测量标题标签的实际尺寸。
+ * getBoundingClientRect 测得的是缩放后的屏幕像素（label 容器位于画布的 scale(zoom) 变换内），
+ * 除以当前 zoom 换算为 flow 坐标单位，使缺口计算在任意缩放级别下都准确；
+ * 换算结果与 zoom 无关，因此 zoom 变化后无需重新测量。
+ */
 function measureLabel(): void {
   if (labelRef.value) {
     const rect = labelRef.value.getBoundingClientRect();
-    labelWidth.value = rect.width;
+    labelWidth.value = rect.width / viewport.value.zoom;
+    labelHeight.value = rect.height / viewport.value.zoom;
   }
 }
 
@@ -272,7 +222,7 @@ export default {
       :style="edgePathStyle"
       class="vue-flow__edge-path"
     />
-    <path v-if="arrowPath" :d="arrowPath" fill="currentColor" stroke="none" />
+    <path :d="arrowPath" fill="currentColor" stroke="none" />
   </g>
 
   <EdgeLabelRenderer>
