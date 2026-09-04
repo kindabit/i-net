@@ -1,6 +1,5 @@
 # 高
 
-[ ] App.vue 右上角的设置按钮不应该叫“剪贴板设置”，组件名称和aria-label都不正确
 [ ] 二次加密应该使用不同的密码（？可能没有意义）
 [ ] 是不是应该给影子节点单独新建一个 service ？现在有一些在 node 里，有一些在 edge 里。
 [ ] src-tauri\src\business\user_database\node\service\list.rs 递归查询可以用 prepared statement 优化
@@ -59,6 +58,7 @@
 
 # 已完成
 
+[x] App.vue 右上角的设置按钮不应该叫“剪贴板设置”，组件名称和aria-label都不正确
 [x] 点击画布空白处关闭回收站，就像新建节点菜单
 [x] 选中节点时高亮与之相关的边
 [x] Home.vue 页面确认密码的地方 tab 键顺序错误

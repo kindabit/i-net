@@ -2,6 +2,9 @@
   "app": {
     "switch-language": "切换语言",
     "switch-theme": "切换主题",
+    "settings": "设置",
+    "settings-clipboard-clear-timeout": "自动清空剪贴板等待时间（秒）",
+    "settings-seconds": "{n}秒",
     "fatal-error-title": "检测到数据损坏",
     "fatal-error-notice": "为保护你的数据，应用需要立即退出。退出不会保存任何更改。",
     "fatal-error-exit": "退出应用",

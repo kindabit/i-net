@@ -2,6 +2,9 @@
   "app": {
     "switch-language": "Switch Language",
     "switch-theme": "Switch Theme",
+    "settings": "Settings",
+    "settings-clipboard-clear-timeout": "Automatically clear clipboard after (seconds)",
+    "settings-seconds": "{n}s",
     "fatal-error-title": "Data Corruption Detected",
     "fatal-error-notice": "The application must exit now to protect your data. No changes will be saved.",
     "fatal-error-exit": "Exit Application",
