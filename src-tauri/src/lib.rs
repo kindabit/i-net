@@ -153,6 +153,7 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::export::command::export::user_database_export_export,
             business::user_database::edge::command::create::user_database_edge_create,
             business::user_database::edge::command::delete::user_database_edge_delete,
+            business::user_database::edge::command::get::user_database_edge_get,
             business::user_database::edge::command::list::user_database_edge_list,
             business::user_database::edge::command::update::user_database_edge_update,
             business::user_database::lifecycle::command::close::user_database_lifecycle_close,

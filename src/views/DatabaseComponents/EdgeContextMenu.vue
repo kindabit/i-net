@@ -5,19 +5,15 @@
   不接收 props，通过 defineExpose 暴露 open 方法，通过 defineEmits 发出 edit 事件。
   CanvasView 只需在 @edge-context-menu 中调用 open() 并监听 edit 事件即可。
 
-  删除边流程（影子节点联动）：
-  1. 先以未确认姿态调用后端；若删除会断开影子节点在子画布内的关联节点，后端返回
-     EdgeDeleteDisconnectsNodes 错误（data.nodes 为受影响节点标题列表）；
-  2. 此时关闭右键菜单并弹出确认对话框，用户确认后再以 confirmed=true 重试；
-  3. 确认后调用失败或其它错误均交给 snackbarErrorCode 统一展示。
+  删除边复用 use-edge-delete 的断连确认流程（先以未确认姿态调用，后端提示会断开
+  影子节点在子画布内的关联节点则确认后重试）；本组件负责确认前收起菜单、删除成功后
+  把边从本地边集移除。
 -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import type { Edge as VFEdge } from "@vue-flow/core";
 import { t } from "@/i18n";
-import { userDatabaseEdgeDelete } from "@/api";
-import { snackbarErrorCode } from "@/composables/use-snackbar";
-import { isErrorCode } from "@/error-code";
+import { deleteEdgeWithDisconnectConfirm } from "@/composables/use-edge-delete";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
 const emit = defineEmits<{ edit: [id: string] }>();
@@ -66,44 +62,28 @@ function removeEdgeLocally(id: string) {
 }
 
 /**
- * 删除边：先以未确认姿态调用，若后端提示会断开影子节点的关联节点，
- * 则关闭右键菜单并弹出确认对话框，用户确认后再以 confirmed=true 重试。
+ * 删除边：断连确认与重试由共用流程处理，本组件在请求确认前收起菜单，
+ * 删除成功后把边从本地边集移除并关闭菜单。
  */
 async function onDelete() {
   const id = edgeId.value;
   if (!id) return;
-  try {
-    await userDatabaseEdgeDelete(id, false);
-    removeEdgeLocally(id);
+  // 断连确认前先收起菜单，让确认对话框浮在画布之上而不被菜单遮挡
+  const deleted = await deleteEdgeWithDisconnectConfirm(id, async (nodes) => {
     close();
-    return;
-  } catch (e) {
-    if (isErrorCode(e, "EdgeDeleteDisconnectsNodes")) {
-      close();
-      const rawNodes = e.data?.nodes;
-      const nodes: string[] = Array.isArray(rawNodes)
-        ? rawNodes.map(String)
-        : [];
-      const separator = t("database.canvas.delete-edge-disconnect-separator");
-      const confirmed = await confirmDialogRef.value?.open({
-        title: t("database.canvas.delete-edge-disconnect-title"),
-        text: t("database.canvas.delete-edge-disconnect-text", {
-          nodes: nodes.join(separator),
-        }),
-        confirmText: t("database.canvas.delete-edge"),
-        confirmColor: "error",
-      });
-      if (!confirmed) return;
-      try {
-        await userDatabaseEdgeDelete(id, true);
-        removeEdgeLocally(id);
-      } catch (e2) {
-        snackbarErrorCode(e2);
-      }
-      return;
-    }
-    snackbarErrorCode(e);
-  }
+    const confirmed = await confirmDialogRef.value?.open({
+      title: t("database.canvas.delete-edge-disconnect-title"),
+      text: t("database.canvas.delete-edge-disconnect-text", {
+        nodes: nodes.join(t("database.canvas.delete-edge-disconnect-separator")),
+      }),
+      confirmText: t("database.canvas.delete-edge"),
+      confirmColor: "error",
+    });
+    return !!confirmed;
+  });
+  if (!deleted) return;
+  removeEdgeLocally(id);
+  close();
 }
 
 defineExpose({

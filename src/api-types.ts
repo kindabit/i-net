@@ -71,7 +71,7 @@ export interface Node {
   deleted: boolean;
   /** 序列化自定义颜色，空串 = 默认 */
   color: string;
-  /** 影子节点指向的原始节点 id；null 表示普通节点 */
+  /** 产生该影子节点的边 id；null 表示普通节点（影子的产生边为其存在依据，与其同生共死） */
   shadow_id: string | null;
 }
 

@@ -6,15 +6,15 @@
   四个方向均为出口（source）。
   节点为固定宽高（尺寸常量见 node-size.ts，为吸附网格 20px 的整数倍），标题/副标题过长时显示省略号。
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
-  影子节点只显示编辑按钮，画布节点不显示复制按钮。
+  影子节点只显示编辑与删除按钮（删除等价于删除产生它的边），画布节点不显示复制按钮。
   支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
   在跨画布迁移（按住 Alt 拖拽）时根据节点集合法性显示"允许/禁止"落点光环。
 
-  影子节点（data.shadowId 非 null）的渲染差异：
+  影子节点（data.shadowOriginId 非 null）的渲染差异：
   - 边框使用虚线，整体略降透明度，提示其为对画布外原始节点的引用。
   - 当 data.shadowDirection 非 null 时，在节点对应外侧渲染一条带行进动画的虚拟边，
     表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
-    点击该虚拟边可快捷跳转至父画布并尽量定位原始节点。
+    点击该虚拟边跳转至产生该影子节点的边所在画布，并把视角定位到该边。
   - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
   - data.canvasRefId 对影子节点恒为 null（后端不合并根本体的 canvas_ref_id）。
   - 双击行为按影子方向分流：入向影子打开根本体的只读编辑对话框；出向影子（画布节点的影子）
@@ -26,7 +26,8 @@ import { Handle, Position, useNode } from "@vue-flow/core";
 import { useRoute, useRouter } from "vue-router";
 import { isString } from "lodash";
 import { t } from "@/i18n";
-import { userDatabaseCanvasList } from "@/api";
+import { userDatabaseCanvasList, userDatabaseEdgeGet } from "@/api";
+import type { Edge } from "@/api-types";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import { highlightedNodeIds } from "@/composables/use-neighbor-highlight";
 import type { DataNodeData } from "@/vf-convert";
@@ -68,7 +69,7 @@ const handleStyle = computed(() => {
   return handle ? { background: handle, borderColor: handle } : undefined;
 });
 
-/** 迁移落点高亮状态：仅当本节点成为迁移目标（状态机只会以影子节点/画布节点为目标）且处于 relocate 模式时非 null */
+/** 迁移落点高亮状态：仅当本节点成为迁移目标（状态机只会以画布节点/出向影子节点为目标）且处于 relocate 模式时非 null */
 const dropState = computed(() => {
   if (nodeMoveAndRelocate.mode.value !== "relocate") return null;
   const target = nodeMoveAndRelocate.relocatingTarget.value;
@@ -76,6 +77,11 @@ const dropState = computed(() => {
   if (target.nodeId !== props.id) return null;
   return nodeMoveAndRelocate.nodeSetRelocatingLegality.value === "legal" ? "allow" : "forbid";
 });
+
+/** 删除按钮的悬浮提示：影子节点的删除等价于删除产生它的边，故与节点删除区分文案 */
+const deleteTitle = computed(() =>
+  t(props.data.shadowOriginId ? "database.canvas.delete-shadow-node" : "database.canvas.delete-node"),
+);
 
 /** 邻居高亮状态：本节点是某条选中边的端点时为 true（与 selected 状态正交，可叠加） */
 const isNeighborHighlighted = computed(() => highlightedNodeIds.value.has(props.id));
@@ -103,28 +109,50 @@ function onDblClick() {
 }
 
 /**
- * 点击影子节点虚拟边：跳转至当前画布的父画布，并尽量通过 nodeId 定位影子对应的原始节点。
- * 原始节点已逻辑删除或父画布不存在（数据不一致）时仅完成可确定的跳转或静默不跳转。
+ * 按画布父子关系记录本次画布间导航的钻取方向：目标画布是父画布记为 drill-out、
+ * 是子画布记为 drill-in；关系不明或查询失败时不记录，由过渡模块回落为默认动画。
+ * 输入：fromCanvasId 当前画布 id；toCanvasId 目标画布 id。
+ * 返回：无返回值。
+ */
+async function markNavIntent(fromCanvasId: string, toCanvasId: string): Promise<void> {
+  try {
+    const canvases = await userDatabaseCanvasList(false);
+    const from = canvases.find((c) => c.id === fromCanvasId);
+    const to = canvases.find((c) => c.id === toCanvasId);
+    if (!from || !to) return;
+    if (to.id === from.parent_id) setCanvasNavIntent("drill-out");
+    else if (from.id === to.parent_id) setCanvasNavIntent("drill-in");
+  } catch {
+    // 导航意图只影响过渡动画方向：查询失败时静默回落为默认动画，不阻塞跳转
+  }
+}
+
+/**
+ * 点击影子节点虚拟边：现场查询产生该影子节点的边，跳转至该边所在画布并把视角定位到该边
+ * （影子是边的映射而非节点的映射，其产生边所在画布未必是父画布）。
+ * 查询失败（含边不存在）时提示错误且不跳转。
  * 输入：无。
  * 返回：无返回值。
  */
 async function onShadowVirtualEdgeClick() {
-  if (!props.data.shadowId || !props.data.shadowDirection) return;
-  const canvasId = route.params.canvasId;
-  if (!isString(canvasId) || canvasId === "") return;
+  const edgeId = props.data.shadowId;
+  if (!edgeId) return;
+  const currentCanvasId = route.params.canvasId;
+  let producingEdge: Edge;
   try {
-    const canvases = await userDatabaseCanvasList(false);
-    const current = canvases.find((c) => c.id === canvasId);
-    if (!current || current.parent_id === null) return;
-    setCanvasNavIntent("drill-out");
-    await router.push({
-      name: "canvas",
-      params: { canvasId: current.parent_id },
-      query: { nodeId: props.data.shadowId },
-    });
+    producingEdge = await userDatabaseEdgeGet(edgeId);
   } catch (e) {
     snackbarErrorCode(e);
+    return;
   }
+  if (isString(currentCanvasId) && currentCanvasId !== "") {
+    await markNavIntent(currentCanvasId, producingEdge.canvas_id);
+  }
+  await router.push({
+    name: "canvas",
+    params: { canvasId: producingEdge.canvas_id },
+    query: { edgeId },
+  });
 }
 </script>
 
@@ -134,7 +162,7 @@ async function onShadowVirtualEdgeClick() {
     :class="{
       'data-node-card--selected': selected,
       'data-node-card--neighbor-highlighted': isNeighborHighlighted,
-      'data-node-card--shadow': !!data.shadowId,
+      'data-node-card--shadow': !!data.shadowOriginId,
       'data-node-card--origin-deleted': !!data.shadowOriginDeleted,
       'data-node-card--drop-allow': dropState === 'allow',
       'data-node-card--drop-forbid': dropState === 'forbid',
@@ -167,7 +195,7 @@ async function onShadowVirtualEdgeClick() {
           @dblclick.stop
         />
         <VBtn
-          v-if="!data.shadowId && !data.canvasRefId"
+          v-if="!data.shadowOriginId && !data.canvasRefId"
           icon="mdi-content-copy"
           size="x-small"
           variant="text"
@@ -180,7 +208,7 @@ async function onShadowVirtualEdgeClick() {
           @dblclick.stop
         />
         <VBtn
-          v-if="!data.shadowId"
+          v-if="!data.shadowOriginId"
           icon="mdi-paperclip"
           size="x-small"
           variant="text"
@@ -193,7 +221,7 @@ async function onShadowVirtualEdgeClick() {
           @dblclick.stop
         />
         <VBtn
-          v-if="!data.shadowId"
+          v-if="!data.shadowOriginId"
           icon="mdi-palette-outline"
           size="x-small"
           variant="text"
@@ -206,12 +234,11 @@ async function onShadowVirtualEdgeClick() {
           @dblclick.stop
         />
         <VBtn
-          v-if="!data.shadowId"
           icon="mdi-delete-outline"
           size="x-small"
           variant="text"
           density="comfortable"
-          :title="t('database.canvas.delete-node')"
+          :title="deleteTitle"
           :style="{ color: colors.action }"
           @click.stop="emit('delete', props.id)"
           @pointerdown.stop

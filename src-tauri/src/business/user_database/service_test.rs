@@ -2542,12 +2542,8 @@ fn test_user_database_service_all_functions() {
     assert_ne!((unchanged_d.x, unchanged_d.y), (500.0, 600.0));
 
     // move_canvases 成功路径：批量移动（canvas_e 原地移动，实际位移 1 个）。
-    // 先获取 canvas_d 和 canvas_e 当前坐标。
-    let canvas_d_before = canvas::service::list(false)
-        .unwrap()
-        .into_iter()
-        .find(|c| c.id == canvas_d.id)
-        .unwrap();
+    // canvas_d 移动到固定坐标 (500, 600)，其移动前坐标不等于该值已由上方失败路径的断言证明；
+    // canvas_e 的坐标由布局计算得出，需先读取才能构造原地移动项并校验其坐标不变。
     let canvas_e_before = canvas::service::list(false)
         .unwrap()
         .into_iter()

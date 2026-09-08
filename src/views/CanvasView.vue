@@ -3,8 +3,8 @@
 
   渲染单个画布内的有向无环图，包括节点和边的可视化。
    左键拖动空白处框选节点（框选后拖动任一选中节点可批量移动），右键/中键拖动平移视口，视口变化自动持久化。
-   路由携带 nodeId 时视角居中到目标节点。
-   集成节点编辑、逻辑删除与回收站功能。
+   路由携带 edgeId 时居中到目标边，携带 nodeId 时视角居中到目标节点。
+   集成节点编辑、逻辑删除与回收站功能；影子节点的删除等价于删除产生它的边。
    支持自动布局（罗盘锚定分层）。
     集成节点移动和迁移系统：按住 Alt 拖拽节点到画布节点、影子节点或面包屑祖先片段可跨画布迁移，
     并在落点处显示允许/禁止高亮；非法迁移尝试（落点有效但节点集不可迁移）弹出针对性错误提示；
@@ -29,7 +29,6 @@ import {
   userDatabaseNodeCopy,
   userDatabaseEdgeCreate,
   userDatabaseEdgeUpdate,
-  userDatabaseCanvasList,
   userDatabaseViewportGet,
 } from "@/api";
 import type { Node, Edge, MoveNodeVO } from "@/api-types";
@@ -43,6 +42,7 @@ import { setupNeighborHighlight } from "@/composables/use-neighbor-highlight";
 import nodeMoveAndRelocate, { type Mode, type RelocatingLegality, type RelocatingTarget } from "@/composables/use-node-move-and-relocate.ts";
 import { blurOutRelocated } from "@/composables/use-relocate-animation";
 import { useRecycleBin } from "@/composables/use-recycle-bin";
+import { deleteEdgeWithDisconnectConfirm } from "@/composables/use-edge-delete";
 import { flyToRecycleBin, fadeInNode, fadeInEdges, ghostOutEdge } from "@/composables/use-canvas-animations";
 import DataNode from "./DatabaseComponents/DataNode.vue";
 import CustomEdge from "./DatabaseComponents/CustomEdge.vue";
@@ -146,20 +146,39 @@ onUnmounted(() => {
 });
 
 /**
- * VueFlow 实例初始化回调：在持久化视口恢复完成后，若路由携带 nodeId 查询参数，
- * 则将视角以动画飞行方式居中到目标节点（节点为固定尺寸，见 node-size.ts；坐标为左上角，故偏移半个宽高）。
+ * VueFlow 实例初始化回调：在持久化视口恢复完成后，按路由查询参数把视角以动画飞行方式
+ * 居中到定位目标——携带 edgeId 时目标为该边的两端节点（居中到两者中心连线的中点），
+ * 否则携带 nodeId 时目标为该节点（节点为固定尺寸，见 node-size.ts；坐标为左上角，
+ * 需换算到中心）。定位目标不存在（如端点被逻辑删除导致边被过滤）时不改变视角。
  * 输入：instance VueFlow 实例。
  * 返回：无返回值。
  */
 function onFlowInit(instance: VueFlowStore) {
+  const edgeId = route.query.edgeId;
   const nodeId = route.query.nodeId;
-  if (!isString(nodeId) || nodeId === "") return;
-  const target = nodes.value.find((n) => n.id === nodeId);
-  if (!target) return;
-  instance.setCenter(target.position.x + DATA_NODE_HALF_WIDTH, target.position.y + DATA_NODE_HALF_HEIGHT, {
-    zoom: viewport.current.value.zoom,
-    duration: 300,
-  });
+  // 收集定位目标的节点集合：edgeId 取边的两端节点，nodeId 取单个节点
+  // （两个参数互斥，GlobalSearch 跳转前已清除残留的 edgeId）
+  let focusNodes: VFNode[] = [];
+  if (isString(edgeId) && edgeId !== "") {
+    const edge = edges.value.find((e) => e.id === edgeId);
+    if (edge) {
+      focusNodes = [edge.source, edge.target]
+        .map((id) => nodes.value.find((n) => n.id === id))
+        .filter((n): n is VFNode => !!n);
+    }
+  } else if (isString(nodeId) && nodeId !== "") {
+    const node = nodes.value.find((n) => n.id === nodeId);
+    if (node) focusNodes = [node];
+  }
+  if (focusNodes.length === 0) return;
+  instance.setCenter(
+    focusNodes.reduce((sum, n) => sum + n.position.x, 0) / focusNodes.length + DATA_NODE_HALF_WIDTH,
+    focusNodes.reduce((sum, n) => sum + n.position.y, 0) / focusNodes.length + DATA_NODE_HALF_HEIGHT,
+    {
+      zoom: viewport.current.value.zoom,
+      duration: 300,
+    },
+  );
 }
 
 // 节点
@@ -167,10 +186,10 @@ function onFlowInit(instance: VueFlowStore) {
 /**
  * 打开指定节点的编辑对话框。
  *
- * 普通节点以编辑模式打开；影子节点（data.shadowId 非 null）以只读模式打开原始节点的对话框，
+ * 普通节点以编辑模式打开；影子节点（data.shadowOriginId 非 null）以只读模式打开原始节点的对话框，
  * 字段数据通过传入的原始节点 id 从 userDatabaseNodeFieldGet 加载。只读模式不会
  * resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
- * @param id 节点 id（影子节点是画布中的虚拟节点 id，原始节点 id 通过 data.shadowId 获取）
+ * @param id 节点 id（影子节点是画布中的虚拟节点 id，原始节点 id 通过 data.shadowOriginId 获取）
  * @returns 无返回值
  */
 async function onNodeEdit(id: string) {
@@ -178,18 +197,59 @@ async function onNodeEdit(id: string) {
   if (!node) return;
   // 影子节点以只读形式打开原始节点的编辑对话框：传入原始节点 id，字段从原始节点加载；
   // 只读模式不会 resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
-  const shadowId = node.data.shadowId as string | null;
+  const shadowOriginId = node.data.shadowOriginId as string | null;
   const result = await editNodeDialogRef.value?.open(
-    { id: shadowId ?? id, title: node.data.title, subTitle: node.data.subTitle },
-    { readonly: !!shadowId },
+    { id: shadowOriginId ?? id, title: node.data.title, subTitle: node.data.subTitle },
+    { readonly: !!shadowOriginId },
   );
   if (!result) return;
   node.data.title = result.title;
   node.data.subTitle = result.subTitle;
 }
 
-async function onNodeLogicalDelete(id: string) {
-  if (!nodes.value.some((n) => n.id === id)) return;
+/**
+ * 删除影子节点：等价于删除产生该影子的边（影子是边的映射，随产生边同生共死）。
+ *
+ * 删除会让子画布内的节点失去连接时先弹出断连确认框，用户确认后才真正删除；
+ * 影子由后端沿外键链物理删除，不进入回收站，故不播放飞向回收站动画。
+ * @param node 待删除的影子节点
+ * @param producingEdgeId 产生该影子的边 id
+ * @returns 无返回值
+ */
+async function deleteShadowNode(node: VFNode, producingEdgeId: string): Promise<void> {
+  const deleted = await deleteEdgeWithDisconnectConfirm(producingEdgeId, async (affected) => {
+    const confirmed = await confirmDialogRef.value?.open({
+      title: t("database.canvas.delete-shadow-node-disconnect-title"),
+      text: t("database.canvas.delete-shadow-node-disconnect-text", {
+        nodes: affected.join(t("database.canvas.delete-edge-disconnect-separator")),
+      }),
+      confirmText: t("database.canvas.delete-shadow-node"),
+      confirmColor: "error",
+    });
+    return !!confirmed;
+  });
+  if (!deleted) return;
+  // 后端已级联删除影子的相连边：本地同步移除，相连边先播残影淡出
+  const leavingEdges = edges.value.filter((e) => e.source === node.id || e.target === node.id);
+  for (const e of leavingEdges) ghostOutEdge(e.id);
+  edges.value = edges.value.filter((e) => e.source !== node.id && e.target !== node.id);
+  nodes.value = nodes.value.filter((n) => n.id !== node.id);
+}
+
+/**
+ * 删除指定节点：影子节点走产生边删除（见 deleteShadowNode），普通节点与画布节点
+ * 走逻辑删除并飞入回收站。
+ * @param id 节点 id
+ * @returns 无返回值
+ */
+async function onNodeDelete(id: string): Promise<void> {
+  const node = nodes.value.find((n) => n.id === id);
+  if (!node) return;
+  const producingEdgeId = node.data.shadowId as string | null;
+  if (producingEdgeId !== null) {
+    await deleteShadowNode(node, producingEdgeId);
+    return;
+  }
 
   const ok = await recycleBin.logicalDelete(id);
   if (!ok) return;
@@ -464,9 +524,9 @@ function isValidConnection(connection: Connection): boolean {
   if (!source || !target) return false;
   // 画布节点不能直接作为源连接普通节点（后端 CanvasToPlainNodeEdge 兜底）。
   // 画布节点的判定需排除影子：影子不是画布节点，其 canvasRefId 不参与本判断。
-  // 普通节点的判定：canvasRefId === null 且 shadowId === null。
-  const sourceIsCanvas = source.data.canvasRefId !== null && source.data.shadowId === null;
-  const targetIsPlain = target.data.canvasRefId === null && target.data.shadowId === null;
+  // 普通节点的判定：canvasRefId === null 且 shadowOriginId === null。
+  const sourceIsCanvas = source.data.canvasRefId !== null && source.data.shadowOriginId === null;
+  const targetIsPlain = target.data.canvasRefId === null && target.data.shadowOriginId === null;
   if (sourceIsCanvas && targetIsPlain) return false;
   // 入向影子（普通节点的影子）只能作为源：拒绝 target 为入向影子（后端 InvalidShadowEdge 兜底）。
   if (target.data.shadowDirection === "inflow") return false;
@@ -510,7 +570,7 @@ async function onEdgeEdit(id: string): Promise<void> {
  * 基于 document.elementsFromPoint 做 DOM 命中测试：vue-flow 节点容器带
  * vue-flow__node 类和 data-id 属性，重叠节点与被拖动节点下方的节点都会被
  * 收集，按自顶向下的顺序返回。被拖动的节点也会被返回——其 data 上没有
- * canvasRefId/shadowId 时会被状态机的迁移目标计算自然跳过，无需在此排除。
+ * canvasRefId/shadowOriginId 时会被状态机的迁移目标计算自然跳过，无需在此排除。
  * @param position 屏幕坐标（clientX / clientY）
  * @returns 该位置处的节点数组，按 DOM 自顶向下排序
  */
@@ -593,32 +653,6 @@ function persistMove(moved: VFNode[]) {
 }
 
 /**
- * 解析迁移目标画布 id。
- *
- * canvas-node / breadcrumb-segment 目标直接携带 canvasId；
- * shadow-node 目标取当前画布的父画布 id（影子 origin 恒位于父画布——该不变量由后端
- * 迁移校验保证：与画布节点有边的节点永远无法通过合法性校验，故影子 origin 不会被迁走）。
- * @param target 状态机算出的迁移目标
- * @returns 目标画布 id；解析失败（当前画布无父画布或查询出错）时返回 null
- */
-async function resolveRelocateTargetCanvasId(target: RelocatingTarget): Promise<string | null> {
-  if (target.type === "canvas-node") {
-    return target.canvasRefId;
-  }
-  else if (target.type === "breadcrumb-segment") {
-    return target.canvasId;
-  }
-  try {
-    const canvases = await userDatabaseCanvasList(false);
-    const current = canvases.find((c) => c.id === canvasId);
-    return current?.parent_id ?? null;
-  } catch (e) {
-    snackbarErrorCode(e);
-    return null;
-  }
-}
-
-/**
  * 计算迁移落点：节点区域包围盒（节点固定尺寸，见 node-size.ts）中心平移到目标锚点，
  * 平移量按吸附网格逐轴取整——源坐标本就网格对齐，取整后的平移量保证结果仍对齐，
  * 且节点之间的相对位置关系不变。
@@ -642,7 +676,7 @@ function computeRelocateItems(draggedNodes: VFNode[], center: { x: number; y: nu
  * 迁移条件：relocate 模式 + 节点集合法 + 有迁移目标；其余一律按画布内移动持久化。
  * 非法迁移尝试（relocate 模式 + 有迁移目标 + 节点集非法）按非法原因弹出针对性错误提示，
  * 随后仍按画布内移动持久化。
- * 迁移失败（含目标解析失败、视口查询失败、API 报错）时回退为画布内移动持久化——
+ * 迁移失败（视口查询失败、API 报错）时回退为画布内移动持久化——
  * 节点已在视觉上移位，坐标必须落库，否则刷新后位置跳变。
  * 迁移成功后先对被迁移节点与两端都在集合内的内部边播放失焦淡出动画，
  * 动画结束再从本地移除（对齐逻辑删除的本地移除模式）。
@@ -663,26 +697,26 @@ async function onNodeDragStopEffect(mode: Mode, draggedNodes: VFNode[], legality
         : "database.canvas.relocate-has-external"; // has-external
       snackbarText(t(key), "error");
     } else {
-      const targetCanvasId = await resolveRelocateTargetCanvasId(target);
-      if (targetCanvasId !== null) {
-        try {
-          // 视口的持久化语义为"视口中心"：中心画布坐标 = (-x / zoom, -y / zoom)；
-          // 目标画布无视口记录时 GET 返回默认值 (0, 0, 1)，代入即画布原点 (0, 0)
-          const vp = await userDatabaseViewportGet(targetCanvasId);
-          const center = { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom };
-          const items = computeRelocateItems(draggedNodes, center);
-          await userDatabaseNodeRelocateNodes(items, targetCanvasId);
-          const movedIds = new Set(draggedNodes.map((n) => n.id));
-          const internalEdgeIds = edges.value
-            .filter((e) => movedIds.has(e.source) && movedIds.has(e.target))
-            .map((e) => e.id);
-          await blurOutRelocated([...movedIds], internalEdgeIds);
-          nodes.value = nodes.value.filter((n) => !movedIds.has(n.id));
-          edges.value = edges.value.filter((e) => !movedIds.has(e.source) && !movedIds.has(e.target));
-          return;
-        } catch (e) {
-          snackbarErrorCode(e);
-        }
+      // 三类迁移目标均直接携带目标画布 id：canvas-node 为画布节点引用的子画布，
+      // shadow-node 为影子根本体（画布节点）引用的子画布，breadcrumb-segment 为面包屑片段对应的画布
+      const targetCanvasId = target.type === "canvas-node" ? target.canvasRefId : target.canvasId;
+      try {
+        // 视口的持久化语义为"视口中心"：中心画布坐标 = (-x / zoom, -y / zoom)；
+        // 目标画布无视口记录时 GET 返回默认值 (0, 0, 1)，代入即画布原点 (0, 0)
+        const vp = await userDatabaseViewportGet(targetCanvasId);
+        const center = { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom };
+        const items = computeRelocateItems(draggedNodes, center);
+        await userDatabaseNodeRelocateNodes(items, targetCanvasId);
+        const movedIds = new Set(draggedNodes.map((n) => n.id));
+        const internalEdgeIds = edges.value
+          .filter((e) => movedIds.has(e.source) && movedIds.has(e.target))
+          .map((e) => e.id);
+        await blurOutRelocated([...movedIds], internalEdgeIds);
+        nodes.value = nodes.value.filter((n) => !movedIds.has(n.id));
+        edges.value = edges.value.filter((e) => !movedIds.has(e.source) && !movedIds.has(e.target));
+        return;
+      } catch (e) {
+        snackbarErrorCode(e);
       }
     }
   }
@@ -797,7 +831,7 @@ async function onNodePhysicalDelete(node: Node): Promise<void> {
       <Background pattern="dots" :gap="20" :size="1" />
       <Controls class="theme-controls frosted-glass" />
       <template #node-data-node="{ id, data, selected }">
-        <DataNode :id="id" :data="data" :selected="selected" @delete="onNodeLogicalDelete" @edit="onNodeEdit" @copy="onNodeCopy" @attachment="onNodeAttachment" @color="onNodeColor" />
+        <DataNode :id="id" :data="data" :selected="selected" @delete="onNodeDelete" @edit="onNodeEdit" @copy="onNodeCopy" @attachment="onNodeAttachment" @color="onNodeColor" />
       </template>
       <template #edge-custom="edgeProps">
         <CustomEdge v-bind="edgeProps" @contextmenu="(p) => onEdgeContextMenu(p.id, { x: p.x, y: p.y })" />

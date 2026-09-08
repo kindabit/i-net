@@ -15,10 +15,13 @@ import { DataNodeData } from "@/vf-convert";
 
 /**
  * 迁移目标的类型以及相关数据
+ * canvas-node - 画布节点，迁移至其引用的子画布
+ * shadow-node - 出向影子节点，迁移至其根本体（画布节点）引用的子画布
+ * breadcrumb-segment - 面包屑祖先片段，迁移至片段对应的画布
  */
 export type RelocatingTarget =
   { type: 'canvas-node', nodeId: string, canvasRefId: string } |
-  { type: 'shadow-node', nodeId: string, shadowId: string } |
+  { type: 'shadow-node', nodeId: string, canvasId: string } |
   { type: 'breadcrumb-segment', canvasId: string, canvasName: string }
 
 /**
@@ -133,7 +136,7 @@ function useNodeMoveAndRelocate() {
       if ((node.data as DataNodeData).canvasRefId) {
         return 'has-canvas';
       }
-      if ((node.data as DataNodeData).shadowId) {
+      if ((node.data as DataNodeData).shadowOriginId) {
         return 'has-shadow';
       }
       set.add(node.id);
@@ -156,11 +159,14 @@ function useNodeMoveAndRelocate() {
     let nodes = queryNodeAtPosition!(position);
     for (let node of nodes) {
       let data = node.data as DataNodeData;
-      if (data.shadowId) {
+      // 影子节点中只有出向影子（根本体为画布节点）携带根本体引用的子画布 id，是合法迁移目标；
+      // 入向影子的根本体是普通节点，不指向任何画布，跳过并继续考察下层节点；
+      // 根本体已被逻辑删除时其引用的子画布已随之级联删除，同样不再作为目标（与双击钻入行为的判定一致）。
+      if (data.shadowOriginCanvasRefId && !data.shadowOriginDeleted) {
         return {
           type: 'shadow-node',
           nodeId: node.id,
-          shadowId: data.shadowId,
+          canvasId: data.shadowOriginCanvasRefId,
         };
       }
       if (data.canvasRefId) {

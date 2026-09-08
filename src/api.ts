@@ -543,6 +543,15 @@ export async function userDatabaseEdgeDelete(
 }
 
 /**
+ * 查询指定边（含其所属画布 id，供从影子节点回溯产生边时跳转定位）。
+ * @param id 边 id
+ * @returns 该边
+ */
+export async function userDatabaseEdgeGet(id: string): Promise<Edge> {
+  return invoke<Edge>("user_database_edge_get", { id });
+}
+
+/**
  * 查询指定画布内的所有边。
  * @param canvasId 画布 id
  * @returns 该画布内的边列表

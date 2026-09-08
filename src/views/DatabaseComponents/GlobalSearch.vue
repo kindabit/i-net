@@ -152,7 +152,8 @@ function select(item: NodeSearchResponse) {
   void router.push({
     name: "canvas",
     params: { canvasId: item.canvas_id },
-    query: { ...route.query, nodeId: item.id },
+    // 清除可能残留的 edgeId：edgeId 与 nodeId 是两个互斥的定位参数，搜索定位以 nodeId 为准
+    query: { ...route.query, edgeId: undefined, nodeId: item.id },
   });
 }
 

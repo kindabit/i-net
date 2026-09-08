@@ -15,14 +15,16 @@ export interface DataNodeData {
   canvasRefId: string | null;
   /** 节点自定义颜色字符串，空串 = 默认 */
   color: string;
-  /** 影子节点根本体节点的 id；null 表示普通节点（用于判断是否影子节点、以及影子节点点击跳转/迁移落点时的定位锚点） */
-  shadowId: string | null;
+  /** 影子节点根本体节点的 id（对应后端 shadow_origin_id）；null 表示普通节点（用于判断是否影子节点、以及影子节点编辑对话框与迁移落点的定位锚点） */
+  shadowOriginId: string | null;
   /** 影子节点的原始节点是否已被逻辑删除（普通节点恒为 false） */
   shadowOriginDeleted: boolean;
   /** 影子节点的方向（inflow=入向，只有出度；outflow=出向，只有入度）；普通节点为 null */
   shadowDirection: "inflow" | "outflow" | null;
   /** 影子节点根本体（画布节点）引用的子画布 id；仅出向影子有值，双击出向影子时的跳转目标 */
   shadowOriginCanvasRefId: string | null;
+  /** 产生该影子节点的边 id（对应后端 shadow_id，与后端字段名保持一致：影子是边的映射）；null 表示普通节点，点击虚拟边时据此查询产生边 */
+  shadowId: string | null;
 }
 
 /**
@@ -45,10 +47,11 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
       subTitle: node.sub_title,
       canvasRefId: node.canvas_ref_id,
       color: node.color,
-      shadowId: vo.shadow_origin_id ?? null,
+      shadowOriginId: vo.shadow_origin_id ?? null,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
       shadowDirection: vo.shadow_direction ?? null,
       shadowOriginCanvasRefId: vo.shadow_origin_canvas_ref_id ?? null,
+      shadowId: node.shadow_id,
     } satisfies DataNodeData,
   };
 }
