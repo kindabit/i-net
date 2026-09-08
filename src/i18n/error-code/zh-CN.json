@@ -259,6 +259,14 @@
       "title": "导出模式无效",
       "text": "导出模式无效：{mode}"
     },
+    "InvalidImportedEdgeIndex": {
+      "title": "导入边下标无效",
+      "text": "导入边下标无效：{source_index} → {target_index}（要求父节点下标小于子节点下标且不超出节点数量）"
+    },
+    "InvalidKdbxFileExtension": {
+      "title": "文件扩展名无效",
+      "text": "文件扩展名无效：只能读取扩展名为 .kdbx 的 KeePass 2.0 数据库文件（{path}）"
+    },
     "InvalidPath": {
       "title": "路径无效",
       "text": "路径无效：{detail}"

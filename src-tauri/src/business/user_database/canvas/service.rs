@@ -12,6 +12,7 @@ mod set_color;
 
 pub use color_list::color_list;
 pub use create::create;
+pub(crate) use create::layout;
 pub use initialize::initialize;
 pub use list::list;
 pub use logical_delete::logical_delete;

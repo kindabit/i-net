@@ -124,6 +124,10 @@
       "NodeRelocate": {
         "name": "Relocate Nodes",
         "detail": "Relocated {node_count} nodes from \"{source_canvas_name}\" to \"{target_canvas_name}\""
+      },
+      "NodesImport": {
+        "name": "Data import",
+        "detail": "Imported {node_count} nodes into new canvas \"{canvas_name}\""
       }
     },
     "node-fields-change-added": "Added field \"{name}\" ({type}): {value}",

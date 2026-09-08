@@ -6,6 +6,7 @@ pub mod entity;
 pub mod export;
 pub mod lifecycle;
 pub mod log;
+pub mod migration;
 pub mod node;
 pub mod node_field;
 pub mod registry;

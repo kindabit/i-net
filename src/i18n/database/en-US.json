@@ -15,6 +15,23 @@
       "mode-include-values-hint": "Fully export all fields with plaintext values",
       "exported": "Database exported"
     },
+    "migration": {
+      "menu-button": "Tools",
+      "menu-keepass2": "Import KeePass 2.0 Data",
+      "dialog-title": "Import KeePass 2.0 Data",
+      "file-label": "KeePass 2.0 database file",
+      "pick-file": "Browse",
+      "password-label": "Master Password",
+      "file-required": "Please select a KeePass 2.0 database file",
+      "password-required": "Please enter the master password",
+      "field-password": "Password",
+      "field-url": "URL",
+      "field-notes": "Notes",
+      "invalid-file": "Invalid KeePass 2.0 database file",
+      "incorrect-password": "Incorrect master password, failed to decrypt the selected database",
+      "importing": "Importing…",
+      "imported": "KeePass 2.0 data imported"
+    },
     "placeholder": "Database is open. Features will be added here.",
     "canvas-universe": {
       "title": "Canvas Universe",

@@ -61,6 +61,8 @@ export type ErrorCodeVariant =
   | "InvalidEdgeId"
   | "InvalidExportMode"
   | "InvalidExportTargetPath"
+  | "InvalidImportedEdgeIndex"
+  | "InvalidKdbxFileExtension"
   | "InvalidNodeId"
   | "InvalidNodePort"
   | "InvalidPath"

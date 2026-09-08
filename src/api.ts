@@ -10,6 +10,8 @@ import type {
   CanvasColorEntry,
   Dictionary,
   Edge,
+  ImportedEdge,
+  ImportedNode,
   LogPageResponse,
   Metadata,
   MoveNodeVO,
@@ -900,6 +902,53 @@ export async function userDatabaseExport(
   return invoke<boolean>("user_database_export_export", {
     mode,
     locale: currentLocale.value,
+  });
+}
+
+// ==================== user_database / migration ====================
+
+/**
+ * 弹出系统文件选择对话框选择 KeePass2 数据库文件（.kdbx）；由后端弹出系统对话框，
+ * 用户在系统对话框中取消时返回 null。
+ * @returns 选中的文件路径，用户取消返回 null
+ */
+export async function userDatabaseMigrationPickFile(): Promise<string | null> {
+  return invoke<string | null>("user_database_migration_pick_file");
+}
+
+/**
+ * 读取文件的全部字节（用于前端解析 KeePass2 数据库文件），后端对内容不透明。
+ * @param path 文件路径
+ * @returns 文件字节
+ */
+export async function userDatabaseMigrationReadFile(path: string): Promise<Uint8Array> {
+  const buffer = await invoke<ArrayBuffer>("user_database_migration_read_file", { path });
+  return new Uint8Array(buffer);
+}
+
+/**
+ * 将前端已构造好的节点与边数据聚合导入用户数据库：后端在根画布创建新画布与画布节点，
+ * 批量创建普通节点、写入字段并创建父子边，全部操作聚合成一条日志条目。
+ * @param canvasName 新画布名称（画布节点标题），重名时后端自动追加 " 2"、" 3"…
+ * @param canvasNodeX 画布节点在根画布中的 x 坐标
+ * @param canvasNodeY 画布节点在根画布中的 y 坐标
+ * @param nodes 待导入的节点列表（含字段；第一个节点表示数据库本身，为树的根）
+ * @param edges 待导入的父子边列表（下标引用 nodes）
+ * @returns 新建画布的 id（供跳转至新画布）
+ */
+export async function userDatabaseMigrationImportKeepass2(
+  canvasName: string,
+  canvasNodeX: number,
+  canvasNodeY: number,
+  nodes: ImportedNode[],
+  edges: ImportedEdge[],
+): Promise<string> {
+  return invoke("user_database_migration_import_keepass2", {
+    canvasName,
+    canvasNodeX,
+    canvasNodeY,
+    nodes,
+    edges,
   });
 }
 

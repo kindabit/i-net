@@ -15,6 +15,23 @@
       "mode-include-values-hint": "完整导出所有字段，字段值为明文",
       "exported": "数据库已导出"
     },
+    "migration": {
+      "menu-button": "工具",
+      "menu-keepass2": "KeePass 2.0数据导入",
+      "dialog-title": "KeePass2数据导入",
+      "file-label": "KeePass 2.0 数据库文件",
+      "pick-file": "选择文件",
+      "password-label": "Master Password",
+      "file-required": "请选择 KeePass 2.0 数据库文件",
+      "password-required": "请输入 Master Password",
+      "field-password": "密码",
+      "field-url": "访问链接",
+      "field-notes": "备注",
+      "invalid-file": "无效的 KeePass 2.0 数据库文件",
+      "incorrect-password": "Master Password 不正确，无法解密所选数据库",
+      "importing": "导入中…",
+      "imported": "KeePass2 数据导入完成"
+    },
     "placeholder": "数据库已打开，功能将在此处添加。",
     "canvas-universe": {
       "title": "画布宇宙",

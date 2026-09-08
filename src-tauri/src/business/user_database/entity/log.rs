@@ -168,6 +168,8 @@ pub enum Action {
     TemplateFieldsSet { template_name: String, field_names: Vec<String> },
     /// 重命名模板，包含旧名称和新名称。
     TemplateRename { old_name: String, new_name: String },
+    /// 数据迁移导入节点，包含去重后的画布名称与导入的节点数量。
+    NodesImport { canvas_name: String, node_count: i64 },
 }
 
 /// 日志实体类，记录创建对象和修改对象的行为，提供一定程度的追溯能力。

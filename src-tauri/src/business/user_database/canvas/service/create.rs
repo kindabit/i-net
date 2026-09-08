@@ -59,7 +59,7 @@ pub fn create(parent_id: &str, name: String) -> Result<Canvas, ErrorCode> {
 ///
 /// # 返回值
 /// 返回新画布的坐标。
-fn layout(parent: &Canvas, all: &[Canvas]) -> (f64, f64) {
+pub(crate) fn layout(parent: &Canvas, all: &[Canvas]) -> (f64, f64) {
     let is_free = |x: f64, y: f64| {
         all.iter().all(|canvas| {
             let dx = canvas.x - x;

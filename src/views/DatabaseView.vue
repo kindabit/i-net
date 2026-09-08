@@ -2,7 +2,7 @@
   数据库布局页。
 
   打开用户数据库后显示的页面框架。
-    右下角提供"日志"按钮（打开操作日志对话框）与"保存并退出"按钮（保存数据库 → 关闭数据库 → 回主页）。
+    右下角提供数据迁移入口（扳手图标弹出菜单）、"日志"按钮（打开操作日志对话框）与"保存并退出"按钮（保存数据库 → 关闭数据库 → 回主页）。
   窗口关闭（X 按钮）弹出确认对话框，确认后退出应用。
   监听 Ctrl/Cmd+S 快捷键，仅保存数据库，不退出当前页面。
   顶部居中悬浮 Topbar（全局搜索 + 画布层级面包屑）。
@@ -24,6 +24,7 @@ import {
 import { LAST_SCENE_KEY } from "./Home.vue";
 import LogDialog from "./DatabaseComponents/LogDialog.vue";
 import ExportDialog from "./DatabaseComponents/ExportDialog.vue";
+import KeePass2Import from "@/components/migration/KeePass2Import.vue";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { loadDictionary, clearDictionary } from "@/dictionary";
 import {
@@ -40,6 +41,7 @@ const closing = ref(false);
 const showCloseConfirm = ref(false);
 const logDialogRef = useTemplateRef<InstanceType<typeof LogDialog>>("logDialogRef");
 const exportDialogRef = useTemplateRef<InstanceType<typeof ExportDialog>>("exportDialogRef");
+const keepass2ImportRef = useTemplateRef<InstanceType<typeof KeePass2Import>>("keepass2ImportRef");
 
 let unlistenClose: (() => void) | undefined;
 
@@ -144,6 +146,21 @@ async function handleExport() {
   }
 }
 
+/** 打开 KeePass 2.0 数据导入对话框（菜单项点击处理） */
+function handleImportKeepass2() {
+  keepass2ImportRef.value?.open();
+}
+
+/**
+ * 数据导入成功后的跳转处理：直接导航至导入产生的新画布（导入前该画布不存在，
+ * 路由变化必然触发子页面重新挂载加载）。不设置导航意图：从画布宇宙出发时
+ * 钻入动画由路由名对比自动解析；从其它画布出发时按横向切换（drill-swap）处理。
+ * @param canvasId 聚合导入接口返回的新画布 id
+ */
+function onImportSuccess(canvasId: string) {
+  void router.push({ name: "canvas", params: { canvasId } });
+}
+
 /** 确认框中"保存并关闭"的处理：保存成功后执行关闭；保存失败不关闭 */
 async function handleConfirmSaveAndClose() {
   saving.value = true;
@@ -182,10 +199,26 @@ async function doClose() {
 
       <div class="bottom-actions">
       <div class="frosted-btns frosted-glass">
-        <VBtn variant="text" @click="handleExport">
-          <VIcon icon="mdi-file-export-outline" class="mr-1" />
-          {{ t("database.export.button") }}
-        </VBtn>
+        <VMenu location="top">
+          <template #activator="{ props: menuProps }">
+            <VBtn variant="text" v-bind="menuProps">
+              <VIcon icon="mdi-wrench" class="mr-1" />
+              {{ t("database.migration.menu-button") }}
+            </VBtn>
+          </template>
+          <VList>
+            <VListItem
+              prepend-icon="mdi-import"
+              :title="t('database.migration.menu-keepass2')"
+              @click="handleImportKeepass2"
+            />
+            <VListItem
+              prepend-icon="mdi-file-export-outline"
+              :title="t('database.export.button')"
+              @click="handleExport"
+            />
+          </VList>
+        </VMenu>
         <VBtn variant="text" @click="logDialogRef?.open()">
           <VIcon icon="mdi-history" class="mr-1" />
           {{ t("log.dialog-title") }}
@@ -227,6 +260,7 @@ async function doClose() {
 
     <LogDialog ref="logDialogRef" />
     <ExportDialog ref="exportDialogRef" />
+    <KeePass2Import ref="keepass2ImportRef" @success="onImportSuccess" />
   </div>
 </template>
 

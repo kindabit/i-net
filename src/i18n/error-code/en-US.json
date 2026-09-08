@@ -259,6 +259,14 @@
       "title": "Invalid export mode",
       "text": "Invalid export mode: {mode}"
     },
+    "InvalidImportedEdgeIndex": {
+      "title": "Invalid imported edge index",
+      "text": "Invalid imported edge index: {source_index} → {target_index} (the parent index must be less than the child index and within the node count)"
+    },
+    "InvalidKdbxFileExtension": {
+      "title": "Invalid file extension",
+      "text": "Invalid file extension: only KeePass 2.0 database files with the .kdbx extension can be read ({path})"
+    },
     "InvalidPath": {
       "title": "Invalid path",
       "text": "Invalid path: {detail}"

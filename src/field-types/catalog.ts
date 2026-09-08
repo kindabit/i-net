@@ -72,7 +72,11 @@ export const FIELD_TYPES: readonly FieldTypeDef[] = [
     passwordGenerator: false,
     supportsDictionary: false,
     validator: (value: string): string | null =>
-      /^https?:\/\/\S+$/.test(value) ? null : "invalid-url",
+      /^((?:https?|ftp|ssh|ws):\/\/\S+|mailto:[^@\s]+@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/.test(
+        value,
+      )
+        ? null
+        : "invalid-url",
   },
   {
     key: "string:multiple-line",

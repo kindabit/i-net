@@ -124,6 +124,10 @@
       "NodeRelocate": {
         "name": "迁移节点",
         "detail": "将 {node_count} 个节点从“{source_canvas_name}”迁移至“{target_canvas_name}”"
+      },
+      "NodesImport": {
+        "name": "数据导入",
+        "detail": "导入 {node_count} 个节点至新画布“{canvas_name}”"
       }
     },
     "node-fields-change-added": "新增字段\u201c{name}\u201d（{type}）：{value}",

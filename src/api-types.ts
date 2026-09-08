@@ -152,6 +152,31 @@ export interface NodeFieldVO {
   dictionary_id: string | null;
 }
 
+/** 迁移导入的节点值对象：前端构造好的节点数据（含布局坐标与字段列表），传给后端聚合导入接口。 */
+export interface ImportedNode {
+  /** 节点标题 */
+  title: string;
+  /** 节点副标题 */
+  sub_title: string;
+  /** 节点在目标画布中的 x 坐标 */
+  x: number;
+  /** 节点在目标画布中的 y 坐标 */
+  y: number;
+  /** 节点字段列表，顺序即存储顺序 */
+  fields: NodeFieldVO[];
+}
+
+/**
+ * 迁移导入的边值对象：以节点列表下标表达父子关系（source_index 为父、target_index 为子），
+ * 恒满足 source_index < target_index（节点按深度优先先序排列，父节点下标恒小于子节点）。
+ */
+export interface ImportedEdge {
+  /** 父节点在节点列表中的下标 */
+  source_index: number;
+  /** 子节点在节点列表中的下标 */
+  target_index: number;
+}
+
 /** 模板字段值对象。模板字段只定义结构，不含值。 */
 export interface TemplateFieldVO {
   name: string;
