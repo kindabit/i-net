@@ -61,6 +61,8 @@ pub enum ErrorCode {
     EmptyCanvasName,
     /// 文件路径为空。
     EmptyFilePath,
+    /// 文件名为空。
+    EmptyFileName,
     /// 字典条目值为空。
     EmptyDictionaryValue,
     /// 节点字段名称为空。

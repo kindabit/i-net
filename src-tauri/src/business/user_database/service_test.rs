@@ -2186,6 +2186,41 @@ fn test_user_database_service_all_functions() {
     }
     assert!(!file_system_util::try_exists(&file_cv).unwrap());
 
+    // == attachment::create 失败路径：节点不存在 → NoNodeWithSuchId ==
+    assert!(matches!(
+        attachment::service::create(&uuid::Uuid::new_v4().to_string(), "note.txt"),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
+
+    // == attachment::create 成功路径：以压缩模式创建空内容的文本附件 ==
+    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let created = attachment::service::create(&node.id, "note.txt").unwrap();
+    assert_eq!(created.file_name, "note.txt");
+    assert_eq!(created.size, 0);
+    assert!(created.create_time > 0);
+    assert!(!created.missing_file);
+    // 空内容也按压缩模式落盘：文本扩展名路由到压缩算法，且能解压回空内容。
+    let created_meta = attachment::service::get(&created.id).unwrap();
+    assert!(created_meta.compressed, "文本附件应以压缩模式创建");
+    assert!(!created_meta.compress_param.is_empty(), "压缩参数应非空");
+    let created_file = path.user_attachment_file(&id, &created.id);
+    assert!(file_system_util::try_exists(&created_file).unwrap());
+    assert!(attachment::service::load(&created.id).unwrap().is_empty());
+    // 排序：新附件追加到该节点附件列表末尾。
+    let normal = attachment::service::list(&node.id, false).unwrap();
+    assert_eq!(normal.last().unwrap().id, created.id);
+    // 产生一条 AttachmentCreate 日志，载荷为节点标题与文件名。
+    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
+    let logs_after_create = log::service::list(0, 1000).unwrap();
+    assert!(
+        logs_after_create.items.iter().any(|entry| {
+            entry.object_id == node.id
+                && matches!(&entry.action, entity::Action::AttachmentCreate { node_title, file_name }
+                    if node_title == "attach-node" && file_name == "note.txt")
+        }),
+        "应产生 AttachmentCreate 日志"
+    );
+
     // == 清理 ==
     lifecycle::service::save().unwrap();
     lifecycle::service::close().unwrap();

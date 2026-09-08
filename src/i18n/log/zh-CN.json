@@ -53,6 +53,10 @@
         "name": "编辑节点字段",
         "detail": "编辑了节点\u201c{node_title}\u201d的字段"
       },
+      "AttachmentCreate": {
+        "name": "创建附件",
+        "detail": "在节点“{node_title}”中创建了附件“{file_name}”"
+      },
       "AttachmentImport": {
         "name": "导入附件",
         "detail": "向节点\u201c{node_title}\u201d导入了附件\u201c{file_name}\u201d"

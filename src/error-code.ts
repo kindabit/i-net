@@ -33,6 +33,7 @@ export type ErrorCodeVariant =
   | "EdgeWouldFormCycle"
   | "EmptyCanvasName"
   | "EmptyDictionaryValue"
+  | "EmptyFileName"
   | "EmptyFilePath"
   | "EmptyNodeFieldName"
   | "EmptyPassword"

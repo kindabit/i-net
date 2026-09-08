@@ -53,6 +53,10 @@
         "name": "Edit Node Fields",
         "detail": "Edited fields of node \"{node_title}\""
       },
+      "AttachmentCreate": {
+        "name": "Create attachment",
+        "detail": "Created attachment “{file_name}” on node “{node_title}”"
+      },
       "AttachmentImport": {
         "name": "Import Attachment",
         "detail": "Imported attachment \"{file_name}\" to node \"{node_title}\""

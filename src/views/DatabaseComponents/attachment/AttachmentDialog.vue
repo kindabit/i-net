@@ -1,16 +1,17 @@
 <!--
   节点附件管理对话框。
 
-  管理单个节点的附件：导入、预览、导出、逻辑删除；回收站分区提供恢复与物理删除；
+  管理单个节点的附件：新建文本附件、导入、预览、导出、逻辑删除；回收站分区提供恢复与物理删除；
   无主附件文件（有文件无元数据）以警示区上报并由用户显式清理。
   所有操作即时生效并局部刷新，不单独触发保存，随数据库"保存并退出"统一持久化。
   通过 defineExpose 的 open() 打开。
 -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { t, d } from "@/i18n";
 import {
   userDatabaseAttachmentImport,
+  userDatabaseAttachmentCreate,
   userDatabaseAttachmentList,
   userDatabaseAttachmentExport,
   userDatabaseAttachmentLogicalDelete,
@@ -24,7 +25,7 @@ import type { AttachmentVO } from "@/api-types";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import AttachmentPreviewDialog from "./AttachmentPreviewDialog.vue";
-import { formatSize } from "./attachment-types";
+import { formatSize, resolveTextAttachmentFileName } from "./attachment-types";
 
 /** 对话框显示状态 */
 const dialog = ref(false);
@@ -36,6 +37,12 @@ const nodeTitle = ref("");
 const loading = ref(false);
 /** 导入进行中 */
 const importing = ref(false);
+/** 文本附件创建模式（按钮态与输入态互斥） */
+const creating = ref(false);
+/** 新文本附件的文件名草稿 */
+const newFileName = ref("");
+/** 新文本附件文件名的扩展名错误状态（输入框标红，用户修正输入时自动解除） */
+const createNameError = ref(false);
 /** 正常附件列表 */
 const attachments = ref<AttachmentVO[]>([]);
 /** 回收站（已逻辑删除）附件列表 */
@@ -55,6 +62,9 @@ const previewDialogRef = ref<InstanceType<typeof AttachmentPreviewDialog>>();
 function open(id: string, title: string): void {
   nodeId.value = id;
   nodeTitle.value = title;
+  creating.value = false;
+  newFileName.value = "";
+  createNameError.value = false;
   dialog.value = true;
   void loadData();
 }
@@ -99,6 +109,59 @@ async function importAttachment(): Promise<void> {
     importing.value = false;
   }
 }
+
+/**
+ * 进入文本附件创建模式：按钮切换为文件名输入框，等待用户输入。
+ */
+function startCreate(): void {
+  newFileName.value = "";
+  createNameError.value = false;
+  creating.value = true;
+}
+
+/**
+ * 退出文本附件创建模式并丢弃草稿；输入框的 esc 与 blur（含 tab 触发）均视为取消。
+ */
+function cancelCreate(): void {
+  if (!creating.value) return;
+  creating.value = false;
+  newFileName.value = "";
+  createNameError.value = false;
+}
+
+/**
+ * 提交文本附件创建：文件名为空白时按取消处理（不调用接口）；无扩展名时自动补全 .txt；
+ * 扩展名不是文本类型时阻止提交，输入框标红并用 snackbar 提示，保持输入态与草稿等待用户修正；
+ * 校验通过后输入框恢复为按钮态，随后调用后端接口创建空内容附件，成功后局部刷新附件列表。
+ */
+async function submitCreate(): Promise<void> {
+  const input = newFileName.value.trim();
+  if (input === "") {
+    cancelCreate();
+    return;
+  }
+  const fileName = resolveTextAttachmentFileName(input);
+  if (fileName === null) {
+    createNameError.value = true;
+    snackbarText(t("database.canvas.attachment.create-text-invalid-extension"), "error");
+    return;
+  }
+  creating.value = false;
+  newFileName.value = "";
+  createNameError.value = false;
+  try {
+    await userDatabaseAttachmentCreate(nodeId.value, fileName);
+    snackbarText(t("database.canvas.attachment.created"), "success");
+    await loadData();
+  } catch (e) {
+    snackbarErrorCode(e);
+  }
+}
+
+// 用户修正文件名时解除扩展名错误状态（输入框恢复常态）
+watch(newFileName, () => {
+  createNameError.value = false;
+});
 
 /**
  * 导出附件：由后端弹出系统保存对话框，导出成功后提示；取消选择静默返回。
@@ -260,7 +323,7 @@ defineExpose({ open });
 </script>
 
 <template>
-  <VDialog v-model="dialog" max-width="40rem">
+  <VDialog v-model="dialog" persistent max-width="40rem">
     <VCard>
       <VCardTitle class="attachment-title">
         {{ t("database.canvas.attachment.title", { title: nodeTitle }) }}
@@ -405,13 +468,59 @@ defineExpose({ open });
           color="primary"
           variant="flat"
           prepend-icon="mdi-import"
-          class="mr-auto"
           :loading="importing"
           :disabled="loading"
           @click="importAttachment"
         >
           {{ t("database.canvas.attachment.import") }}
         </VBtn>
+        <VBtn
+          v-if="!creating"
+          color="primary"
+          variant="tonal"
+          prepend-icon="mdi-text-box-plus-outline"
+          class="mr-auto"
+          :disabled="loading"
+          @click="startCreate"
+        >
+          {{ t("database.canvas.attachment.create-text") }}
+        </VBtn>
+        <!--
+          输入态：文件名输入框 + 确认/取消图标按钮。确认与取消按钮用 mousedown.prevent
+          阻止输入框先触发 blur（blur 语义为取消），否则点击按钮会先走取消分支。
+        -->
+        <div v-else class="attachment-create-group mr-auto">
+          <VTextField
+            v-model="newFileName"
+            autofocus
+            density="compact"
+            variant="outlined"
+            hide-details
+            class="attachment-create-input"
+            :error="createNameError"
+            :placeholder="t('database.canvas.attachment.create-text-placeholder')"
+            @keydown.enter="submitCreate"
+            @keydown.esc="cancelCreate"
+            @blur="cancelCreate"
+          />
+          <VBtn
+            icon="mdi-check"
+            size="small"
+            variant="text"
+            color="primary"
+            :title="t('database.canvas.attachment.create-text-submit')"
+            @mousedown.prevent
+            @click="submitCreate"
+          />
+          <VBtn
+            icon="mdi-close"
+            size="small"
+            variant="text"
+            :title="t('database.canvas.attachment.create-text-cancel')"
+            @mousedown.prevent
+            @click="cancelCreate"
+          />
+        </div>
         <VBtn variant="text" @click="dialog = false">
           {{ t("common.close") }}
         </VBtn>
@@ -491,5 +600,18 @@ defineExpose({ open });
 
 .mr-auto {
   margin-right: auto;
+}
+
+.attachment-create-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 1 auto;
+}
+
+.attachment-create-input {
+  width: 14rem;
+  max-width: 40vw;
+  flex: 0 1 auto;
 }
 </style>

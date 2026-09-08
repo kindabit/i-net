@@ -176,6 +176,22 @@ export function viewerTypeOf(fileName: string): AttachmentViewerType | null {
 }
 
 /**
+ * 校验并规范化新建文本附件的文件名：无扩展名时自动补全 .txt；
+ * 扩展名存在但不是文本类型时返回 null（调用方应阻止提交并提示用户），
+ * 否则保持用户输入原样返回（校验大小写不敏感，但不改写原始大小写）。
+ * @param fileName 用户输入的文件名（已去除首尾空白）
+ * @returns 规范化后的文件名；扩展名非法时返回 null
+ */
+export function resolveTextAttachmentFileName(fileName: string): string | null {
+  const ext = extensionOf(fileName);
+  if (ext === "") {
+    // 结尾的孤立点号视为无扩展名，补全时避免产生双点
+    return fileName.endsWith(".") ? `${fileName}txt` : `${fileName}.txt`;
+  }
+  return EXTENSIONS_BY_TYPE.text.includes(ext) ? fileName : null;
+}
+
+/**
  * 按文件扩展名推断 MIME 类型。
  * @param fileName 文件名
  * @returns MIME 类型；扩展名不受支持时返回 null

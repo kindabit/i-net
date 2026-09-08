@@ -279,6 +279,10 @@
       "title": "Empty file path",
       "text": "File path cannot be empty"
     },
+    "EmptyFileName": {
+      "title": "Empty file name",
+      "text": "File name cannot be empty"
+    },
     "EdgeDeleteDisconnectsNodes": {
       "title": "Deleting edge will disconnect nodes",
       "text": "The following nodes will lose connection: {nodes}"

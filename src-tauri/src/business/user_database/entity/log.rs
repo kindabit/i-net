@@ -100,6 +100,11 @@ pub enum Action {
         node_title: String,
         changes: Vec<NodeFieldChange>,
     },
+    /// 新建附件（空内容的文本附件），包含节点标题和附件文件名。
+    AttachmentCreate {
+        node_title: String,
+        file_name: String,
+    },
     /// 导入附件，包含节点标题和附件文件名。
     AttachmentImport {
         node_title: String,

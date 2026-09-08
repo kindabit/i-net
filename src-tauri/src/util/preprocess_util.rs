@@ -205,6 +205,21 @@ pub fn preprocess_file_path(path: String) -> Result<String, ErrorCode> {
     Ok(path)
 }
 
+/// 预处理附件文件名：去除首尾空白字符，并校验文件名非空。
+///
+/// # 参数
+/// - `file_name`: 原始附件文件名。
+///
+/// # 返回值
+/// 返回清洗后的附件文件名；文件名为空时返回 `ErrorCode::EmptyFileName`。
+pub fn preprocess_file_name(file_name: String) -> Result<String, ErrorCode> {
+    let file_name = file_name.trim().to_string();
+    if file_name.is_empty() {
+        return Err(ErrorCode::EmptyFileName);
+    }
+    Ok(file_name)
+}
+
 /// 预处理密码：校验密码非空，然后将其哈希为 32 字节密钥。
 ///
 /// # 参数
@@ -466,6 +481,22 @@ mod tests {
         assert!(matches!(
             preprocess_file_path(" \t\n ".to_string()),
             Err(ErrorCode::EmptyFilePath)
+        ));
+
+        // preprocess_file_name 成功路径：去除首尾空白字符。
+        assert_eq!(
+            preprocess_file_name("  notes.txt  ".to_string()).unwrap(),
+            "notes.txt"
+        );
+
+        // preprocess_file_name 失败路径：空文件名或纯空白文件名返回 EmptyFileName。
+        assert!(matches!(
+            preprocess_file_name("".to_string()),
+            Err(ErrorCode::EmptyFileName)
+        ));
+        assert!(matches!(
+            preprocess_file_name(" \t\n ".to_string()),
+            Err(ErrorCode::EmptyFileName)
         ));
     }
 }

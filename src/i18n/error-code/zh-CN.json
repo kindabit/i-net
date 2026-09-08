@@ -279,6 +279,10 @@
       "title": "文件路径为空",
       "text": "文件路径不能为空"
     },
+    "EmptyFileName": {
+      "title": "文件名为空",
+      "text": "文件名不能为空"
+    },
     "EdgeDeleteDisconnectsNodes": {
       "title": "删除边将断开连接",
       "text": "以下节点将失去连接：{nodes}"

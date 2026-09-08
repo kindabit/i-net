@@ -7,4 +7,4 @@ mod guard;
 mod param;
 mod route;
 
-pub use guard::{GuardOutput, compress, decompress};
+pub use guard::{GuardOutput, compress, compress_forced, decompress};

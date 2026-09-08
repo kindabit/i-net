@@ -88,18 +88,13 @@ pub fn classify(file_name: &str, data: &[u8]) -> (bool, Option<CompressParam>) {
         return (true, Some(CompressParam::Zstd { level: 19 }));
     }
 
-    // 3. engine 未识别，取扩展名兜底
+    // 3. engine 未识别，取扩展名兜底；wav 需要按数据头判定能否走 FLAC，先于扩展名路由处理
     let ext = std::path::Path::new(file_name)
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase());
 
-    match ext.as_deref() {
-        None => (true, Some(CompressParam::Zstd { level: 19 })),
-        Some(e) if COMPRESSED_FORMATS.contains(&e) => (false, None),
-        Some(e) if TEXT_EXTENSIONS.contains(&e) => {
-            (true, Some(CompressParam::Brotli { quality: 11, window: 22 }))
-        }
-        Some("wav") => match flac_codec::validate_wav(data) {
+    if ext.as_deref() == Some("wav") {
+        return match flac_codec::validate_wav(data) {
             Some(params) => (
                 true,
                 Some(CompressParam::Flac {
@@ -110,7 +105,33 @@ pub fn classify(file_name: &str, data: &[u8]) -> (bool, Option<CompressParam>) {
                 }),
             ),
             None => (true, Some(CompressParam::Zstd { level: 19 })),
-        },
+        };
+    }
+    classify_by_extension(file_name)
+}
+
+/// 仅按文件名（扩展名）路由压缩参数，不感知数据内容。
+/// 用于创建空内容附件：此时既无法做 magic 探测，又会被 classify 的"空数据直通"规则旁路，
+/// 但压缩参数需要在内容写入之前就确定下来。WAV 分支依赖数据头，此处统一降级为 zstd 兜底。
+///
+/// # 参数
+///
+/// * `file_name` - 文件名（可能含扩展名）。
+///
+/// # 返回值
+///
+/// 返回 (是否压缩, 压缩参数) 元组；compressed 为 true 时 param 必为 Some。
+pub fn classify_by_extension(file_name: &str) -> (bool, Option<CompressParam>) {
+    let ext = std::path::Path::new(file_name)
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase());
+
+    match ext.as_deref() {
+        None => (true, Some(CompressParam::Zstd { level: 19 })),
+        Some(e) if COMPRESSED_FORMATS.contains(&e) => (false, None),
+        Some(e) if TEXT_EXTENSIONS.contains(&e) => {
+            (true, Some(CompressParam::Brotli { quality: 11, window: 22 }))
+        }
         Some(e) if AUDIO_EXTENSIONS.contains(&e) => {
             (true, Some(CompressParam::Zstd { level: 19 }))
         }
@@ -280,6 +301,48 @@ mod tests {
         let (compressed, param) = classify("noext", &plain_data());
         assert!(compressed);
         assert_eq!(param, Some(CompressParam::Zstd { level: 19 }));
+    }
+
+    /// classify_by_extension 成功路径：文本扩展名走 Brotli，与 classify 的扩展名兜底一致。
+    #[test]
+    fn test_classify_by_extension_txt() {
+        assert_eq!(
+            classify_by_extension("x.txt"),
+            (true, Some(CompressParam::Brotli { quality: 11, window: 22 }))
+        );
+    }
+
+    /// classify_by_extension 成功路径：无扩展名走 Zstd 兜底。
+    #[test]
+    fn test_classify_by_extension_no_extension() {
+        assert_eq!(
+            classify_by_extension("noext"),
+            (true, Some(CompressParam::Zstd { level: 19 }))
+        );
+    }
+
+    /// classify_by_extension 成功路径：位图扩展名走 Lzma。
+    #[test]
+    fn test_classify_by_extension_bmp() {
+        assert_eq!(
+            classify_by_extension("x.bmp"),
+            (true, Some(CompressParam::Lzma))
+        );
+    }
+
+    /// classify_by_extension 旁路路径：已压缩格式直通不压缩（与 classify 的直通规则一致）。
+    #[test]
+    fn test_classify_by_extension_zip_bypass() {
+        assert_eq!(classify_by_extension("x.zip"), (false, None));
+    }
+
+    /// classify_by_extension 成功路径：wav 无数据头可校验时降级为 Zstd 兜底（不 panic）。
+    #[test]
+    fn test_classify_by_extension_wav_falls_back_to_zstd() {
+        assert_eq!(
+            classify_by_extension("x.wav"),
+            (true, Some(CompressParam::Zstd { level: 19 }))
+        );
     }
 
     /// 辅助函数：构造标准 PCM WAV。

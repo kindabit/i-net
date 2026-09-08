@@ -43,6 +43,40 @@ pub fn compress(file_name: &str, plaintext: Vec<u8>) -> Result<GuardOutput, Erro
     })
 }
 
+/// 强制压缩 guard：按文件名选定算法并压缩，路由不感知数据内容。
+///
+/// 与 compress 的差别在于路由走 route::classify_by_extension，因此空数据不再被"空数据直通"
+/// 规则判为未压缩。用于创建空内容附件：空明文若走 compress 会得到"未压缩"标记，
+/// 而 compressed 标记必须与载荷成对自洽，否则加载时按标记解压必然失败。
+/// 已压缩格式扩展名（zip/pdf 等）仍按路由规则直通不压缩。
+///
+/// # 参数
+///
+/// * `file_name` - 文件名（可能含扩展名），用于路由判定。
+/// * `plaintext` - 文件明文数据（允许为空）。
+///
+/// # 返回值
+///
+/// 返回 GuardOutput 包含处理后的数据、是否压缩标志及压缩参数串；
+/// 若压缩失败则返回 ErrorCode::FailToCompress。
+pub fn compress_forced(file_name: &str, plaintext: Vec<u8>) -> Result<GuardOutput, ErrorCode> {
+    let (compressed, param) = route::classify_by_extension(file_name);
+    if !compressed {
+        return Ok(GuardOutput {
+            data: plaintext,
+            compressed: false,
+            compress_param: String::new(),
+        });
+    }
+    let param = param.expect("classify_by_extension must return Some(param) when compressed is true");
+    let data = execute::compress(&param, &plaintext)?;
+    Ok(GuardOutput {
+        data,
+        compressed: true,
+        compress_param: param.serialize(),
+    })
+}
+
 /// 解压 guard：按参数串解压数据还原明文。
 ///
 /// # 参数
@@ -127,6 +161,34 @@ mod tests {
         assert!(output.compressed);
         let decompressed = decompress(&output.compress_param, output.data).unwrap();
         assert_eq!(decompressed, wav);
+    }
+
+    /// compress_forced("x.txt", 空 vec) → compressed=true 且能解压回空数据（compress 的直通不复现）。
+    #[test]
+    fn test_guard_compress_forced_empty_txt() {
+        let output = compress_forced("x.txt", vec![]).unwrap();
+        assert!(output.compressed);
+        assert!(!output.compress_param.is_empty());
+        assert_eq!(decompress(&output.compress_param, output.data).unwrap(), Vec::<u8>::new());
+    }
+
+    /// compress_forced("x.txt", 文本) → 与 compress 一样走 Brotli 且往返一致。
+    #[test]
+    fn test_guard_compress_forced_txt_roundtrip() {
+        let plaintext = b"forced compression roundtrip text. ".repeat(20);
+        let output = compress_forced("x.txt", plaintext.clone()).unwrap();
+        assert!(output.compressed);
+        assert_eq!(decompress(&output.compress_param, output.data).unwrap(), plaintext);
+    }
+
+    /// compress_forced("x.zip", 数据) → 已压缩格式仍直通，data 与原文一致、param 为空。
+    #[test]
+    fn test_guard_compress_forced_zip_bypass() {
+        let data = vec![0x50, 0x4B, 0x03, 0x04, 0x14, 0, 0, 0, 8, 0];
+        let output = compress_forced("x.zip", data.clone()).unwrap();
+        assert!(!output.compressed);
+        assert_eq!(output.data, data);
+        assert_eq!(output.compress_param, "");
     }
 
     /// decompress("", vec![...]) → Err(FailToDecompress)。

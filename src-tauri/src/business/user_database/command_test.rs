@@ -479,6 +479,18 @@ fn test_user_database_command_all_functions() {
     assert_eq!(updated_edge.title, "new title");
     assert_eq!(updated_edge.description, "new desc");
 
+    // edge::command::get::preprocess 失败路径：id 非法时报 InvalidEdgeId。
+    assert!(matches!(
+        edge::command::get::preprocess("no-such-id".to_string()),
+        Err(ErrorCode::InvalidEdgeId { .. })
+    ));
+
+    // edge::command::get::preprocess 成功路径：按 id 取回的边携带其所属画布 id
+    // （前端据此从影子节点跳转至产生边所在画布）。
+    let fetched_edge = edge::command::get::preprocess(edge_1.id.clone()).unwrap();
+    assert_eq!(fetched_edge.id, edge_1.id);
+    assert_eq!(fetched_edge.canvas_id, child.id);
+
     // edge::command::delete::preprocess 失败路径：id 非法时报 InvalidEdgeId。
     assert!(matches!(
         edge::command::delete::preprocess("no-such-id".to_string(), false),
@@ -916,6 +928,41 @@ fn test_user_database_command_all_functions() {
     let list = attachment::command::list::preprocess(node.id.clone(), false).unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].id, imported.id);
+
+    // == attachment::command::create::preprocess 失败路径：node_id 非法 → InvalidNodeId ==
+    assert!(matches!(
+        attachment::command::create::preprocess("no-such-id".to_string(), "note.txt".to_string()),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // == attachment::command::create::preprocess 失败路径：file_name 为空白 → EmptyFileName ==
+    assert!(matches!(
+        attachment::command::create::preprocess(node.id.clone(), "  ".to_string()),
+        Err(ErrorCode::EmptyFileName)
+    ));
+
+    // == attachment::command::create::preprocess 成功路径：文件名去除首尾空白后落库，附件内容为空 ==
+    // 另建节点承载新建附件，避免影响上面 import 用例对 node 附件数量的断言。
+    let create_target = node::service::create(
+        &root_id,
+        "cmd-create-node".to_string(),
+        String::new(),
+        0.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let created =
+        attachment::command::create::preprocess(create_target.id.clone(), "  note.txt  ".to_string())
+            .unwrap();
+    assert_eq!(created.file_name, "note.txt");
+    assert_eq!(created.size, 0);
+    assert!(!created.missing_file);
+    let created_list =
+        attachment::command::list::preprocess(create_target.id.clone(), false).unwrap();
+    assert_eq!(created_list.len(), 1);
+    assert_eq!(created_list[0].id, created.id);
 
     // == attachment::command::load::preprocess 失败路径：id 非法 → InvalidAttachmentId ==
     assert!(matches!(

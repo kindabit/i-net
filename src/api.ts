@@ -760,6 +760,22 @@ export async function userDatabaseTemplateImport(): Promise<boolean> {
 // ==================== user_database / attachment ====================
 
 /**
+ * 新建文本附件：以指定文件名在节点下创建一个内容为空的附件，供用户随后写入文本内容。
+ * @param nodeId 附件所属节点 id
+ * @param fileName 附件文件名
+ * @returns 新建附件的值对象
+ */
+export async function userDatabaseAttachmentCreate(
+  nodeId: string,
+  fileName: string,
+): Promise<AttachmentVO> {
+  return invoke<AttachmentVO>("user_database_attachment_create", {
+    nodeId,
+    fileName,
+  });
+}
+
+/**
  * 导入附件：由后端弹出系统文件选择对话框，将用户选中的文件加密后存为节点的附件。
  * @param nodeId 节点 id
  * @returns 新建附件的值对象；用户在系统对话框中取消选择时返回 null
