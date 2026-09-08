@@ -46,10 +46,11 @@ const keepass2ImportRef = useTemplateRef<InstanceType<typeof KeePass2Import>>("k
 let unlistenClose: (() => void) | undefined;
 
 // 子路由变化时记录当前场景（画布宇宙记为空值），供下次打开数据库时恢复
+// 监听派生场景标识而非 route.name：画布间跳转（面包屑、影子虚拟边等）name 恒为 "canvas"，
+// 只有 params.canvasId 变化，监听 name 会漏掉画布间切换
 watch(
-  () => route.name,
-  (name) => {
-    const canvasId = name === "canvas" ? (route.params.canvasId as string) : "";
+  () => (route.name === "canvas" ? (route.params.canvasId as string) : ""),
+  (canvasId) => {
     void userDatabaseRegistrySet(LAST_SCENE_KEY, canvasId).catch(snackbarErrorCode);
   },
   { immediate: true },
