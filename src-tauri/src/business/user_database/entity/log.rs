@@ -135,6 +135,12 @@ pub enum Action {
         node_title: String,
         file_name: String,
     },
+    /// 重命名附件，包含节点标题、旧文件名和新文件名。
+    AttachmentRename {
+        node_title: String,
+        old_file_name: String,
+        new_file_name: String,
+    },
     /// 创建边，包含源节点标题和目标节点标题。
     EdgeCreate {
         source_title: String,

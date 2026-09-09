@@ -860,6 +860,19 @@ export async function userDatabaseAttachmentPhysicalDelete(
 }
 
 /**
+ * 重命名附件：修改附件的文件名（仅元数据，附件文件内容不受影响）。
+ * @param id 附件 id
+ * @param fileName 新的文件名
+ * @returns 无返回值
+ */
+export async function userDatabaseAttachmentRename(
+  id: string,
+  fileName: string,
+): Promise<void> {
+  return invoke("user_database_attachment_rename", { id, fileName });
+}
+
+/**
  * 列出孤儿附件文件（附件目录中存在但没有对应元数据的文件 id）。
  * 仅上报，由用户显式删除。
  * @returns 孤儿文件的 id 列表

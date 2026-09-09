@@ -1072,6 +1072,25 @@ fn test_user_database_command_all_functions() {
         1
     );
 
+    // == attachment::command::rename::preprocess 失败路径：id 非法 → InvalidAttachmentId ==
+    assert!(matches!(
+        attachment::command::rename::preprocess("no-such-id".to_string(), "renamed.pdf".to_string()),
+        Err(ErrorCode::InvalidAttachmentId { .. })
+    ));
+
+    // == attachment::command::rename::preprocess 失败路径：文件名为空白 → EmptyFileName ==
+    assert!(matches!(
+        attachment::command::rename::preprocess(imported.id.clone(), "  ".to_string()),
+        Err(ErrorCode::EmptyFileName)
+    ));
+
+    // == attachment::command::rename::preprocess 成功路径：文件名去除首尾空白后落库 ==
+    attachment::command::rename::preprocess(imported.id.clone(), "  renamed.pdf  ".to_string())
+        .unwrap();
+    let renamed = attachment::command::list::preprocess(node.id.clone(), false).unwrap();
+    assert_eq!(renamed.len(), 1);
+    assert_eq!(renamed[0].file_name, "renamed.pdf");
+
     // == attachment::command::physical_delete::preprocess 成功路径：附件从列表消失 ==
     attachment::command::physical_delete::preprocess(imported.id.clone()).unwrap();
     assert!(attachment::command::list::preprocess(node.id.clone(), false)

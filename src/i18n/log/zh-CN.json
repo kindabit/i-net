@@ -77,6 +77,10 @@
         "name": "永久删除附件",
         "detail": "永久删除了节点\u201c{node_title}\u201d的附件\u201c{file_name}\u201d"
       },
+      "AttachmentRename": {
+        "name": "重命名附件",
+        "detail": "将节点“{node_title}”的附件“{old_file_name}”重命名为“{new_file_name}”"
+      },
       "EdgeCreate": {
         "name": "连接节点",
         "detail": "连接\u201c{source_title}\u201d\u2192\u201c{target_title}\u201d"

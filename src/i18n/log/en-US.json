@@ -77,6 +77,10 @@
         "name": "Permanently Delete Attachment",
         "detail": "Permanently deleted attachment \"{file_name}\" of node \"{node_title}\""
       },
+      "AttachmentRename": {
+        "name": "Rename Attachment",
+        "detail": "Renamed attachment “{old_file_name}” of node “{node_title}” to “{new_file_name}”"
+      },
       "EdgeCreate": {
         "name": "Connect Nodes",
         "detail": "Connected \"{source_title}\" \u2192 \"{target_title}\""

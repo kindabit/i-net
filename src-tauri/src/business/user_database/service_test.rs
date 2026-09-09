@@ -1974,6 +1974,28 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::NoAttachmentWithSuchId { .. })
     ));
 
+    // == attachment::rename 成功路径：文件名更新、附件文件内容不受影响、产生 AttachmentRename 日志 ==
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    attachment::service::rename(&imported.id, "renamed-report.pdf".to_string()).unwrap();
+    assert_eq!(
+        attachment::service::get(&imported.id).unwrap().file_name,
+        "renamed-report.pdf"
+    );
+    assert_eq!(
+        attachment::service::load(&imported.id).unwrap(),
+        source_bytes
+    );
+    assert_eq!(
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
+        log_total_before + 1
+    );
+
+    // == attachment::rename 失败路径：id 不存在 → NoAttachmentWithSuchId ==
+    assert!(matches!(
+        attachment::service::rename(&uuid::Uuid::new_v4().to_string(), "x.pdf".to_string()),
+        Err(ErrorCode::NoAttachmentWithSuchId { .. })
+    ));
+
     // == attachment::physical_delete 成功路径：行与文件均消失、产生日志 ==
     // 先把 second 的附件文件补回来（上面为测 missing_file 删掉了）。
     file_system_util::write(

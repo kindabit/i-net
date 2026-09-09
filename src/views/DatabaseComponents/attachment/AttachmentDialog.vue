@@ -1,13 +1,14 @@
 <!--
   节点附件管理对话框。
 
-  管理单个节点的附件：新建文本附件、导入、预览、导出、逻辑删除；回收站分区提供恢复与物理删除；
+  管理单个节点的附件：新建文本附件、导入、重命名、预览、导出、逻辑删除；回收站分区提供恢复与物理删除；
   无主附件文件（有文件无元数据）以警示区上报并由用户显式清理。
   所有操作即时生效并局部刷新，不单独触发保存，随数据库"保存并退出"统一持久化。
   通过 defineExpose 的 open() 打开。
 -->
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import { t, d } from "@/i18n";
 import {
   userDatabaseAttachmentImport,
@@ -17,6 +18,7 @@ import {
   userDatabaseAttachmentLogicalDelete,
   userDatabaseAttachmentRestore,
   userDatabaseAttachmentPhysicalDelete,
+  userDatabaseAttachmentRename,
   userDatabaseAttachmentListOrphanFiles,
   userDatabaseAttachmentRemoveOrphanFile,
   userDatabaseAttachmentSwapSortOrder,
@@ -54,6 +56,15 @@ const draggingId = ref<string | null>(null);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
 const previewDialogRef = ref<InstanceType<typeof AttachmentPreviewDialog>>();
 
+/** 当前处于重命名编辑态的附件 id（同时最多一个） */
+const renamingId = ref<string | null>(null);
+/** 附件重命名草稿，进入编辑态时以当前文件名初始化；提交时才生效 */
+const renameDraft = ref("");
+/** 重命名文件名为空的错误状态（输入框标红，用户修正输入时自动解除） */
+const renameNameError = ref(false);
+/** 重命名输入框的 DOM 引用（用于进入编辑态时聚焦） */
+const renameInput = ref<HTMLInputElement | null>(null);
+
 /**
  * 打开对话框并加载指定节点的附件数据。
  * @param id 节点 id
@@ -65,6 +76,9 @@ function open(id: string, title: string): void {
   creating.value = false;
   newFileName.value = "";
   createNameError.value = false;
+  renamingId.value = null;
+  renameDraft.value = "";
+  renameNameError.value = false;
   dialog.value = true;
   void loadData();
 }
@@ -161,6 +175,11 @@ async function submitCreate(): Promise<void> {
 // 用户修正文件名时解除扩展名错误状态（输入框恢复常态）
 watch(newFileName, () => {
   createNameError.value = false;
+});
+
+// 用户修正重命名文件名时解除为空错误状态（输入框恢复常态）
+watch(renameDraft, () => {
+  renameNameError.value = false;
 });
 
 /**
@@ -266,6 +285,66 @@ function previewAttachment(attachment: AttachmentVO): void {
 }
 
 /**
+ * 设置重命名输入框的 DOM 引用。使用函数形式的 ref 是因为字符串模板 ref 位于 v-for 内时
+ * 运行时会收集为数组，导致 focus/select 调用失败。
+ * @param el 输入框元素（元素卸载时为 null）
+ */
+function setRenameInput(el: Element | ComponentPublicInstance | null): void {
+  renameInput.value = el as HTMLInputElement | null;
+}
+
+/**
+ * 进入附件重命名编辑态：以当前文件名初始化草稿，并聚焦选中新出现的输入框。
+ * @param attachment 目标附件
+ */
+async function startRename(attachment: AttachmentVO): Promise<void> {
+  renameDraft.value = attachment.file_name;
+  renameNameError.value = false;
+  renamingId.value = attachment.id;
+  await nextTick();
+  renameInput.value?.focus();
+  renameInput.value?.select();
+}
+
+/**
+ * 取消附件重命名：丢弃草稿并退出编辑态；输入框的 esc 与 blur 均视为取消。
+ */
+function cancelRename(): void {
+  if (renamingId.value === null) return;
+  renamingId.value = null;
+  renameDraft.value = "";
+  renameNameError.value = false;
+}
+
+/**
+ * 提交附件重命名：文件名 trim 后为空时阻止提交，输入框标红并用 snackbar 提示，保持编辑态等待修正；
+ * 文件名未变化时直接退出编辑态（不调用接口、不产生日志）；
+ * 校验通过后退出编辑态，随后调用后端接口重命名，成功后局部刷新附件列表。
+ */
+async function submitRename(): Promise<void> {
+  const id = renamingId.value;
+  if (id === null) return;
+  const fileName = renameDraft.value.trim();
+  if (fileName === "") {
+    renameNameError.value = true;
+    snackbarText(t("database.canvas.attachment.rename-empty"), "error");
+    return;
+  }
+  const oldName = attachments.value.find((a) => a.id === id)?.file_name;
+  renamingId.value = null;
+  renameDraft.value = "";
+  renameNameError.value = false;
+  if (fileName === oldName) return;
+  try {
+    await userDatabaseAttachmentRename(id, fileName);
+    snackbarText(t("database.canvas.attachment.renamed"), "success");
+    await loadData();
+  } catch (e) {
+    snackbarErrorCode(e);
+  }
+}
+
+/**
  * 拖拽开始：记录源附件 id，并设置自定义 ghost image 为整行元素。
  * @param event 拖拽事件
  * @param id 源附件 id
@@ -353,12 +432,52 @@ defineExpose({ open });
                     @dragstart="onDragStart($event, item.id)"
                   />
                 </template>
-                <VListItemTitle class="attachment-name">
-                 {{ item.file_name }}
-                 <span v-if="item.missing_file" class="attachment-missing">
-                   {{ t("database.canvas.attachment.missing-file") }}
-                 </span>
-               </VListItemTitle>
+                <VListItemTitle v-if="renamingId !== item.id" class="attachment-name">
+                  <span class="attachment-name-text">{{ item.file_name }}</span>
+                  <VIcon
+                    icon="mdi-pencil-outline"
+                    size="x-small"
+                    class="attachment-rename-icon"
+                    :title="t('database.canvas.attachment.rename')"
+                    @click="startRename(item)"
+                  />
+                  <span v-if="item.missing_file" class="attachment-missing">
+                    {{ t("database.canvas.attachment.missing-file") }}
+                  </span>
+                </VListItemTitle>
+                <!--
+                  重命名编辑态：原生 input 而非 VTextField，与展示态精确等高（1.5rem），避免状态切换时列表行高跳动。
+                  确认与取消按钮用 mousedown.prevent 阻止输入框先触发 blur（blur 语义为取消），否则点击按钮会先走取消分支。
+                -->
+                <div v-else class="attachment-rename-row">
+                  <input
+                    :ref="setRenameInput"
+                    v-model="renameDraft"
+                    type="text"
+                    class="attachment-rename-input"
+                    :class="{ 'attachment-rename-input--error': renameNameError }"
+                    @keydown.enter="submitRename"
+                    @keydown.esc="cancelRename"
+                    @blur="cancelRename"
+                  />
+                  <VBtn
+                    icon="mdi-check"
+                    size="small"
+                    variant="text"
+                    color="primary"
+                    :title="t('database.canvas.attachment.rename-submit')"
+                    @mousedown.prevent
+                    @click="submitRename"
+                  />
+                  <VBtn
+                    icon="mdi-close"
+                    size="small"
+                    variant="text"
+                    :title="t('database.canvas.attachment.rename-cancel')"
+                    @mousedown.prevent
+                    @click="cancelRename"
+                  />
+                </div>
                <VListItemSubtitle>
                  {{ formatSize(item.size) }} · {{ d(new Date(item.create_time), "short") }}
                </VListItemSubtitle>
@@ -404,7 +523,7 @@ defineExpose({ open });
             <VList density="compact" class="attachment-list">
               <VListItem v-for="item in deletedAttachments" :key="item.id">
                 <VListItemTitle class="attachment-name">
-                  {{ item.file_name }}
+                  <span class="attachment-name-text">{{ item.file_name }}</span>
                   <span v-if="item.missing_file" class="attachment-missing">
                     {{ t("database.canvas.attachment.missing-file") }}
                   </span>
@@ -446,7 +565,9 @@ defineExpose({ open });
             />
             <VList density="compact" class="attachment-list">
               <VListItem v-for="id in orphanFiles" :key="id">
-                <VListItemTitle class="attachment-name">{{ id }}</VListItemTitle>
+                <VListItemTitle class="attachment-name">
+                  <span class="attachment-name-text">{{ id }}</span>
+                </VListItemTitle>
                 <template #append>
                   <VBtn
                     icon="mdi-delete-forever-outline"
@@ -558,9 +679,57 @@ defineExpose({ open });
 }
 
 .attachment-name {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.5rem;
+}
+
+.attachment-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 重命名入口图标：弱化展示以免喧宾夺主，与名称保持 0.25rem 间距。 */
+.attachment-rename-icon {
+  flex: none;
+  cursor: pointer;
+  color: rgba(var(--v-theme-on-surface), 0.45);
+}
+
+/* 展示态与编辑态统一为 1.5rem 高（VListItemTitle 固有行高），状态切换时附件列表行高不跳动。 */
+.attachment-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.5rem;
+}
+
+.attachment-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 1.5rem;
+  box-sizing: border-box;
+  font-size: 1rem;
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 0.25rem;
+  outline: none;
+  padding: 0 0.375rem;
+
+  &:focus {
+    border-color: rgb(var(--v-theme-primary));
+  }
+}
+
+.attachment-rename-input--error,
+.attachment-rename-input--error:focus {
+  border-color: rgb(var(--v-theme-error));
 }
 
 .attachment-missing {

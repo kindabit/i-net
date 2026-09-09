@@ -135,6 +135,7 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::attachment::command::load::user_database_attachment_load,
             business::user_database::attachment::command::logical_delete::user_database_attachment_logical_delete,
             business::user_database::attachment::command::physical_delete::user_database_attachment_physical_delete,
+            business::user_database::attachment::command::rename::user_database_attachment_rename,
             business::user_database::attachment::command::remove_orphan_file::user_database_attachment_remove_orphan_file,
             business::user_database::attachment::command::restore::user_database_attachment_restore,
             business::user_database::attachment::command::swap_sort_order::user_database_attachment_swap_sort_order,

@@ -6,6 +6,7 @@ pub mod list_orphan_files;
 pub mod load;
 pub mod logical_delete;
 pub mod physical_delete;
+pub mod rename;
 pub mod remove_orphan_file;
 pub mod restore;
 pub mod swap_sort_order;
