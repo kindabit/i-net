@@ -599,16 +599,31 @@ export async function userDatabaseRegistrySet(name: string, value: string): Prom
 // ==================== user_database / log ====================
 
 /**
- * 分页查询日志（按时间倒序）。
+ * 分页查询日志（按时间倒序），支持可选的时间范围、行为类型与内容关键词筛选。
  * @param offset 偏移量
  * @param limit 数量上限
- * @returns 日志分页列表（含总数）
+ * @param filter 筛选条件；缺省或字段全空表示不过滤。
+ *   startTime/endTime 为毫秒时间戳（闭区间）；actions 为行为 variant 名列表；keyword 为内容关键词
+ * @returns 日志分页列表（含总数，带筛选时为过滤后的匹配总数）
  */
 export async function userDatabaseLogList(
   offset: number,
   limit: number,
+  filter?: {
+    startTime?: number | null;
+    endTime?: number | null;
+    actions?: string[] | null;
+    keyword?: string | null;
+  },
 ): Promise<LogPageResponse> {
-  return invoke<LogPageResponse>("user_database_log_list", { offset, limit });
+  return invoke<LogPageResponse>("user_database_log_list", {
+    offset,
+    limit,
+    startTime: filter?.startTime ?? null,
+    endTime: filter?.endTime ?? null,
+    actions: filter?.actions?.length ? filter.actions : null,
+    keyword: filter?.keyword?.trim() ? filter.keyword : null,
+  });
 }
 
 // ==================== user_database / node_field ====================

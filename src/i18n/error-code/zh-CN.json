@@ -310,6 +310,10 @@
     "NodeSetHasExternalEdges": {
       "title": "节点集存在外部边",
       "text": "要迁移的节点集与画布内其它节点之间存在边，无法迁移"
+    },
+    "InvalidLogTimeRange": {
+      "title": "日志查询时间范围无效",
+      "text": "开始时间不能晚于结束时间"
     }
   }
 }

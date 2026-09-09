@@ -127,6 +127,8 @@ pub enum ErrorCode {
     InvalidImportedEdgeIndex { source_index: u64, target_index: u64 },
     /// KeePass 2.0 数据库文件扩展名无效（仅允许 .kdbx，不区分大小写），包含目标路径。
     InvalidKdbxFileExtension { path: String },
+    /// 日志查询的时间范围无效（起始时间晚于结束时间），包含起始时间与结束时间。
+    InvalidLogTimeRange { start: i64, end: i64 },
     /// 节点 id 无效，包含节点 id。
     InvalidNodeId { id: String },
     /// 节点连接桩无效，包含连接桩。

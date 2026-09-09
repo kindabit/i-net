@@ -145,6 +145,14 @@
     "show-sensitive-values": "显示敏感值",
     "dialog-title": "日志",
     "total": "共 {total} 条",
-    "empty": "暂无日志"
+    "empty": "暂无日志",
+    "empty-search": "无匹配的日志",
+    "filter-start-date": "开始日期",
+    "filter-end-date": "结束日期",
+    "filter-actions": "行为类型",
+    "search-placeholder": "搜索日志内容",
+    "search": "搜索",
+    "clear-filter": "清除筛选",
+    "invalid-time-range": "开始日期不能晚于结束日期"
   }
 }

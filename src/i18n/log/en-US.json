@@ -145,6 +145,14 @@
     "show-sensitive-values": "Show sensitive values",
     "dialog-title": "Logs",
     "total": "{total} entries",
-    "empty": "No logs yet"
+    "empty": "No logs yet",
+    "empty-search": "No matching logs",
+    "filter-start-date": "Start date",
+    "filter-end-date": "End date",
+    "filter-actions": "Action type",
+    "search-placeholder": "Search log content",
+    "search": "Search",
+    "clear-filter": "Clear",
+    "invalid-time-range": "The start date must not be later than the end date"
   }
 }

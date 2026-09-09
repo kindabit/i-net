@@ -1,6 +1,7 @@
 use super::*;
 use crate::business::metadata;
 use crate::business::user_database::entity::Dictionary;
+use crate::business::user_database::log::service::LogFilter;
 use crate::business::user_database::migration::vo::{ImportedEdgeVO, ImportedNodeVO};
 use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::template::vo::TemplateFieldVO;
@@ -86,9 +87,9 @@ fn test_user_database_service_all_functions() {
     assert_eq!((moved.x, moved.y), (1000.0, 1000.0));
     // canvas::move_canvas 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
     // 且不产生新日志（日志总数不变）。
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     canvas::service::move_canvas(&child.id, 1000.0, 1000.0).unwrap();
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before);
 
     // canvas::create 成功路径：在子画布下新建孙画布，layout 以子画布新坐标为圆心。
     let grandchild = canvas::service::create(&child.id, "grandchild".to_string()).unwrap();
@@ -317,7 +318,7 @@ fn test_user_database_service_all_functions() {
 
     // node::modify 同步成功路径：修改画布节点标题，引用画布的名称随之更新，
     // 产生 NodeModify + CanvasRename 两条日志。
-    let log_total_before_sync = log::service::list(0, 1).unwrap().total;
+    let log_total_before_sync = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::modify(
         &canvas_node.id,
         "canvas-node-renamed".to_string(),
@@ -340,13 +341,13 @@ fn test_user_database_service_all_functions() {
         assert_eq!(synced_canvas.name, "canvas-node-renamed");
     }
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_sync + 2
     );
 
     // node::modify 同步失败路径：新标题与其它画布（"canvas-node 2"）重名时报 CanvasNameAlreadyExists，
     // 节点标题/副标题与画布名称均保持原值（无任何落库，也不产生日志）。
-    let log_total_before_conflict = log::service::list(0, 1).unwrap().total;
+    let log_total_before_conflict = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     assert!(matches!(
         node::service::modify(
             &canvas_node.id,
@@ -371,12 +372,12 @@ fn test_user_database_service_all_functions() {
         assert_eq!(unchanged_canvas.name, "canvas-node-renamed");
     }
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_conflict
     );
 
     // node::modify 标题未变化路径：仅修改副标题，不触发画布同步，只产生 NodeModify 一条日志。
-    let log_total_before_sub_only = log::service::list(0, 1).unwrap().total;
+    let log_total_before_sub_only = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::modify(
         &canvas_node.id,
         "canvas-node-renamed".to_string(),
@@ -384,14 +385,14 @@ fn test_user_database_service_all_functions() {
     )
     .unwrap();
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_sub_only + 1
     );
 
     // canvas::rename 同步成功路径：重命名画布，引用节点的标题随之更新（副标题不变），
     // 产生 CanvasRename + NodeModify 两条日志。
     let canvas_node_ref_id = canvas_node.canvas_ref_id.clone().unwrap();
-    let log_total_before_rename = log::service::list(0, 1).unwrap().total;
+    let log_total_before_rename = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     canvas::service::rename(&canvas_node_ref_id, "canvas-node-back".to_string()).unwrap();
     {
         let conn = state::lock_connection();
@@ -402,7 +403,7 @@ fn test_user_database_service_all_functions() {
         assert_eq!(synced_node.sub_title, "canvas-node-sub-2");
     }
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_rename + 2
     );
 
@@ -651,7 +652,7 @@ fn test_user_database_service_all_functions() {
     // edge::create 同向重建路径：同一对节点之间同向重建时直接更新旧边的连接桩——
     // 边 id 不变、标题与详情保留、不产生新日志。
     let edge_1_id = edge_1.id.clone();
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let edge_1 = edge::service::create(
         &child.id,
         &node_1.id,
@@ -666,7 +667,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!(edge_1.target_port, "bottom");
     assert_eq!(edge_1.title, "new title");
     assert_eq!(edge_1.description, "new description");
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before);
 
     // edge::create 失败路径：两端连接桩相同时报 EdgeSameNodePort（早于查重与成环检查）。
     assert!(matches!(
@@ -761,9 +762,9 @@ fn test_user_database_service_all_functions() {
     assert_eq!((modified.x, modified.y), (30.0, 40.0));
     // node::move_node 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
     // 且不产生新日志（日志总数不变）。
-    let log_total_before_node = log::service::list(0, 1).unwrap().total;
+    let log_total_before_node = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::move_node(&node_1.id, 30.0, 40.0).unwrap();
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before_node);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before_node);
 
     // node::logical_delete 失败路径：节点不存在时报 NoNodeWithSuchId。
     assert!(matches!(
@@ -883,7 +884,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!(viewport::service::get(None).unwrap().zoom, 3.0);
 
     // log::list 成功路径：以上操作产生了对应行为的日志，且载荷已正确解密重组。
-    let logs = log::service::list(0, 1000).unwrap();
+    let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     // log::list 成功路径：limit 足够大时 total 与 items 长度一致。
     assert_eq!(logs.total, logs.items.len() as i64);
     let has = |object_id: &str, predicate: fn(&entity::Action) -> bool| {
@@ -939,10 +940,10 @@ fn test_user_database_service_all_functions() {
     // log::list 成功路径：分页参数正确生效，且整体按时间倒序排列。
     let total = logs.total;
     assert!(total > 2);
-    let first_page = log::service::list(0, 2).unwrap();
+    let first_page = log::service::list(0, 2, LogFilter::default()).unwrap();
     assert_eq!(first_page.items.len(), 2);
     assert_eq!(first_page.items[0].id, logs.items[0].id);
-    let rest = log::service::list(2, 1000).unwrap();
+    let rest = log::service::list(2, 1000, LogFilter::default()).unwrap();
     assert_eq!(rest.items.len() as i64, total - 2);
     // log::list 成功路径：分页查询时 total 始终为总条数，不受分页参数影响。
     assert_eq!(first_page.total, total);
@@ -960,7 +961,7 @@ fn test_user_database_service_all_functions() {
         },
     )
     .unwrap();
-    let after = log::service::list(0, 1000).unwrap();
+    let after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after.total, before + 1);
     assert!(after.items.iter().any(|entry| entry.object_id == "object-x"
         && matches!(
@@ -979,7 +980,7 @@ fn test_user_database_service_all_functions() {
     let canvases = canvas::service::list(false).unwrap();
     assert_eq!(canvases.len(), 1);
     assert_eq!(canvases[0].name, entity::ROOT_CANVAS_NAME);
-    assert!(!log::service::list(0, 1000).unwrap().items.is_empty());
+    assert!(!log::service::list(0, 1000, LogFilter::default()).unwrap().items.is_empty());
 
     // lifecycle::initialize 失败路径：错误密钥报 FailToDecrypt。
     lifecycle::service::close().unwrap();
@@ -1231,7 +1232,7 @@ fn test_user_database_service_all_functions() {
         false,
     )
     .unwrap();
-    let before_total = log::service::list(0, 1000).unwrap().total;
+    let before_total = log::service::list(0, 1000, LogFilter::default()).unwrap().total;
 
     // 首次给无字段节点 set 两个字段 → 一条 NodeFieldsModify，changes 为两个 Added。
     let f1 = NodeFieldVO {
@@ -1247,7 +1248,7 @@ fn test_user_database_service_all_functions() {
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1.clone(), f2.clone()]).unwrap();
-    let after_set = log::service::list(0, 1000).unwrap();
+    let after_set = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_set.total, before_total + 1);
     // 取最新一条（时间倒序，第 0 条即最新），验证 NodeFieldsModify。
     let first_entry = after_set
@@ -1275,7 +1276,7 @@ fn test_user_database_service_all_functions() {
 
     // 再次 set 完全相同的内容 → 不产生新的 NodeFieldsModify 日志（日志总数不变）。
     node_field::service::set(&log_node.id, &[f1.clone(), f2.clone()]).unwrap();
-    let after_same = log::service::list(0, 1000).unwrap();
+    let after_same = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_same.total, after_set.total);
 
     // 修改 f1 的值 → 一条 Modified（old_value / new_value 正确）。
@@ -1286,7 +1287,7 @@ fn test_user_database_service_all_functions() {
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_modified, f2.clone()]).unwrap();
-    let after_value_change = log::service::list(0, 1000).unwrap();
+    let after_value_change = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_value_change.total, after_same.total + 1);
     let value_change_entry = after_value_change
         .items
@@ -1316,7 +1317,7 @@ fn test_user_database_service_all_functions() {
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_type_change.clone(), f2.clone()]).unwrap();
-    let after_type_change = log::service::list(0, 1000).unwrap();
+    let after_type_change = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_type_change.total, after_value_change.total + 1);
     let type_change_entry = after_type_change
         .items
@@ -1340,7 +1341,7 @@ fn test_user_database_service_all_functions() {
 
     // 删除 f2 → 一条 Removed。
     node_field::service::set(&log_node.id, &[f1_type_change.clone()]).unwrap();
-    let after_remove = log::service::list(0, 1000).unwrap();
+    let after_remove = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_remove.total, after_type_change.total + 1);
     let remove_entry = after_remove
         .items
@@ -1367,7 +1368,7 @@ fn test_user_database_service_all_functions() {
         dictionary_id: None,
     };
     node_field::service::set(&log_node.id, &[f1_renamed]).unwrap();
-    let after_rename = log::service::list(0, 1000).unwrap();
+    let after_rename = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after_rename.total, after_remove.total + 1);
     let rename_entry = after_rename
         .items
@@ -1914,12 +1915,12 @@ fn test_user_database_service_all_functions() {
     // == attachment::update_file 成功路径：明文被覆盖、size 同步更新、产生 AttachmentUpdate 日志 ==
     // second 的附件文件在 missing_file 测试中被删掉，此时由 update_file 直接写入新内容重建。
     let new_bytes: Vec<u8> = (0..2048u32).map(|i| (i * 7 % 251) as u8).collect();
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     attachment::service::update_file(&second.id, &new_bytes).unwrap();
     assert_eq!(attachment::service::load(&second.id).unwrap(), new_bytes);
     let updated = attachment::service::get(&second.id).unwrap();
     assert_eq!(updated.size, new_bytes.len() as i64);
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before + 1);
 
     // == attachment::update_file 失败路径：id 不存在 → NoAttachmentWithSuchId ==
     assert!(matches!(
@@ -1938,7 +1939,7 @@ fn test_user_database_service_all_functions() {
     ));
 
     // == attachment::logical_delete 成功路径：deleted 翻转、文件保留不动、产生日志 ==
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     attachment::service::logical_delete(&imported.id).unwrap();
     // 文件保留不动。
     assert!(file_system_util::try_exists(&attachment_file).unwrap());
@@ -1950,7 +1951,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!(trash.len(), 1);
     assert_eq!(trash[0].id, imported.id);
     // 产生一条 AttachmentLogicalDelete 日志。
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before + 1);
 
     // == attachment::load 成功路径：已逻辑删除的附件仍可加载（回收站中允许预览/导出）==
     assert_eq!(attachment::service::load(&imported.id).unwrap(), source_bytes);
@@ -1962,11 +1963,11 @@ fn test_user_database_service_all_functions() {
     ));
 
     // == attachment::restore 成功路径：deleted 翻转回正常列表、产生日志 ==
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     attachment::service::restore(&imported.id).unwrap();
     assert_eq!(attachment::service::list(&node.id, false).unwrap().len(), 5);
     assert!(attachment::service::list(&node.id, true).unwrap().is_empty());
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before + 1);
 
     // == attachment::restore 失败路径：id 不存在 → NoAttachmentWithSuchId ==
     assert!(matches!(
@@ -2003,7 +2004,7 @@ fn test_user_database_service_all_functions() {
         &crate::security::aes::encrypt(source_bytes.clone(), test::test_key()).unwrap(),
     )
     .unwrap();
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     attachment::service::physical_delete(&second.id).unwrap();
     {
         let conn = state::lock_connection();
@@ -2014,7 +2015,7 @@ fn test_user_database_service_all_functions() {
         );
     }
     assert!(!file_system_util::try_exists(&second_file).unwrap());
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before + 1);
 
     // == attachment::physical_delete 失败路径：id 不存在 → NoAttachmentWithSuchId ==
     assert!(matches!(
@@ -2022,9 +2023,9 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::NoAttachmentWithSuchId { .. })
     ));
 
-    // == attachment 日志载荷验证：import / export / logical_delete / restore / physical_delete
+    // == attachment 日志载荷验证：import / export / logical_delete / restore / physical_delete / rename
     //    均以节点 id 记录并携带节点标题与文件名 ==
-    let logs = log::service::list(0, 1000).unwrap();
+    let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     let has = |object_id: &str, predicate: fn(&entity::Action) -> bool| {
         logs.items
             .iter()
@@ -2053,6 +2054,10 @@ fn test_user_database_service_all_functions() {
     assert!(has(
         &node.id,
         |action| matches!(action, entity::Action::AttachmentUpdate { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
+    ));
+    assert!(has(
+        &node.id,
+        |action| matches!(action, entity::Action::AttachmentRename { node_title, old_file_name, new_file_name } if node_title == "attach-node" && old_file_name == "report.pdf" && new_file_name == "renamed-report.pdf")
     ));
 
     // == 孤儿文件：手放 <uuid>.bin 与无法解析为 uuid 的异常文件到附件目录 ==
@@ -2215,7 +2220,7 @@ fn test_user_database_service_all_functions() {
     ));
 
     // == attachment::create 成功路径：以压缩模式创建空内容的文本附件 ==
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let created = attachment::service::create(&node.id, "note.txt").unwrap();
     assert_eq!(created.file_name, "note.txt");
     assert_eq!(created.size, 0);
@@ -2232,8 +2237,8 @@ fn test_user_database_service_all_functions() {
     let normal = attachment::service::list(&node.id, false).unwrap();
     assert_eq!(normal.last().unwrap().id, created.id);
     // 产生一条 AttachmentCreate 日志，载荷为节点标题与文件名。
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before + 1);
-    let logs_after_create = log::service::list(0, 1000).unwrap();
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before + 1);
+    let logs_after_create = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert!(
         logs_after_create.items.iter().any(|entry| {
             entry.object_id == node.id
@@ -2492,7 +2497,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!((unchanged.x, unchanged.y), (10.0, 20.0));
 
     // move_nodes 成功路径：批量移动（node_c 原地移动，实际位移 2 个）。
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let items = vec![
         node::vo::MoveNodeVO {
             id: node_a.id.clone(),
@@ -2532,7 +2537,7 @@ fn test_user_database_service_all_functions() {
         .unwrap();
     assert_eq!((updated_c.x, updated_c.y), (50.0, 60.0));
     // 验证只产生一条日志，action 为 AutoLayoutDataNodes，node_count=2，object_id 为画布 id。
-    let logs_after = log::service::list(0, 1000).unwrap();
+    let logs_after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after.total, log_total_before + 1);
     let auto_layout_log = logs_after
         .items
@@ -2546,12 +2551,12 @@ fn test_user_database_service_all_functions() {
     ));
 
     // move_nodes 成功路径：空列表成功返回且不产日志。
-    let log_total_before_empty = log::service::list(0, 1).unwrap().total;
+    let log_total_before_empty = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::move_nodes(&[]).unwrap();
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before_empty);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before_empty);
 
     // move_nodes 成功路径：全部原地移动成功返回且不产日志。
-    let log_total_before_no_move = log::service::list(0, 1).unwrap().total;
+    let log_total_before_no_move = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let items_no_move = vec![
         node::vo::MoveNodeVO {
             id: node_a.id.clone(),
@@ -2566,7 +2571,7 @@ fn test_user_database_service_all_functions() {
     ];
     node::service::move_nodes(&items_no_move).unwrap();
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_no_move
     );
 
@@ -2606,7 +2611,7 @@ fn test_user_database_service_all_functions() {
         .into_iter()
         .find(|c| c.id == canvas_e.id)
         .unwrap();
-    let log_total_before_canvas = log::service::list(0, 1).unwrap().total;
+    let log_total_before_canvas = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let items_canvas = vec![
         canvas::vo::MoveNodeVO {
             id: canvas_d.id.clone(),
@@ -2635,7 +2640,7 @@ fn test_user_database_service_all_functions() {
         .unwrap();
     assert_eq!((updated_e.x, updated_e.y), (canvas_e_before.x, canvas_e_before.y));
     // 验证只产生一条日志，action 为 AutoLayoutCanvasNodes，canvas_count=1，object_id 为根画布 id。
-    let logs_after_canvas = log::service::list(0, 1000).unwrap();
+    let logs_after_canvas = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after_canvas.total, log_total_before_canvas + 1);
     let auto_layout_canvas_log = logs_after_canvas
         .items
@@ -2649,15 +2654,15 @@ fn test_user_database_service_all_functions() {
     ));
 
     // move_canvases 成功路径：空列表成功返回且不产日志。
-    let log_total_before_empty_canvas = log::service::list(0, 1).unwrap().total;
+    let log_total_before_empty_canvas = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     canvas::service::move_canvases(&[]).unwrap();
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_empty_canvas
     );
 
     // move_canvases 成功路径：全部原地移动成功返回且不产日志。
-    let log_total_before_no_move_canvas = log::service::list(0, 1).unwrap().total;
+    let log_total_before_no_move_canvas = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let items_canvas_no_move = vec![canvas::vo::MoveNodeVO {
         id: canvas_d.id.clone(),
         x: 500.0,
@@ -2665,7 +2670,7 @@ fn test_user_database_service_all_functions() {
     }];
     canvas::service::move_canvases(&items_canvas_no_move).unwrap();
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_no_move_canvas
     );
 
@@ -2854,7 +2859,7 @@ fn test_user_database_service_all_functions() {
         false,
     )
     .unwrap();
-    let log_total_before_same = log::service::list(0, 1).unwrap().total;
+    let log_total_before_same = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::relocate_nodes(
         &[node::vo::MoveNodeVO {
             id: same_canvas_node.id.clone(),
@@ -2866,7 +2871,7 @@ fn test_user_database_service_all_functions() {
     .unwrap();
     // 日志数未变。
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_same
     );
     // 坐标未被更新（仍是创建时的 50.0, 60.0）。
@@ -2878,10 +2883,10 @@ fn test_user_database_service_all_functions() {
     assert_eq!((unchanged.x, unchanged.y), (50.0, 60.0));
 
     // relocate_nodes 成功路径：空列表直接返回 Ok 且不产日志。
-    let log_total_before_empty = log::service::list(0, 1).unwrap().total;
+    let log_total_before_empty = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::relocate_nodes(&[], &target_canvas.id).unwrap();
     assert_eq!(
-        log::service::list(0, 1).unwrap().total,
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_empty
     );
 
@@ -2916,7 +2921,7 @@ fn test_user_database_service_all_functions() {
         false,
     )
     .unwrap();
-    let log_total_before = log::service::list(0, 1).unwrap().total;
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::relocate_nodes(
         &[
             node::vo::MoveNodeVO {
@@ -2966,7 +2971,7 @@ fn test_user_database_service_all_functions() {
     assert!(target_edges.iter().any(|e| e.id == reloc_edge.id
         && e.canvas_id == target_canvas.id));
     // 产生恰好一条 Action::NodeRelocate 日志，且 node_count=2、source/target 画布名称正确、object_id 为目标画布 id。
-    let logs_after = log::service::list(0, 1000).unwrap();
+    let logs_after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after.total, log_total_before + 1);
     let relocate_log = logs_after
         .items
@@ -3099,7 +3104,7 @@ fn test_shadow_node_service() {
         .unwrap();
     assert_eq!((moved.x, moved.y), (10.0, 20.0));
     // 日志载荷成功路径：影子的移动日志标题沿产生边链解析为根本体标题（影子本体标题落库为空串）。
-    let logs = log::service::list(0, 1000).unwrap();
+    let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert!(logs.items.iter().any(|entry| entry.object_id == shadow_x.id
         && matches!(&entry.action, entity::Action::NodeMove { title, .. } if title == "origin-x")));
 
@@ -3259,7 +3264,7 @@ fn test_shadow_node_edge_create() {
     let edge_n_sz = edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &shadow_z.id, "left".to_string(), false).unwrap();
     // 日志载荷成功路径：影子端点的标题落库为空串，日志沿产生边链解析为根本体标题
     // （嵌套影子链同样解析到根本体）。
-    let logs = log::service::list(0, 1000).unwrap();
+    let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     let has_edge_create = |edge_id: &str, expect_source: &str, expect_target: &str| {
         logs.items.iter().any(|entry| entry.object_id == edge_id
             && matches!(&entry.action, entity::Action::EdgeCreate { source_title, target_title }
@@ -3313,7 +3318,7 @@ fn test_shadow_node_edge_create() {
     // 日志载荷成功路径：影子端点边的更新与删除日志同样沿产生边链解析根本体标题。
     edge::service::update(&edge_sx_n.id, "edge-title".to_string(), String::new()).unwrap();
     edge::service::delete(&edge_n_sz.id, false).unwrap();
-    let logs = log::service::list(0, 1000).unwrap();
+    let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert!(logs.items.iter().any(|entry| entry.object_id == edge_sx_n.id
         && matches!(&entry.action, entity::Action::EdgeUpdate { source_title, target_title, new_title, .. }
             if source_title == "origin-x" && target_title == "internal-n" && new_title == "edge-title")));
@@ -3452,7 +3457,7 @@ fn test_edge_replace() {
     // 写入标题与详情，便于断言保留。
     edge::service::update(&edge_ab.id, "inherited title".to_string(), "inherited desc".to_string()).unwrap();
     // 同向用不同连接桩重建 → 触发端口更新路径。
-    let log_total_before_port = log::service::list(0, 1).unwrap().total;
+    let log_total_before_port = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     let edge_ab_updated = edge::service::create(&root.id, &node_a.id, "top".to_string(), &node_b.id, "bottom".to_string(), false).unwrap();
     // 边 id 不变，端口为新值，title/description 保留。
     assert_eq!(edge_ab_updated.id, edge_ab.id);
@@ -3464,13 +3469,13 @@ fn test_edge_replace() {
     assert_eq!(persisted.len(), 1);
     assert_eq!(persisted[0].id, edge_ab.id);
     // 日志总数不变（同向重建不记任何日志）。
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before_port);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before_port);
     // 幂等用例：连接桩完全相同的重复拖线也成功，且日志总数仍不变。
     let edge_ab_idempotent = edge::service::create(&root.id, &node_a.id, "top".to_string(), &node_b.id, "bottom".to_string(), false).unwrap();
     assert_eq!(edge_ab_idempotent.id, edge_ab.id);
     assert_eq!(edge_ab_idempotent.source_port, "top");
     assert_eq!(edge_ab_idempotent.target_port, "bottom");
-    assert_eq!(log::service::list(0, 1).unwrap().total, log_total_before_port);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before_port);
     let edge_ab_new = edge_ab_updated;
 
     // ===== 第 2 阶段：换向替换（无影子），反向建边在排除旧边后不成环 =====
@@ -3485,7 +3490,7 @@ fn test_edge_replace() {
     assert_eq!(after_reverse[0].source_id, node_b.id);
     assert_eq!(after_reverse[0].target_id, node_a.id);
     // 日志：EdgeReplace，载荷含新方向（B→A）与旧方向（A→B）的标题；title/description 继承自旧边。
-    let replace_log = log::service::list(0, 1000).unwrap()
+    let replace_log = log::service::list(0, 1000, LogFilter::default()).unwrap()
         .items
         .into_iter()
         .find(|e| e.object_id == edge_reversed.id
@@ -3887,7 +3892,7 @@ fn test_user_database_migration_import_keepass2() {
     ));
     assert_eq!(canvas::service::list(false).unwrap().len(), 1);
     assert!(node::service::list(&root.id, false).unwrap().is_empty());
-    assert_eq!(log::service::list(0, 1).unwrap().total, 0);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
 
     // ===== 失败路径：悬空字典引用返回 NoDictionaryEntryWithSuchId，且不写库 =====
     let mut dangling = nodes.clone();
@@ -3897,7 +3902,7 @@ fn test_user_database_migration_import_keepass2() {
         Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
     ));
     assert_eq!(canvas::service::list(false).unwrap().len(), 1);
-    assert_eq!(log::service::list(0, 1).unwrap().total, 0);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
 
     // ===== 失败路径：非前向边（source_index >= target_index，含自环）与越界边
     // （target_index 超出节点数量）返回 InvalidImportedEdgeIndex，且不写库 =====
@@ -3918,7 +3923,7 @@ fn test_user_database_migration_import_keepass2() {
         Err(ErrorCode::InvalidImportedEdgeIndex { source_index: 0, target_index: 2 })
     ));
     assert_eq!(canvas::service::list(false).unwrap().len(), 1);
-    assert_eq!(log::service::list(0, 1).unwrap().total, 0);
+    assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
 
     // ===== 成功路径：service 层导入，画布名 "test"，画布节点坐标 (0, 240) =====
     let imported_id =
@@ -3988,7 +3993,7 @@ fn test_user_database_migration_import_keepass2() {
     assert_eq!(imported_edges[0].description, "");
 
     // 日志恰好 1 条且 variant 为 NodesImport，data 的 canvas_name 与 node_count 正确。
-    let logs = log::service::list(0, 10).unwrap();
+    let logs = log::service::list(0, 10, LogFilter::default()).unwrap();
     assert_eq!(logs.total, 1);
     assert_eq!(logs.items.len(), 1);
     assert_eq!(logs.items[0].object_id, imported.id);
@@ -4027,7 +4032,7 @@ fn test_user_database_migration_import_keepass2() {
     assert!(root_nodes_2
         .iter()
         .any(|n| n.title == "test 2" && n.canvas_ref_id.as_deref() == Some(imported_2.id.as_str())));
-    let logs = log::service::list(0, 10).unwrap();
+    let logs = log::service::list(0, 10, LogFilter::default()).unwrap();
     // 1 条 CanvasCreate（canvas::service::create）+ 1 条 NodesImport（聚合导入）。
     assert_eq!(logs.total, 2);
     assert!(logs.items.iter().any(|entry| matches!(
@@ -4096,6 +4101,200 @@ fn test_user_database_migration_import_keepass2() {
     ));
 
     // 保存并关闭数据库，清理测试数据目录（临时文件随数据目录一并删除）。
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
+    test::cleanup(&path);
+}
+
+/// 日志分页查询的筛选能力：时间范围、行为类型与内容关键词（含组合过滤与关键词分页语义）。
+#[test]
+fn test_log_list_filter() {
+    let _guard = test::acquire_test_lock();
+
+    // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered = metadata::service::register("log-filter-test-db".to_string()).unwrap();
+    lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+
+    // 直接向 log 表插入一条日志（time 可控，detail 与 log::service::create 的落库格式一致）。
+    let insert_log = |id: &str, object_id: &str, action: &entity::Action, time: i64| {
+        let value = serde_json::to_value(action).unwrap();
+        let variant = value.get("variant").and_then(|v| v.as_str()).unwrap().to_string();
+        let data = value.get("data").cloned().unwrap_or(serde_json::Value::Null);
+        let data = serde_json::to_string(&data).unwrap();
+        let detail = crate::security::aes::encrypt(data.into_bytes(), test::test_key()).unwrap();
+        let connection = state::lock_connection();
+        log::dao::insert(
+            &connection,
+            &entity::Log {
+                id: id.to_string(),
+                object_id: object_id.to_string(),
+                action: variant,
+                time,
+                detail,
+            },
+        )
+        .unwrap();
+    };
+    // 构造 LogFilter 的辅助闭包。
+    let filter = |start_time: Option<i64>, end_time: Option<i64>, actions: Option<Vec<String>>, keyword: Option<String>| LogFilter {
+        start_time,
+        end_time,
+        actions,
+        keyword,
+    };
+
+    // 四条基础日志：节点创建（标题含关键词）、字段修改（changes 嵌套字段值含关键词）、
+    // 画布创建（名称大写混合）、画布移动（载荷不含关键词）。
+    insert_log(
+        "log-1",
+        "obj-1",
+        &entity::Action::NodeCreate {
+            title: "Alpha Project".to_string(),
+            sub_title: "sub".to_string(),
+        },
+        100,
+    );
+    insert_log(
+        "log-2",
+        "obj-2",
+        &entity::Action::NodeFieldsModify {
+            node_title: "node".to_string(),
+            changes: vec![entity::NodeFieldChange::Added {
+                name: "密码".to_string(),
+                field_type: "string:password".to_string(),
+                value: Some("TopSecret".to_string()),
+            }],
+        },
+        200,
+    );
+    insert_log(
+        "log-3",
+        "obj-3",
+        &entity::Action::CanvasCreate {
+            name: "MIXED Case Canvas".to_string(),
+        },
+        300,
+    );
+    insert_log(
+        "log-4",
+        "obj-4",
+        &entity::Action::CanvasMove {
+            name: "canvas".to_string(),
+            old_x: 0.0,
+            old_y: 0.0,
+            new_x: 1.0,
+            new_y: 1.0,
+        },
+        400,
+    );
+
+    // keyword 命中日志载荷中的节点标题（NodeCreate 的 title）。
+    let page = log::service::list(0, 100, filter(None, None, None, Some("alpha".to_string())))
+        .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].id, "log-1");
+
+    // keyword 命中 NodeFieldsModify 的 changes 嵌套字段值。
+    let page = log::service::list(0, 100, filter(None, None, None, Some("topsecret".to_string())))
+        .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.items[0].id, "log-2");
+
+    // keyword 大小写不敏感：内容为大写、关键词为小写也命中。
+    let page = log::service::list(0, 100, filter(None, None, None, Some("mixed".to_string())))
+        .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.items[0].id, "log-3");
+
+    // keyword 不命中：items 为空且 total 为 0。
+    let page =
+        log::service::list(0, 100, filter(None, None, None, Some("no-such-keyword".to_string())))
+            .unwrap();
+    assert!(page.items.is_empty());
+    assert_eq!(page.total, 0);
+
+    // 时间范围过滤命中：闭区间 [200, 300] 恰好覆盖 log-2 与 log-3 的 time。
+    let page = log::service::list(0, 100, filter(Some(200), Some(300), None, None)).unwrap();
+    assert_eq!(page.total, 2);
+    assert!(page.items.iter().all(|e| e.id == "log-2" || e.id == "log-3"));
+
+    // 时间范围过滤排除：只给 start 时排除更早的记录。
+    let page = log::service::list(0, 100, filter(Some(300), None, None, None)).unwrap();
+    assert_eq!(page.total, 2);
+    assert!(page.items.iter().all(|e| e.id == "log-3" || e.id == "log-4"));
+
+    // 时间范围过滤排除：只给 end 时排除更晚的记录。
+    let page = log::service::list(0, 100, filter(None, Some(200), None, None)).unwrap();
+    assert_eq!(page.total, 2);
+    assert!(page.items.iter().all(|e| e.id == "log-1" || e.id == "log-2"));
+
+    // action 过滤：只返回指定 variant 的日志。
+    let page =
+        log::service::list(0, 100, filter(None, None, Some(vec!["CanvasCreate".to_string()]), None))
+            .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.items[0].id, "log-3");
+
+    // action 过滤：多个 variant 任一匹配。
+    let page = log::service::list(
+        0,
+        100,
+        filter(
+            None,
+            None,
+            Some(vec!["CanvasCreate".to_string(), "CanvasMove".to_string()]),
+            None,
+        ),
+    )
+    .unwrap();
+    assert_eq!(page.total, 2);
+    assert!(page.items.iter().all(|e| e.id == "log-3" || e.id == "log-4"));
+
+    // 时间 + action + keyword 组合过滤：画布创建日志中名称含 "mixed" 且 time 在 [100, 300]。
+    let page = log::service::list(
+        0,
+        100,
+        filter(
+            Some(100),
+            Some(300),
+            Some(vec!["CanvasCreate".to_string()]),
+            Some("mixed".to_string()),
+        ),
+    )
+    .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.items[0].id, "log-3");
+
+    // keyword 搜索的分页：再插入 5 条标题含 "needle" 的日志（time 依次递增），
+    // 验证 offset/limit 以匹配序号为基准翻页且 total 为匹配总数。
+    for index in 0..5 {
+        insert_log(
+            &format!("needle-{index}"),
+            "obj-needle",
+            &entity::Action::NodeCreate {
+                title: format!("needle title {index}"),
+                sub_title: String::new(),
+            },
+            500 + index,
+        );
+    }
+    let page = log::service::list(0, 100, filter(None, None, None, Some("needle".to_string())))
+        .unwrap();
+    assert_eq!(page.total, 5);
+    assert_eq!(page.items.len(), 5);
+    // 匹配序号按时间倒序：offset=1、limit=2 取第 2、3 条命中（time 为 503 与 502）。
+    let page = log::service::list(1, 2, filter(None, None, None, Some("needle".to_string())))
+        .unwrap();
+    assert_eq!(page.total, 5);
+    assert_eq!(page.items.len(), 2);
+    assert_eq!(page.items[0].time, 503);
+    assert_eq!(page.items[1].time, 502);
+
+    // 保存并关闭数据库，清理测试数据目录。
     lifecycle::service::save().unwrap();
     lifecycle::service::close().unwrap();
     test::cleanup(&path);

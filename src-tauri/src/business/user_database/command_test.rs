@@ -522,7 +522,7 @@ fn test_user_database_command_all_functions() {
 
 
     // log::command::list::preprocess 成功路径：前面各操作自动生成的日志，可被正常分页查询并解密反序列化。
-    let logs = log::command::list::preprocess(0, 1000).unwrap();
+    let logs = log::command::list::preprocess(0, 1000, None, None, None, None).unwrap();
     assert!(!logs.items.is_empty());
     // 断言至少包含本次测试中 node 创建产生的日志。
     assert!(logs.items.iter().any(|entry| entry.object_id == node_1.id));
@@ -1355,5 +1355,103 @@ fn test_user_database_command_all_functions() {
     lifecycle::command::close::preprocess().unwrap();
     }
 
+    test::cleanup(&path);
+}
+
+/// 日志 command 层 preprocess 的筛选预处理：时间范围校验（InvalidLogTimeRange）与
+/// keyword / actions 的归一化（纯空白关键词视为无关键词、trim+小写化、空 actions 视为不过滤）。
+#[test]
+fn test_log_list_command_filter() {
+    let _guard = test::acquire_test_lock();
+
+    // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered =
+        metadata::service::register("log-filter-cmd-test-db".to_string()).unwrap();
+    lifecycle::command::initialize::preprocess(registered.id.clone(), "password".to_string())
+        .unwrap();
+
+    // 直接向 log 表插入一条标题为 "Hello World" 的日志（time 可控，detail 与落库格式一致）。
+    // command::initialize 的密钥由密码 "password" 派生，加密必须使用同一密钥。
+    let key = crate::util::preprocess_util::preprocess_password("password".to_string()).unwrap();
+    let value = serde_json::to_value(&entity::Action::NodeCreate {
+        title: "Hello World".to_string(),
+        sub_title: String::new(),
+    })
+    .unwrap();
+    let variant = value.get("variant").and_then(|v| v.as_str()).unwrap().to_string();
+    let data = value.get("data").cloned().unwrap_or(serde_json::Value::Null);
+    let data = serde_json::to_string(&data).unwrap();
+    let detail = crate::security::aes::encrypt(data.into_bytes(), key).unwrap();
+    {
+        let connection = state::lock_connection();
+        log::dao::insert(
+            &connection,
+            &entity::Log {
+                id: "cmd-log-1".to_string(),
+                object_id: "obj-1".to_string(),
+                action: variant,
+                time: 100,
+                detail,
+            },
+        )
+        .unwrap();
+    }
+
+    // preprocess 失败路径：start_time > end_time 返回 InvalidLogTimeRange。
+    assert!(matches!(
+        log::command::list::preprocess(0, 100, Some(200), Some(100), None, None),
+        Err(ErrorCode::InvalidLogTimeRange { .. })
+    ));
+
+    // preprocess 失败路径：错误载荷携带 trim 后的 start 与 end。
+    match log::command::list::preprocess(0, 100, Some(300), Some(100), None, None) {
+        Err(ErrorCode::InvalidLogTimeRange { start, end }) => {
+            assert_eq!(start, 300);
+            assert_eq!(end, 100);
+        }
+        other => panic!("expected InvalidLogTimeRange, got {other:?}"),
+    }
+
+    // preprocess 成功路径：时间范围相等时不报错（闭区间，start == end 合法）。
+    let page = log::command::list::preprocess(0, 100, Some(100), Some(100), None, None).unwrap();
+    assert_eq!(page.total, 1);
+
+    // preprocess 预处理：keyword 为纯空白时按无关键词处理（结果与无筛选一致）。
+    let all = log::command::list::preprocess(0, 100, None, None, None, None).unwrap();
+    let blank =
+        log::command::list::preprocess(0, 100, None, None, None, Some("   ".to_string())).unwrap();
+    assert_eq!(blank.total, all.total);
+    assert_eq!(blank.items.len(), all.items.len());
+
+    // preprocess 预处理：keyword 带首尾空白且大小写混合时仍能命中（trim 与小写化生效）。
+    let hit =
+        log::command::list::preprocess(0, 100, None, None, None, Some("  hello  ".to_string()))
+            .unwrap();
+    assert_eq!(hit.total, 1);
+    assert_eq!(hit.items[0].id, "cmd-log-1");
+
+    // preprocess 预处理：actions 空数组视为 None（不过滤）。
+    let empty_actions =
+        log::command::list::preprocess(0, 100, None, None, Some(vec![]), None).unwrap();
+    assert_eq!(empty_actions.total, all.total);
+
+    // preprocess 成功路径：actions 过滤生效（不存在的 variant 返回空结果）。
+    let no_match = log::command::list::preprocess(
+        0,
+        100,
+        None,
+        None,
+        Some(vec!["CanvasMove".to_string()]),
+        None,
+    )
+    .unwrap();
+    assert_eq!(no_match.total, 0);
+    assert!(no_match.items.is_empty());
+
+    lifecycle::command::save::preprocess().unwrap();
+    lifecycle::command::close::preprocess().unwrap();
     test::cleanup(&path);
 }

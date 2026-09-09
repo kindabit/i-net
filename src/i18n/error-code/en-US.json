@@ -310,6 +310,10 @@
     "NodeSetHasExternalEdges": {
       "title": "Node set has external edges",
       "text": "The node set to relocate has edges connecting to other nodes in the canvas"
+    },
+    "InvalidLogTimeRange": {
+      "title": "Invalid Log Time Range",
+      "text": "The start time cannot be later than the end time"
     }
   }
 }
