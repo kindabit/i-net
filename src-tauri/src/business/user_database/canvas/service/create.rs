@@ -38,12 +38,9 @@ pub fn create(parent_id: &str, name: String) -> Result<Canvas, ErrorCode> {
         color: String::new(),
     };
     dao::insert(&connection, &canvas)?;
-    log::service::create(
-        &canvas.id,
-        Action::CanvasCreate {
-            name: canvas.name.clone(),
-        },
-    )?;
+    log::service::create(Action::CanvasCreate {
+        name: canvas.name.clone(),
+    })?;
     Ok(canvas)
 }
 

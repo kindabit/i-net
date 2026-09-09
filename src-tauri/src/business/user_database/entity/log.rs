@@ -188,8 +188,6 @@ pub enum Action {
 pub struct Log {
     /// 日志 id（uuid），主键。
     pub id: String,
-    /// 被操作对象的 id。
-    pub object_id: String,
     /// 行为，存储 Action 的 variant 名。
     pub action: String,
     /// 时间，毫秒时间戳。

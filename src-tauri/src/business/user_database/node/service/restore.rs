@@ -31,16 +31,13 @@ pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     node.y = y;
     dao::update(&connection, &node)?;
     let canvas_ref_id = node.canvas_ref_id.clone();
-    log::service::create(
-        id,
-        Action::NodeRestore {
-            title: node.title,
-            old_x,
-            old_y,
-            new_x: x,
-            new_y: y,
-        },
-    )?;
+    log::service::create(Action::NodeRestore {
+        title: node.title,
+        old_x,
+        old_y,
+        new_x: x,
+        new_y: y,
+    })?;
     // 级联恢复引用的子画布（使用库内坐标）
     if let Some(ref_id) = canvas_ref_id {
         let canvas = canvas::dao::select_by_id(&connection, &ref_id)?;

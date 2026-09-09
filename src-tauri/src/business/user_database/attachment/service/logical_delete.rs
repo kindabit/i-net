@@ -21,13 +21,10 @@ pub fn logical_delete(id: &str) -> Result<(), ErrorCode> {
     })?;
     dao::update_deleted(&connection, id, true)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentLogicalDelete {
-                node_title: node.title,
-                file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentLogicalDelete {
+            node_title: node.title,
+            file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

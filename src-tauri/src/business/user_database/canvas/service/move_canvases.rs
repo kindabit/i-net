@@ -6,7 +6,7 @@ use crate::error_code::ErrorCode;
 
 /// 批量移动画布坐标。若所有条目均未发生位移，则不更新数据库、不产生日志。
 ///
-/// 产生一条 AutoLayoutCanvasNodes 日志，object_id 为根画布 id，
+/// 产生一条 AutoLayoutCanvasNodes 日志。
 /// canvas_count 为实际位移的画布数量。
 ///
 /// # 参数
@@ -14,7 +14,6 @@ use crate::error_code::ErrorCode;
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；任一画布不存在时返回 `ErrorCode::NoCanvasWithSuchId`，
-/// 根画布不存在时返回 `ErrorCode::DatabaseError`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn move_canvases(items: &[MoveNodeVO]) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
@@ -38,15 +37,8 @@ pub fn move_canvases(items: &[MoveNodeVO]) -> Result<(), ErrorCode> {
     }
     // 一次性更新。
     dao::batch_move(&connection, &moved)?;
-    // 产生一条日志：object_id 取根画布 id。
-    let root = dao::select_root(&connection)?
-        .ok_or_else(|| ErrorCode::DatabaseError {
-            detail: "root canvas not found".to_string(),
-        })?;
+    // 产生一条日志。
     let canvas_count = moved.len() as i64;
-    log::service::create(
-        &root.id,
-        Action::AutoLayoutCanvasNodes { canvas_count },
-    )?;
+    log::service::create(Action::AutoLayoutCanvasNodes { canvas_count })?;
     Ok(())
 }

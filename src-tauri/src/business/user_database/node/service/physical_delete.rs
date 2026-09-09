@@ -74,7 +74,7 @@ pub fn physical_delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     // node.shadow_id 外键级联删除，嵌套影子沿外键链递归坍塌。
     dao::delete_by_id(&connection, id)?;
     let canvas_ref_id = node.canvas_ref_id.clone();
-    log::service::create(id, Action::NodePhysicalDelete { title: node.title })?;
+    log::service::create(Action::NodePhysicalDelete { title: node.title })?;
     // 级联物理删除引用的子画布
     if let Some(ref_id) = canvas_ref_id {
         canvas::service::physical_delete(&ref_id)?;

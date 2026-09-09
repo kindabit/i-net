@@ -168,13 +168,10 @@ pub fn import_keepass2(
     }
 
     // 全部写库操作聚合为一条日志。
-    log::service::create(
-        &canvas.id,
-        Action::NodesImport {
-            canvas_name: final_name,
-            node_count: nodes.len() as i64,
-        },
-    )?;
+    log::service::create(Action::NodesImport {
+        canvas_name: final_name,
+        node_count: nodes.len() as i64,
+    })?;
 
     Ok(canvas.id)
 }

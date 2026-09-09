@@ -7,8 +7,6 @@ use crate::business::user_database::entity::Action;
 pub struct LogListResponse {
     /// 日志 id（uuid）。
     pub id: String,
-    /// 被操作对象的 id。
-    pub object_id: String,
     /// 行为（含数据载荷）。
     pub action: Action,
     /// 时间，毫秒时间戳。

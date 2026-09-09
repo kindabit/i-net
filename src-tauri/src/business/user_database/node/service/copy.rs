@@ -63,12 +63,9 @@ pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
         node_field::dao::insert(&connection, &node_field)?;
     }
 
-    log::service::create(
-        &node.id,
-        Action::NodeCreate {
-            title: node.title.clone(),
-            sub_title: node.sub_title.clone(),
-        },
-    )?;
+    log::service::create(Action::NodeCreate {
+        title: node.title.clone(),
+        sub_title: node.sub_title.clone(),
+    })?;
     Ok(node)
 }

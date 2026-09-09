@@ -7,10 +7,9 @@ use crate::error_code::ErrorCode;
 fn map_row(row: &Row) -> rusqlite::Result<Log> {
     Ok(Log {
         id: row.get(0)?,
-        object_id: row.get(1)?,
-        action: row.get(2)?,
-        time: row.get(3)?,
-        detail: row.get(4)?,
+        action: row.get(1)?,
+        time: row.get(2)?,
+        detail: row.get(3)?,
     })
 }
 
@@ -26,7 +25,6 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
         .execute(
             "CREATE TABLE log (
                 id TEXT PRIMARY KEY,
-                object_id TEXT NOT NULL,
                 action TEXT NOT NULL,
                 time INTEGER NOT NULL,
                 detail BLOB NOT NULL
@@ -50,11 +48,10 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 pub fn insert(connection: &Connection, log: &Log) -> Result<(), ErrorCode> {
     connection
         .execute(
-            "INSERT INTO log (id, object_id, action, time, detail)
-            VALUES (:id, :object_id, :action, :time, :detail)",
+            "INSERT INTO log (id, action, time, detail)
+            VALUES (:id, :action, :time, :detail)",
             rusqlite::named_params! {
                 ":id": log.id,
-                ":object_id": log.object_id,
                 ":action": &log.action,
                 ":time": log.time,
                 ":detail": log.detail,
@@ -138,7 +135,7 @@ pub fn select_paged(
 ) -> Result<Vec<Log>, ErrorCode> {
     let (where_clause, keys) = build_where_clause(filter);
     let sql = format!(
-        "SELECT id, object_id, action, time, detail
+        "SELECT id, action, time, detail
         FROM log
         {where_clause}
         ORDER BY time DESC, id DESC
@@ -182,7 +179,7 @@ pub fn for_each(
 ) -> Result<(), ErrorCode> {
     let (where_clause, keys) = build_where_clause(filter);
     let sql = format!(
-        "SELECT id, object_id, action, time, detail
+        "SELECT id, action, time, detail
         FROM log
         {where_clause}
         ORDER BY time DESC, id DESC"
@@ -236,7 +233,6 @@ mod tests {
     fn log(id: &str, action: &str, time: i64) -> Log {
         Log {
             id: id.to_string(),
-            object_id: format!("object-{id}"),
             action: action.to_string(),
             time,
             detail: format!("detail-{id}").into_bytes(),

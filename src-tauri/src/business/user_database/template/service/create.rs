@@ -22,9 +22,6 @@ pub fn create(name: String) -> Result<Template, ErrorCode> {
     let order = dao::max_order(&connection)? + 1;
     let template = Template { id: id.clone(), name: name.clone(), order };
     dao::insert(&connection, &template)?;
-    log::service::create(
-        &id,
-        Action::TemplateCreate { name },
-    )?;
+    log::service::create(Action::TemplateCreate { name })?;
     Ok(template)
 }

@@ -23,14 +23,11 @@ pub fn rename(id: &str, new_file_name: String) -> Result<(), ErrorCode> {
     let old_file_name = std::mem::replace(&mut attachment.file_name, new_file_name);
     dao::update(&connection, &attachment)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentRename {
-                node_title: node.title,
-                old_file_name,
-                new_file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentRename {
+            node_title: node.title,
+            old_file_name,
+            new_file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

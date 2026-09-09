@@ -21,9 +21,6 @@ pub fn delete(id: &str) -> Result<(), ErrorCode> {
         })?;
     let name = template.name;
     dao::delete_by_id(&connection, id)?;
-    log::service::create(
-        id,
-        Action::TemplateDelete { name },
-    )?;
+    log::service::create(Action::TemplateDelete { name })?;
     Ok(())
 }

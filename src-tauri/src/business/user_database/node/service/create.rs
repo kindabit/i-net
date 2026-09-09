@@ -82,13 +82,10 @@ pub fn create(
             copy_template_fields(&connection, &node.id, tid)?;
         }
 
-        log::service::create(
-            &node.id,
-            Action::NodeCreate {
-                title: node.title.clone(),
-                sub_title: node.sub_title.clone(),
-            },
-        )?;
+        log::service::create(Action::NodeCreate {
+            title: node.title.clone(),
+            sub_title: node.sub_title.clone(),
+        })?;
         return Ok(node);
     }
 
@@ -108,13 +105,10 @@ pub fn create(
     if let Some(ref tid) = template_id {
         copy_template_fields(&connection, &node.id, tid)?;
     }
-    log::service::create(
-        &node.id,
-        Action::NodeCreate {
-            title: node.title.clone(),
-            sub_title: node.sub_title.clone(),
-        },
-    )?;
+    log::service::create(Action::NodeCreate {
+        title: node.title.clone(),
+        sub_title: node.sub_title.clone(),
+    })?;
     Ok(node)
 }
 

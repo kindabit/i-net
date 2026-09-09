@@ -58,12 +58,9 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     // edge.source_id/target_id 外键级联删除，下游嵌套影子沿外键链递归坍塌，
     // 应用层禁止手写递归删除。
     dao::delete_by_id(&connection, id)?;
-    log::service::create(
-        id,
-        Action::EdgePhysicalDelete {
-            source_title,
-            target_title,
-        },
-    )?;
+    log::service::create(Action::EdgePhysicalDelete {
+        source_title,
+        target_title,
+    })?;
     Ok(())
 }

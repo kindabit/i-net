@@ -28,13 +28,10 @@ pub fn physical_delete(id: &str) -> Result<(), ErrorCode> {
     }
     dao::delete_by_id(&connection, id)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentPhysicalDelete {
-                node_title: node.title,
-                file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentPhysicalDelete {
+            node_title: node.title,
+            file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

@@ -39,7 +39,7 @@ pub fn logical_delete(id: &str) -> Result<(), ErrorCode> {
         let mut canvas = canvas.clone();
         canvas.deleted = true;
         dao::update(&connection, &canvas)?;
-        deleted.push((canvas.id.clone(), canvas.name));
+        deleted.push(canvas.name);
         // 逻辑删除引用该画布的画布节点（若存在且未删除）
         if let Some(mut ref_node) =
             node::dao::select_by_canvas_ref_id(&connection, &canvas.id)?
@@ -47,15 +47,15 @@ pub fn logical_delete(id: &str) -> Result<(), ErrorCode> {
             if !ref_node.deleted {
                 ref_node.deleted = true;
                 node::dao::update(&connection, &ref_node)?;
-                node_deleted.push((ref_node.id, ref_node.title));
+                node_deleted.push(ref_node.title);
             }
         }
     }
-    for (id, name) in deleted {
-        log::service::create(&id, Action::CanvasLogicalDelete { name })?;
+    for name in deleted {
+        log::service::create(Action::CanvasLogicalDelete { name })?;
     }
-    for (id, title) in node_deleted {
-        log::service::create(&id, Action::NodeLogicalDelete { title })?;
+    for title in node_deleted {
+        log::service::create(Action::NodeLogicalDelete { title })?;
     }
     Ok(())
 }

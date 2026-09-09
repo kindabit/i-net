@@ -525,7 +525,10 @@ fn test_user_database_command_all_functions() {
     let logs = log::command::list::preprocess(0, 1000, None, None, None, None).unwrap();
     assert!(!logs.items.is_empty());
     // 断言至少包含本次测试中 node 创建产生的日志。
-    assert!(logs.items.iter().any(|entry| entry.object_id == node_1.id));
+    assert!(logs
+        .items
+        .iter()
+        .any(|entry| matches!(entry.action, entity::Action::NodeCreate { .. })));
 
     // canvas::command::physical_delete::preprocess 成功路径：物理删除子画布后列表只剩根画布。
     canvas::command::physical_delete::preprocess(child.id.clone()).unwrap();
@@ -1391,7 +1394,6 @@ fn test_log_list_command_filter() {
             &connection,
             &entity::Log {
                 id: "cmd-log-1".to_string(),
-                object_id: "obj-1".to_string(),
                 action: variant,
                 time: 100,
                 detail,

@@ -887,53 +887,41 @@ fn test_user_database_service_all_functions() {
     let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
     // log::list 成功路径：limit 足够大时 total 与 items 长度一致。
     assert_eq!(logs.total, logs.items.len() as i64);
-    let has = |object_id: &str, predicate: fn(&entity::Action) -> bool| {
-        logs.items
-            .iter()
-            .any(|entry| entry.object_id == object_id && predicate(&entry.action))
+    let has = |predicate: fn(&entity::Action) -> bool| {
+        logs.items.iter().any(|entry| predicate(&entry.action))
     };
     // 子画布经历过创建、移动、逻辑删除、恢复、物理删除，五种行为的日志都应存在。
     assert!(has(
-        &child.id,
         |action| matches!(action, entity::Action::CanvasCreate { name } if name == "child")
     ));
     assert!(has(
-        &child.id,
         |action| matches!(action, entity::Action::CanvasMove { name, .. } if name == "child")
     ));
     assert!(has(
-        &child.id,
         |action| matches!(action, entity::Action::CanvasLogicalDelete { name } if name == "child")
     ));
     assert!(has(
-        &child.id,
         |action| matches!(action, entity::Action::CanvasRestore { name, .. } if name == "child")
     ));
     assert!(has(
-        &child.id,
         |action| matches!(action, entity::Action::CanvasPhysicalDelete { name } if name == "child")
     ));
-    // 节点和边的日志同样按对象 id 记录。
+    // 节点和边的日志同样存在。
     assert!(has(
-        &node_1.id,
         |action| matches!(action, entity::Action::NodeCreate { title, .. } if title == "title-1")
     ));
     assert!(has(
-        &node_1.id,
         |action| matches!(action, entity::Action::NodeLogicalDelete { title } if title == "title-1-new")
     ));
     assert!(has(
-        &node_1.id,
         |action| matches!(action, entity::Action::NodeRestore { title, .. } if title == "title-1-new")
     ));
     assert!(has(
-        &edge_1.id,
         |action| matches!(action, entity::Action::EdgeReplace { source_title, target_title, old_source_title, old_target_title }
             if source_title == "title-1" && target_title == "title-2"
                 && old_source_title == "title-2" && old_target_title == "title-1")
     ));
     assert!(has(
-        &edge_2.id,
         |action| matches!(action, entity::Action::EdgePhysicalDelete { source_title, target_title } if source_title == "title-1-new" && target_title == "title-3")
     ));
 
@@ -954,20 +942,16 @@ fn test_user_database_service_all_functions() {
 
     // log::create 成功路径：直接插入一条日志后能在列表中查到，载荷解密并重组反序列化正确。
     let before = logs.total;
-    log::service::create(
-        "object-x",
-        entity::Action::CanvasCreate {
-            name: "手动日志".to_string(),
-        },
-    )
+    log::service::create(entity::Action::CanvasCreate {
+        name: "手动日志".to_string(),
+    })
     .unwrap();
     let after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(after.total, before + 1);
-    assert!(after.items.iter().any(|entry| entry.object_id == "object-x"
-        && matches!(
-            entry.action,
-            entity::Action::CanvasCreate { ref name } if name == "手动日志"
-        )));
+    assert!(after.items.iter().any(|entry| matches!(
+        entry.action,
+        entity::Action::CanvasCreate { ref name } if name == "手动日志"
+    )));
 
     // lifecycle::save / close 成功路径：保存并关闭后 state 被清空。
     lifecycle::service::save().unwrap();
@@ -1254,10 +1238,7 @@ fn test_user_database_service_all_functions() {
     let first_entry = after_set
         .items
         .iter()
-        .find(|e| {
-            e.object_id == log_node.id
-                && matches!(e.action, entity::Action::NodeFieldsModify { .. })
-        })
+        .find(|e| matches!(e.action, entity::Action::NodeFieldsModify { .. }))
         .unwrap();
     let first_changes = match &first_entry.action {
         entity::Action::NodeFieldsModify { node_title, changes } => {
@@ -1292,10 +1273,7 @@ fn test_user_database_service_all_functions() {
     let value_change_entry = after_value_change
         .items
         .iter()
-        .find(|e| {
-            e.object_id == log_node.id
-                && matches!(e.action, entity::Action::NodeFieldsModify { .. })
-        })
+        .find(|e| matches!(e.action, entity::Action::NodeFieldsModify { .. }))
         .unwrap();
     let value_changes = match &value_change_entry.action {
         entity::Action::NodeFieldsModify { changes, .. } => changes,
@@ -1322,10 +1300,7 @@ fn test_user_database_service_all_functions() {
     let type_change_entry = after_type_change
         .items
         .iter()
-        .find(|e| {
-            e.object_id == log_node.id
-                && matches!(e.action, entity::Action::NodeFieldsModify { .. })
-        })
+        .find(|e| matches!(e.action, entity::Action::NodeFieldsModify { .. }))
         .unwrap();
     let type_changes = match &type_change_entry.action {
         entity::Action::NodeFieldsModify { changes, .. } => changes,
@@ -1346,10 +1321,7 @@ fn test_user_database_service_all_functions() {
     let remove_entry = after_remove
         .items
         .iter()
-        .find(|e| {
-            e.object_id == log_node.id
-                && matches!(e.action, entity::Action::NodeFieldsModify { .. })
-        })
+        .find(|e| matches!(e.action, entity::Action::NodeFieldsModify { .. }))
         .unwrap();
     let remove_changes = match &remove_entry.action {
         entity::Action::NodeFieldsModify { changes, .. } => changes,
@@ -1373,10 +1345,7 @@ fn test_user_database_service_all_functions() {
     let rename_entry = after_rename
         .items
         .iter()
-        .find(|e| {
-            e.object_id == log_node.id
-                && matches!(e.action, entity::Action::NodeFieldsModify { .. })
-        })
+        .find(|e| matches!(e.action, entity::Action::NodeFieldsModify { .. }))
         .unwrap();
     let rename_changes = match &rename_entry.action {
         entity::Action::NodeFieldsModify { changes, .. } => changes,
@@ -2024,39 +1993,30 @@ fn test_user_database_service_all_functions() {
     ));
 
     // == attachment 日志载荷验证：import / export / logical_delete / restore / physical_delete / rename
-    //    均以节点 id 记录并携带节点标题与文件名 ==
+    //    均携带节点标题与文件名 ==
     let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
-    let has = |object_id: &str, predicate: fn(&entity::Action) -> bool| {
-        logs.items
-            .iter()
-            .any(|entry| entry.object_id == object_id && predicate(&entry.action))
+    let has = |predicate: fn(&entity::Action) -> bool| {
+        logs.items.iter().any(|entry| predicate(&entry.action))
     };
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentImport { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentExport { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentLogicalDelete { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentRestore { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentPhysicalDelete { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentUpdate { node_title, file_name } if node_title == "attach-node" && file_name == "report.pdf")
     ));
     assert!(has(
-        &node.id,
         |action| matches!(action, entity::Action::AttachmentRename { node_title, old_file_name, new_file_name } if node_title == "attach-node" && old_file_name == "report.pdf" && new_file_name == "renamed-report.pdf")
     ));
 
@@ -2241,9 +2201,8 @@ fn test_user_database_service_all_functions() {
     let logs_after_create = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert!(
         logs_after_create.items.iter().any(|entry| {
-            entry.object_id == node.id
-                && matches!(&entry.action, entity::Action::AttachmentCreate { node_title, file_name }
-                    if node_title == "attach-node" && file_name == "note.txt")
+            matches!(&entry.action, entity::Action::AttachmentCreate { node_title, file_name }
+                if node_title == "attach-node" && file_name == "note.txt")
         }),
         "应产生 AttachmentCreate 日志"
     );
@@ -2536,7 +2495,7 @@ fn test_user_database_service_all_functions() {
         .find(|n| n.id == node_c.id)
         .unwrap();
     assert_eq!((updated_c.x, updated_c.y), (50.0, 60.0));
-    // 验证只产生一条日志，action 为 AutoLayoutDataNodes，node_count=2，object_id 为画布 id。
+    // 验证只产生一条日志，action 为 AutoLayoutDataNodes，node_count=2。
     let logs_after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after.total, log_total_before + 1);
     let auto_layout_log = logs_after
@@ -2544,7 +2503,6 @@ fn test_user_database_service_all_functions() {
         .iter()
         .find(|e| matches!(e.action, entity::Action::AutoLayoutDataNodes { .. }))
         .unwrap();
-    assert_eq!(auto_layout_log.object_id, child.id);
     assert!(matches!(
         auto_layout_log.action,
         entity::Action::AutoLayoutDataNodes { node_count } if node_count == 2
@@ -2639,7 +2597,7 @@ fn test_user_database_service_all_functions() {
         .find(|c| c.id == canvas_e.id)
         .unwrap();
     assert_eq!((updated_e.x, updated_e.y), (canvas_e_before.x, canvas_e_before.y));
-    // 验证只产生一条日志，action 为 AutoLayoutCanvasNodes，canvas_count=1，object_id 为根画布 id。
+    // 验证只产生一条日志，action 为 AutoLayoutCanvasNodes，canvas_count=1。
     let logs_after_canvas = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after_canvas.total, log_total_before_canvas + 1);
     let auto_layout_canvas_log = logs_after_canvas
@@ -2647,7 +2605,6 @@ fn test_user_database_service_all_functions() {
         .iter()
         .find(|e| matches!(e.action, entity::Action::AutoLayoutCanvasNodes { .. }))
         .unwrap();
-    assert_eq!(auto_layout_canvas_log.object_id, root_id);
     assert!(matches!(
         auto_layout_canvas_log.action,
         entity::Action::AutoLayoutCanvasNodes { canvas_count } if canvas_count == 1
@@ -2970,7 +2927,7 @@ fn test_user_database_service_all_functions() {
     let target_edges = edge::service::list(&target_canvas.id).unwrap();
     assert!(target_edges.iter().any(|e| e.id == reloc_edge.id
         && e.canvas_id == target_canvas.id));
-    // 产生恰好一条 Action::NodeRelocate 日志，且 node_count=2、source/target 画布名称正确、object_id 为目标画布 id。
+    // 产生恰好一条 Action::NodeRelocate 日志，且 node_count=2、source/target 画布名称正确。
     let logs_after = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after.total, log_total_before + 1);
     let relocate_log = logs_after
@@ -2978,7 +2935,6 @@ fn test_user_database_service_all_functions() {
         .iter()
         .find(|e| matches!(e.action, entity::Action::NodeRelocate { .. }))
         .unwrap();
-    assert_eq!(relocate_log.object_id, target_canvas.id);
     assert!(matches!(
         &relocate_log.action,
         entity::Action::NodeRelocate {
@@ -3105,8 +3061,10 @@ fn test_shadow_node_service() {
     assert_eq!((moved.x, moved.y), (10.0, 20.0));
     // 日志载荷成功路径：影子的移动日志标题沿产生边链解析为根本体标题（影子本体标题落库为空串）。
     let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
-    assert!(logs.items.iter().any(|entry| entry.object_id == shadow_x.id
-        && matches!(&entry.action, entity::Action::NodeMove { title, .. } if title == "origin-x")));
+    assert!(logs.items.iter().any(|entry| matches!(
+        &entry.action,
+        entity::Action::NodeMove { title, .. } if title == "origin-x"
+    )));
 
     // 导出过滤准备：在画布 b 内创建普通节点 N，并建边 shadow_x→N（入向影子有出边）。
     let node_n = node::service::create(&canvas_b, "internal-n".to_string(), String::new(), 500.0, 0.0, None, false).unwrap();
@@ -3265,15 +3223,16 @@ fn test_shadow_node_edge_create() {
     // 日志载荷成功路径：影子端点的标题落库为空串，日志沿产生边链解析为根本体标题
     // （嵌套影子链同样解析到根本体）。
     let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
-    let has_edge_create = |edge_id: &str, expect_source: &str, expect_target: &str| {
-        logs.items.iter().any(|entry| entry.object_id == edge_id
-            && matches!(&entry.action, entity::Action::EdgeCreate { source_title, target_title }
+    let has_edge_create = |expect_source: &str, expect_target: &str| {
+        logs.items
+            .iter()
+            .any(|entry| matches!(&entry.action, entity::Action::EdgeCreate { source_title, target_title }
                 if source_title == expect_source && target_title == expect_target))
     };
-    assert!(has_edge_create(&edge_sxc2.id, "origin-x", "canvas-c2"));
-    assert!(has_edge_create(&edge_c2sz.id, "canvas-c2", "canvas-z"));
-    assert!(has_edge_create(&edge_sx_n.id, "origin-x", "internal-n"));
-    assert!(has_edge_create(&edge_n_sz.id, "internal-n", "canvas-z"));
+    assert!(has_edge_create("origin-x", "canvas-c2"));
+    assert!(has_edge_create("canvas-c2", "canvas-z"));
+    assert!(has_edge_create("origin-x", "internal-n"));
+    assert!(has_edge_create("internal-n", "canvas-z"));
     // 影子-影子互连失败路径：入向影子 shadow_x 连接出向影子 shadow_z，报 ShadowToShadowEdge
     // （影子-影子拦截先于方向约束）。
     assert!(matches!(
@@ -3319,12 +3278,16 @@ fn test_shadow_node_edge_create() {
     edge::service::update(&edge_sx_n.id, "edge-title".to_string(), String::new()).unwrap();
     edge::service::delete(&edge_n_sz.id, false).unwrap();
     let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
-    assert!(logs.items.iter().any(|entry| entry.object_id == edge_sx_n.id
-        && matches!(&entry.action, entity::Action::EdgeUpdate { source_title, target_title, new_title, .. }
-            if source_title == "origin-x" && target_title == "internal-n" && new_title == "edge-title")));
-    assert!(logs.items.iter().any(|entry| entry.object_id == edge_n_sz.id
-        && matches!(&entry.action, entity::Action::EdgePhysicalDelete { source_title, target_title }
-            if source_title == "internal-n" && target_title == "canvas-z")));
+    assert!(logs.items.iter().any(|entry| matches!(
+        &entry.action,
+        entity::Action::EdgeUpdate { source_title, target_title, new_title, .. }
+            if source_title == "origin-x" && target_title == "internal-n" && new_title == "edge-title"
+    )));
+    assert!(logs.items.iter().any(|entry| matches!(
+        &entry.action,
+        entity::Action::EdgePhysicalDelete { source_title, target_title }
+            if source_title == "internal-n" && target_title == "canvas-z"
+    )));
 
     // 保存并关闭数据库，清理测试数据目录。
     lifecycle::service::save().unwrap();
@@ -3493,8 +3456,7 @@ fn test_edge_replace() {
     let replace_log = log::service::list(0, 1000, LogFilter::default()).unwrap()
         .items
         .into_iter()
-        .find(|e| e.object_id == edge_reversed.id
-            && matches!(e.action, entity::Action::EdgeReplace { .. }))
+        .find(|e| matches!(e.action, entity::Action::EdgeReplace { .. }))
         .expect("EdgeReplace log should exist for the reversed edge");
     assert!(matches!(
         &replace_log.action,
@@ -3996,7 +3958,6 @@ fn test_user_database_migration_import_keepass2() {
     let logs = log::service::list(0, 10, LogFilter::default()).unwrap();
     assert_eq!(logs.total, 1);
     assert_eq!(logs.items.len(), 1);
-    assert_eq!(logs.items[0].object_id, imported.id);
     assert!(matches!(
         &logs.items[0].action,
         entity::Action::NodesImport { canvas_name, node_count }
@@ -4119,7 +4080,7 @@ fn test_log_list_filter() {
     lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
 
     // 直接向 log 表插入一条日志（time 可控，detail 与 log::service::create 的落库格式一致）。
-    let insert_log = |id: &str, object_id: &str, action: &entity::Action, time: i64| {
+    let insert_log = |id: &str, action: &entity::Action, time: i64| {
         let value = serde_json::to_value(action).unwrap();
         let variant = value.get("variant").and_then(|v| v.as_str()).unwrap().to_string();
         let data = value.get("data").cloned().unwrap_or(serde_json::Value::Null);
@@ -4130,7 +4091,6 @@ fn test_log_list_filter() {
             &connection,
             &entity::Log {
                 id: id.to_string(),
-                object_id: object_id.to_string(),
                 action: variant,
                 time,
                 detail,
@@ -4150,7 +4110,6 @@ fn test_log_list_filter() {
     // 画布创建（名称大写混合）、画布移动（载荷不含关键词）。
     insert_log(
         "log-1",
-        "obj-1",
         &entity::Action::NodeCreate {
             title: "Alpha Project".to_string(),
             sub_title: "sub".to_string(),
@@ -4159,7 +4118,6 @@ fn test_log_list_filter() {
     );
     insert_log(
         "log-2",
-        "obj-2",
         &entity::Action::NodeFieldsModify {
             node_title: "node".to_string(),
             changes: vec![entity::NodeFieldChange::Added {
@@ -4172,7 +4130,6 @@ fn test_log_list_filter() {
     );
     insert_log(
         "log-3",
-        "obj-3",
         &entity::Action::CanvasCreate {
             name: "MIXED Case Canvas".to_string(),
         },
@@ -4180,7 +4137,6 @@ fn test_log_list_filter() {
     );
     insert_log(
         "log-4",
-        "obj-4",
         &entity::Action::CanvasMove {
             name: "canvas".to_string(),
             old_x: 0.0,
@@ -4274,7 +4230,6 @@ fn test_log_list_filter() {
     for index in 0..5 {
         insert_log(
             &format!("needle-{index}"),
-            "obj-needle",
             &entity::Action::NodeCreate {
                 title: format!("needle title {index}"),
                 sub_title: String::new(),

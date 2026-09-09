@@ -112,13 +112,7 @@ fn decrypt_log(log: &Log, key: [u8; 32]) -> Result<serde_json::Value, ErrorCode>
 /// # 返回值
 /// 返回重组后的日志响应；失败时返回 `ErrorCode::FailToDeserializeAction`。
 fn reassemble_log(log: Log, data: serde_json::Value) -> Result<LogListResponse, ErrorCode> {
-    let Log {
-        id,
-        object_id,
-        action,
-        time,
-        ..
-    } = log;
+    let Log { id, action, time, .. } = log;
     let value = if data.is_null() {
         serde_json::json!({ "variant": action })
     } else {
@@ -126,12 +120,7 @@ fn reassemble_log(log: Log, data: serde_json::Value) -> Result<LogListResponse, 
     };
     let action = serde_json::from_value::<Action>(value)
         .map_err(|_| ErrorCode::FailToDeserializeAction)?;
-    Ok(LogListResponse {
-        id,
-        object_id,
-        action,
-        time,
-    })
+    Ok(LogListResponse { id, action, time })
 }
 
 /// 判断 JSON 值的任意字符串值是否包含关键词（关键词已转为小写，大小写不敏感匹配）。

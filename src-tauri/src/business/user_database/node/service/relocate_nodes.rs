@@ -17,7 +17,7 @@ use crate::error_code::ErrorCode;
 ///   故合法迁移集永远不会有影子引用残留。
 ///
 /// 写库：更新节点 canvas_id/x/y，两端都在集合内的内部边随迁至目标画布。
-/// 产生一条 NodeRelocate 日志，object_id 为目标画布 id，载荷为节点数量与源/目标画布名称。
+/// 产生一条 NodeRelocate 日志，载荷为节点数量与源/目标画布名称。
 ///
 /// # 参数
 /// - `items`: 要迁移的节点列表（含最终坐标）。
@@ -92,13 +92,10 @@ pub fn relocate_nodes(items: &[MoveNodeVO], target_canvas_id: &str) -> Result<()
     let source_canvas_name = canvas::dao::select_by_id(&connection, &source_canvas_id)?
         .map(|c| c.name)
         .unwrap_or_default();
-    log::service::create(
-        target_canvas_id,
-        Action::NodeRelocate {
-            node_count: items.len() as i64,
-            source_canvas_name,
-            target_canvas_name: target_canvas.name,
-        },
-    )?;
+    log::service::create(Action::NodeRelocate {
+        node_count: items.len() as i64,
+        source_canvas_name,
+        target_canvas_name: target_canvas.name,
+    })?;
     Ok(())
 }

@@ -130,23 +130,17 @@ pub fn create(
     shadow::service::create_shadow_for_edge(&connection, &edge, &source, &target)?;
     if replaced {
         // 旧边即新边的反向：旧边源端是新边目标节点，旧边目标端是新边源节点。
-        log::service::create(
-            &edge.id,
-            Action::EdgeReplace {
-                old_source_title: target_title.clone(),
-                old_target_title: source_title.clone(),
-                source_title,
-                target_title,
-            },
-        )?;
+        log::service::create(Action::EdgeReplace {
+            old_source_title: target_title.clone(),
+            old_target_title: source_title.clone(),
+            source_title,
+            target_title,
+        })?;
     } else {
-        log::service::create(
-            &edge.id,
-            Action::EdgeCreate {
-                source_title,
-                target_title,
-            },
-        )?;
+        log::service::create(Action::EdgeCreate {
+            source_title,
+            target_title,
+        })?;
     }
     Ok(edge)
 }

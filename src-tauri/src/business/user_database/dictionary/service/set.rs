@@ -46,10 +46,7 @@ pub fn set(entries: &[Dictionary]) -> Result<(), ErrorCode> {
 
     let entry_count = entries.len() as i64;
 
-    log::service::create(
-        "dictionary",
-        Action::DictionarySet { entry_count },
-    )?;
+    log::service::create(Action::DictionarySet { entry_count })?;
 
     Ok(())
 }

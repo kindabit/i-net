@@ -135,13 +135,10 @@ pub fn set(node_id: &str, fields: &[NodeFieldVO]) -> Result<(), ErrorCode> {
     }
 
     if !changes.is_empty() {
-        log::service::create(
-            node_id,
-            Action::NodeFieldsModify {
-                node_title,
-                changes,
-            },
-        )?;
+        log::service::create(Action::NodeFieldsModify {
+            node_title,
+            changes,
+        })?;
     }
 
     Ok(())

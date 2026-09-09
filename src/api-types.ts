@@ -122,8 +122,6 @@ export type LogAction =
 export interface LogListResponse {
   /** 日志 id（uuid） */
   id: string;
-  /** 被操作对象的 id */
-  object_id: string;
   /** 日志行为及其数据 */
   action: LogAction;
   /** 时间，毫秒时间戳 */

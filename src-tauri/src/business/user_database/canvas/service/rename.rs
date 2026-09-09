@@ -36,23 +36,17 @@ pub fn rename(id: &str, new_name: String) -> Result<(), ErrorCode> {
             let node_old_title = std::mem::replace(&mut referencing.title, canvas.name.clone());
             let node_old_sub_title = referencing.sub_title.clone();
             node::dao::update(&connection, &referencing)?;
-            log::service::create(
-                &referencing.id,
-                Action::NodeModify {
-                    old_title: node_old_title,
-                    old_sub_title: node_old_sub_title,
-                    new_title: referencing.title.clone(),
-                    new_sub_title: referencing.sub_title.clone(),
-                },
-            )?;
+            log::service::create(Action::NodeModify {
+                old_title: node_old_title,
+                old_sub_title: node_old_sub_title,
+                new_title: referencing.title.clone(),
+                new_sub_title: referencing.sub_title.clone(),
+            })?;
         }
     }
-    log::service::create(
-        id,
-        Action::CanvasRename {
-            old_name,
-            new_name: canvas.name,
-        },
-    )?;
+    log::service::create(Action::CanvasRename {
+        old_name,
+        new_name: canvas.name,
+    })?;
     Ok(())
 }

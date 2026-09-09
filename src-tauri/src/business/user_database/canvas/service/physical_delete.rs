@@ -65,7 +65,7 @@ pub fn physical_delete(id: &str) -> Result<(), ErrorCode> {
     // parent_id == 节点所在画布），其子树内其它画布的引用节点位于子树内部。
     // 引用节点的行以及相连边、字段、附件元数据由 node.canvas_ref_id 外键随目标
     // 画布行的删除级联删除；此处先清理其附件磁盘文件并记录日志载荷。
-    let mut node_deleted: Option<(String, String)> = None;
+    let mut node_deleted: Option<String> = None;
     if let Some(ref_node) = node::dao::select_by_canvas_ref_id(&connection, id)? {
         let attachments =
             attachment::dao::select_by_node_ids(&connection, &[ref_node.id.clone()])?;
@@ -75,7 +75,7 @@ pub fn physical_delete(id: &str) -> Result<(), ErrorCode> {
                 file_system_util::remove_file(&file)?;
             }
         }
-        node_deleted = Some((ref_node.id.clone(), ref_node.title.clone()));
+        node_deleted = Some(ref_node.title.clone());
     }
     // 视口无外键约束，逐个画布手工删除。
     for canvas_id in &subtree_ids {
@@ -89,14 +89,14 @@ pub fn physical_delete(id: &str) -> Result<(), ErrorCode> {
     let mut deleted = Vec::new();
     for canvas_id in &subtree_ids {
         if let Some(canvas) = all.iter().find(|canvas| &canvas.id == canvas_id) {
-            deleted.push((canvas.id.clone(), canvas.name.clone()));
+            deleted.push(canvas.name.clone());
         }
     }
-    for (id, name) in deleted {
-        log::service::create(&id, Action::CanvasPhysicalDelete { name })?;
+    for name in deleted {
+        log::service::create(Action::CanvasPhysicalDelete { name })?;
     }
-    if let Some((id, title)) = node_deleted {
-        log::service::create(&id, Action::NodePhysicalDelete { title })?;
+    if let Some(title) = node_deleted {
+        log::service::create(Action::NodePhysicalDelete { title })?;
     }
     Ok(())
 }

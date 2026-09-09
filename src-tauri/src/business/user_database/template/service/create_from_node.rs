@@ -45,12 +45,9 @@ pub fn create_from_node(node_id: &str, name: String) -> Result<Template, ErrorCo
         };
         dao::insert_field(&connection, &field)?;
     }
-    log::service::create(
-        &template_id,
-        Action::TemplateCreateFromNode {
-            template_name: name,
-            node_title: node.title,
-        },
-    )?;
+    log::service::create(Action::TemplateCreateFromNode {
+        template_name: name,
+        node_title: node.title,
+    })?;
     Ok(template)
 }

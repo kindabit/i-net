@@ -28,15 +28,12 @@ pub fn move_canvas(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     canvas.x = x;
     canvas.y = y;
     dao::update(&connection, &canvas)?;
-    log::service::create(
-        id,
-        Action::CanvasMove {
-            name: canvas.name,
-            old_x,
-            old_y,
-            new_x: x,
-            new_y: y,
-        },
-    )?;
+    log::service::create(Action::CanvasMove {
+        name: canvas.name,
+        old_x,
+        old_y,
+        new_x: x,
+        new_y: y,
+    })?;
     Ok(())
 }

@@ -26,13 +26,10 @@ pub fn export(id: &str, target_path: &str) -> Result<(), ErrorCode> {
     let plaintext = super::load(id)?;
     file_system_util::write(Path::new(target_path), &plaintext)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentExport {
-                node_title: node.title,
-                file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentExport {
+            node_title: node.title,
+            file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

@@ -32,15 +32,12 @@ pub fn move_node(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     dao::update(&connection, &node)?;
     // 日志载荷的标题取展示标题：影子节点的标题落库为空串，须沿产生边链解析根本体标题。
     let title = display_title(&connection, &node)?;
-    log::service::create(
-        id,
-        Action::NodeMove {
-            title,
-            old_x,
-            old_y,
-            new_x: x,
-            new_y: y,
-        },
-    )?;
+    log::service::create(Action::NodeMove {
+        title,
+        old_x,
+        old_y,
+        new_x: x,
+        new_y: y,
+    })?;
     Ok(())
 }

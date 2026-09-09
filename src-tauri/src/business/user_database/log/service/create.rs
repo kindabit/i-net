@@ -10,13 +10,12 @@ use crate::util::time_util;
 /// 这就是向日志表执行插入操作的函数，其本身不会产生日志。
 ///
 /// # 参数
-/// - `object_id`: 被操作对象的 id。
 /// - `action`: 行为（含数据载荷）。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；行为序列化失败时返回 `ErrorCode::FailToSerializeAction`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
-pub fn create(object_id: &str, action: Action) -> Result<(), ErrorCode> {
+pub fn create(action: Action) -> Result<(), ErrorCode> {
     let value = serde_json::to_value(&action).map_err(|_| ErrorCode::FailToSerializeAction)?;
     // Action 以内部标签序列化，结果必然存在 variant 字符串字段；取不到属 serde 内部异常。
     let variant = value
@@ -33,7 +32,6 @@ pub fn create(object_id: &str, action: Action) -> Result<(), ErrorCode> {
     let detail = aes::encrypt(data.into_bytes(), state::key())?;
     let log = Log {
         id: uuid::Uuid::new_v4().to_string(),
-        object_id: object_id.to_string(),
         action: variant,
         time: time_util::now(),
         detail,

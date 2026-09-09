@@ -42,13 +42,10 @@ pub fn update_file(id: &str, plaintext: &[u8]) -> Result<(), ErrorCode> {
     updated.compress_param = guard_output.compress_param;
     dao::update(&connection, &updated)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentUpdate {
-                node_title: node.title,
-                file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentUpdate {
+            node_title: node.title,
+            file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

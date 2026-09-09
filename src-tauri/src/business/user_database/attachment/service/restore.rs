@@ -21,13 +21,10 @@ pub fn restore(id: &str) -> Result<(), ErrorCode> {
     })?;
     dao::update_deleted(&connection, id, false)?;
     if let Some(node) = node_dao::select_by_id(&connection, &attachment.node_id)? {
-        log::service::create(
-            &attachment.node_id,
-            Action::AttachmentRestore {
-                node_title: node.title,
-                file_name: attachment.file_name,
-            },
-        )?;
+        log::service::create(Action::AttachmentRestore {
+            node_title: node.title,
+            file_name: attachment.file_name,
+        })?;
     }
     Ok(())
 }

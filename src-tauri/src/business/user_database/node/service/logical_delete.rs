@@ -25,7 +25,9 @@ pub fn logical_delete(id: &str) -> Result<Node, ErrorCode> {
     node.deleted = true;
     dao::update(&connection, &node)?;
     let canvas_ref_id = node.canvas_ref_id.clone();
-    log::service::create(id, Action::NodeLogicalDelete { title: node.title.clone() })?;
+    log::service::create(Action::NodeLogicalDelete {
+        title: node.title.clone(),
+    })?;
     // 级联逻辑删除引用的子画布
     if let Some(ref_id) = canvas_ref_id {
         canvas::service::logical_delete(&ref_id)?;

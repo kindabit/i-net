@@ -66,13 +66,10 @@ pub fn import(node_id: &str, source_path: &str) -> Result<AttachmentVO, ErrorCod
         compress_param: guard_output.compress_param,
     };
     dao::insert(&connection, &attachment)?;
-    log::service::create(
-        node_id,
-        Action::AttachmentImport {
-            node_title: node.title,
-            file_name: attachment.file_name.clone(),
-        },
-    )?;
+    log::service::create(Action::AttachmentImport {
+        node_title: node.title,
+        file_name: attachment.file_name.clone(),
+    })?;
     Ok(AttachmentVO {
         id: attachment.id,
         file_name: attachment.file_name,

@@ -41,16 +41,13 @@ pub fn update(id: &str, title: String, description: String) -> Result<(), ErrorC
     let source_title = shadow::service::display_title(&connection, &source)?;
     let target_title = shadow::service::display_title(&connection, &target)?;
     dao::update_title_and_description(&connection, id, &title, &description)?;
-    log::service::create(
-        id,
-        Action::EdgeUpdate {
-            source_title,
-            target_title,
-            old_title,
-            old_description,
-            new_title: title,
-            new_description: description,
-        },
-    )?;
+    log::service::create(Action::EdgeUpdate {
+        source_title,
+        target_title,
+        old_title,
+        old_description,
+        new_title: title,
+        new_description: description,
+    })?;
     Ok(())
 }

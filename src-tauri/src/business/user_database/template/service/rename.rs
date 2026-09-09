@@ -33,12 +33,6 @@ pub fn rename(id: &str, new_name: String) -> Result<(), ErrorCode> {
         return Ok(());
     }
     dao::update_name(&connection, id, &new_name)?;
-    log::service::create(
-        id,
-        Action::TemplateRename {
-            old_name,
-            new_name,
-        },
-    )?;
+    log::service::create(Action::TemplateRename { old_name, new_name })?;
     Ok(())
 }

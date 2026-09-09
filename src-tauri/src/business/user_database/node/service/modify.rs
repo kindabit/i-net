@@ -60,24 +60,18 @@ pub fn modify(id: &str, title: String, sub_title: String) -> Result<(), ErrorCod
                 let canvas_old_name =
                     std::mem::replace(&mut referenced.name, node.title.clone());
                 canvas::dao::update(&connection, &referenced)?;
-                log::service::create(
-                    ref_id,
-                    Action::CanvasRename {
-                        old_name: canvas_old_name,
-                        new_name: referenced.name,
-                    },
-                )?;
+                log::service::create(Action::CanvasRename {
+                    old_name: canvas_old_name,
+                    new_name: referenced.name,
+                })?;
             }
         }
     }
-    log::service::create(
-        id,
-        Action::NodeModify {
-            old_title,
-            old_sub_title,
-            new_title: node.title,
-            new_sub_title: node.sub_title,
-        },
-    )?;
+    log::service::create(Action::NodeModify {
+        old_title,
+        old_sub_title,
+        new_title: node.title,
+        new_sub_title: node.sub_title,
+    })?;
     Ok(())
 }

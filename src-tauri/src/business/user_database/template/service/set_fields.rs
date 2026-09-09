@@ -60,12 +60,9 @@ pub fn set_fields(template_id: &str, fields: &[TemplateFieldVO]) -> Result<(), E
     }
 
     let field_names: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
-    log::service::create(
-        template_id,
-        Action::TemplateFieldsSet {
-            template_name,
-            field_names,
-        },
-    )?;
+    log::service::create(Action::TemplateFieldsSet {
+        template_name,
+        field_names,
+    })?;
     Ok(())
 }

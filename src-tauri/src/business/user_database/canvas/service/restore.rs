@@ -54,16 +54,13 @@ pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
         canvas.x = new_x;
         canvas.y = new_y;
         dao::update(&connection, &canvas)?;
-        restored.push((
-            canvas.id,
-            Action::CanvasRestore {
-                name: canvas.name,
-                old_x,
-                old_y,
-                new_x,
-                new_y,
-            },
-        ));
+        restored.push(Action::CanvasRestore {
+            name: canvas.name,
+            old_x,
+            old_y,
+            new_x,
+            new_y,
+        });
         // 恢复引用该画布的画布节点（若存在且已逻辑删除）
         if let Some(mut ref_node) = node::dao::select_by_canvas_ref_id(&connection, &canvas_id)? {
             if ref_node.deleted {
@@ -71,24 +68,21 @@ pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
                 let old_y = ref_node.y;
                 ref_node.deleted = false;
                 node::dao::update(&connection, &ref_node)?;
-                node_restored.push((
-                    ref_node.id,
-                    Action::NodeRestore {
-                        title: ref_node.title,
-                        old_x,
-                        old_y,
-                        new_x: old_x,
-                        new_y: old_y,
-                    },
-                ));
+                node_restored.push(Action::NodeRestore {
+                    title: ref_node.title,
+                    old_x,
+                    old_y,
+                    new_x: old_x,
+                    new_y: old_y,
+                });
             }
         }
     }
-    for (id, action) in restored {
-        log::service::create(&id, action)?;
+    for action in restored {
+        log::service::create(action)?;
     }
-    for (id, action) in node_restored {
-        log::service::create(&id, action)?;
+    for action in node_restored {
+        log::service::create(action)?;
     }
     Ok(())
 }
