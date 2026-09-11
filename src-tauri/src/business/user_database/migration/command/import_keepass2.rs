@@ -52,3 +52,85 @@ pub fn preprocess(
     let canvas_name = preprocess_util::preprocess_canvas_name(canvas_name)?;
     service::import_keepass2(&canvas_name, canvas_node_x, canvas_node_y, &nodes, &edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::business::metadata;
+    use crate::business::user_database::canvas;
+    use crate::business::user_database::lifecycle;
+    use crate::business::user_database::node_field::vo::NodeFieldVO;
+    use crate::test;
+
+    /// 数据迁移聚合导入 command 层 preprocess：画布名称为空串或纯空白时报 EmptyCanvasName；
+    /// 名称合法时接入 service 层并返回新建画布 id。
+    #[test]
+    fn test_import_keepass2_preprocess() {
+        let _guard = test::acquire_test_lock();
+
+        // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+        let path = test::create_test_path();
+        crate::state::set_path(path.clone());
+        metadata::service::initialize().unwrap();
+        let registered = metadata::service::register("migration-keepass2-cmd-test-db".to_string()).unwrap();
+        lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+
+        // 构造字段的辅助闭包：dictionary_id 恒为 None。
+        let field = |name: &str, field_type: &str, value: Option<&str>| NodeFieldVO {
+            name: name.to_string(),
+            field_type: field_type.to_string(),
+            value: value.map(str::to_string),
+            dictionary_id: None,
+        };
+        // 两个导入节点：第一个含 3 个字段（密码/访问链接有值、备注无值），第二个无字段。
+        let nodes = vec![
+            ImportedNodeVO {
+                title: "User Name".to_string(),
+                sub_title: "Sample Entry".to_string(),
+                x: 0.0,
+                y: 0.0,
+                fields: vec![
+                    field("密码", "string:password", Some("Password")),
+                    field("访问链接", "string:url", Some("http://keepass.info/")),
+                    field("备注", "string:multiple-line", None),
+                ],
+            },
+            ImportedNodeVO {
+                title: "General".to_string(),
+                sub_title: String::new(),
+                x: 240.0,
+                y: 160.0,
+                fields: Vec::new(),
+            },
+        ];
+        // 一条父子边：节点 0（父）→ 节点 1（子）。
+        let edges = vec![ImportedEdgeVO {
+            source_index: 0,
+            target_index: 1,
+        }];
+
+        // ===== 失败路径：command 层 preprocess 空画布名（空串与纯空白）返回 EmptyCanvasName =====
+        assert!(matches!(
+            preprocess(String::new(), 0.0, 240.0, nodes.clone(), edges.clone()),
+            Err(ErrorCode::EmptyCanvasName)
+        ));
+        assert!(matches!(
+            preprocess("  ".to_string(), 0.0, 240.0, nodes.clone(), edges.clone()),
+            Err(ErrorCode::EmptyCanvasName)
+        ));
+
+        // 成功路径：preprocess 接入 service 层并返回新建画布 id，对应画布已创建且名称为 "cmd-import"。
+        let imported_id =
+            preprocess("cmd-import".to_string(), 0.0, 240.0, nodes, edges).unwrap();
+        let canvases = canvas::service::list(false).unwrap();
+        let imported = canvases
+            .iter()
+            .find(|c| c.id == imported_id)
+            .expect("canvas should exist after command import");
+        assert_eq!(imported.name, "cmd-import");
+
+        lifecycle::service::save().unwrap();
+        lifecycle::service::close().unwrap();
+        test::cleanup(&path);
+    }
+}

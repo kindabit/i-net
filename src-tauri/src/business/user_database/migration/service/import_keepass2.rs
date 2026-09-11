@@ -175,3 +175,227 @@ pub fn import_keepass2(
 
     Ok(canvas.id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::business::metadata;
+    use crate::business::user_database::entity;
+    use crate::business::user_database::lifecycle;
+    use crate::business::user_database::log::service::LogFilter;
+    use crate::business::user_database::node_field::vo::NodeFieldVO;
+    use crate::test;
+
+    /// 数据迁移聚合导入（service 层）：失败路径（字段名重复、悬空字典引用、非前向边与越界边，
+    /// 均不写库）与成功路径（画布与画布节点创建、节点/字段/父子边写入、全部操作聚合为恰好一条
+    /// 日志），以及同名画布的去重导入。
+    #[test]
+    fn test_import_keepass2() {
+        let _guard = test::acquire_test_lock();
+
+        // ===== 会话一：失败路径与成功路径 =====
+        // 初始化测试数据目录、metadata 数据库并打开一个全新的用户数据库。
+        let path = test::create_test_path();
+        crate::state::set_path(path.clone());
+        metadata::service::initialize().unwrap();
+        let registered = metadata::service::register("migration-keepass2-test-db".to_string()).unwrap();
+        lifecycle::service::initialize(&registered.id, test::test_key()).unwrap();
+        let root = canvas::service::list(false).unwrap()[0].clone();
+
+        // 构造字段的辅助闭包：dictionary_id 恒为 None（悬空引用场景再单独修改）。
+        let field = |name: &str, field_type: &str, value: Option<&str>| NodeFieldVO {
+            name: name.to_string(),
+            field_type: field_type.to_string(),
+            value: value.map(str::to_string),
+            dictionary_id: None,
+        };
+        // 两个导入节点：第一个含 3 个字段（密码/访问链接有值、备注无值），第二个无字段。
+        let nodes = vec![
+            ImportedNodeVO {
+                title: "User Name".to_string(),
+                sub_title: "Sample Entry".to_string(),
+                x: 0.0,
+                y: 0.0,
+                fields: vec![
+                    field("密码", "string:password", Some("Password")),
+                    field("访问链接", "string:url", Some("http://keepass.info/")),
+                    field("备注", "string:multiple-line", None),
+                ],
+            },
+            ImportedNodeVO {
+                title: "General".to_string(),
+                sub_title: String::new(),
+                x: 240.0,
+                y: 160.0,
+                fields: Vec::new(),
+            },
+        ];
+        // 一条父子边：节点 0（父）→ 节点 1（子）。
+        let edges = vec![ImportedEdgeVO {
+            source_index: 0,
+            target_index: 1,
+        }];
+
+        // ===== 失败路径：字段名重复返回 DuplicateNodeFieldName，且不写库 =====
+        let mut duplicated = nodes.clone();
+        duplicated[0].fields.push(field("密码", "string:password", Some("dup")));
+        assert!(matches!(
+            import_keepass2("test", 0.0, 240.0, &duplicated, &edges),
+            Err(ErrorCode::DuplicateNodeFieldName { name }) if name == "密码"
+        ));
+        assert_eq!(canvas::service::list(false).unwrap().len(), 1);
+        assert!(node::service::list(&root.id, false).unwrap().is_empty());
+        assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
+
+        // ===== 失败路径：悬空字典引用返回 NoDictionaryEntryWithSuchId，且不写库 =====
+        let mut dangling = nodes.clone();
+        dangling[0].fields[1].dictionary_id = Some(uuid::Uuid::new_v4().to_string());
+        assert!(matches!(
+            import_keepass2("test", 0.0, 240.0, &dangling, &edges),
+            Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
+        ));
+        assert_eq!(canvas::service::list(false).unwrap().len(), 1);
+        assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
+
+        // ===== 失败路径：非前向边（source_index >= target_index，含自环）与越界边
+        // （target_index 超出节点数量）返回 InvalidImportedEdgeIndex，且不写库 =====
+        let backward_edge = vec![ImportedEdgeVO {
+            source_index: 1,
+            target_index: 0,
+        }];
+        assert!(matches!(
+            import_keepass2("test", 0.0, 240.0, &nodes, &backward_edge),
+            Err(ErrorCode::InvalidImportedEdgeIndex { source_index: 1, target_index: 0 })
+        ));
+        let out_of_range_edge = vec![ImportedEdgeVO {
+            source_index: 0,
+            target_index: 2,
+        }];
+        assert!(matches!(
+            import_keepass2("test", 0.0, 240.0, &nodes, &out_of_range_edge),
+            Err(ErrorCode::InvalidImportedEdgeIndex { source_index: 0, target_index: 2 })
+        ));
+        assert_eq!(canvas::service::list(false).unwrap().len(), 1);
+        assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
+
+        // ===== 成功路径：service 层导入，画布名 "test"，画布节点坐标 (0, 240) =====
+        let imported_id =
+            import_keepass2("test", 0.0, 240.0, &nodes, &edges).unwrap();
+
+        // 画布列表新增名为 "test" 的画布，其 id 与接口返回值一致。
+        let canvases = canvas::service::list(false).unwrap();
+        let imported = canvases
+            .iter()
+            .find(|c| c.name == "test")
+            .expect("canvas 'test' should exist after import")
+            .clone();
+        assert_eq!(imported_id, imported.id);
+
+        // 根画布内新增引用新画布的画布节点，标题与画布名一致。
+        let root_nodes = node::service::list(&root.id, false).unwrap();
+        let canvas_node = root_nodes
+            .iter()
+            .find(|n| n.canvas_ref_id.as_deref() == Some(imported.id.as_str()))
+            .expect("canvas node referencing imported canvas should exist in root canvas");
+        assert_eq!(canvas_node.title, "test");
+        assert_eq!(canvas_node.sub_title, "");
+        assert_eq!((canvas_node.x, canvas_node.y), (0.0, 240.0));
+
+        // 新画布内恰好 2 个节点，标题/副标题/坐标与传入一致。
+        let imported_nodes = node::service::list(&imported.id, false).unwrap();
+        assert_eq!(imported_nodes.len(), 2);
+        let first = imported_nodes
+            .iter()
+            .find(|n| n.title == "User Name")
+            .expect("imported node 'User Name' should exist")
+            .clone();
+        assert_eq!(first.sub_title, "Sample Entry");
+        assert_eq!((first.x, first.y), (0.0, 0.0));
+        let second = imported_nodes
+            .iter()
+            .find(|n| n.title == "General")
+            .expect("imported node 'General' should exist")
+            .clone();
+        assert_eq!(second.sub_title, "");
+        assert_eq!((second.x, second.y), (240.0, 160.0));
+
+        // 字段解密读回：name/field_type/value 与传入一致，返回顺序即存储 order 与传入一致，
+        // 无值字段的 value 为 None；第二个节点无字段。
+        let fields = node_field::service::get(&first.id).unwrap();
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[0].name, "密码");
+        assert_eq!(fields[0].field_type, "string:password");
+        assert_eq!(fields[0].value.as_deref(), Some("Password"));
+        assert_eq!(fields[1].name, "访问链接");
+        assert_eq!(fields[1].field_type, "string:url");
+        assert_eq!(fields[1].value.as_deref(), Some("http://keepass.info/"));
+        assert_eq!(fields[2].name, "备注");
+        assert_eq!(fields[2].field_type, "string:multiple-line");
+        assert_eq!(fields[2].value, None);
+        assert!(fields.iter().all(|f| f.dictionary_id.is_none()));
+        assert!(node_field::service::get(&second.id).unwrap().is_empty());
+
+        // 父子边恰好 1 条：节点 0（父）→ 节点 1（子），连接桩 right → left，标题与详情为空。
+        let imported_edges = edge::service::list(&imported.id).unwrap();
+        assert_eq!(imported_edges.len(), 1);
+        assert_eq!(imported_edges[0].source_id, first.id);
+        assert_eq!(imported_edges[0].target_id, second.id);
+        assert_eq!(imported_edges[0].source_port, "right");
+        assert_eq!(imported_edges[0].target_port, "left");
+        assert_eq!(imported_edges[0].title, "");
+        assert_eq!(imported_edges[0].description, "");
+
+        // 日志恰好 1 条且 variant 为 NodesImport，data 的 canvas_name 与 node_count 正确。
+        let logs = log::service::list(0, 10, LogFilter::default()).unwrap();
+        assert_eq!(logs.total, 1);
+        assert_eq!(logs.items.len(), 1);
+        assert!(matches!(
+            &logs.items[0].action,
+            entity::Action::NodesImport { canvas_name, node_count }
+                if canvas_name == "test" && *node_count == 2
+        ));
+
+        // 保存并关闭数据库。
+        lifecycle::service::save().unwrap();
+        lifecycle::service::close().unwrap();
+
+        // ===== 会话二：画布重名去重 =====
+        let registered_2 =
+            metadata::service::register("migration-keepass2-test-db-2".to_string()).unwrap();
+        lifecycle::service::initialize(&registered_2.id, test::test_key()).unwrap();
+        let root_2 = canvas::service::list(false).unwrap()[0].clone();
+
+        // 先通过 canvas::service::create 建同名画布，再导入同名画布。
+        canvas::service::create(&root_2.id, "test".to_string()).unwrap();
+        let imported_id_2 =
+            import_keepass2("test", 0.0, 240.0, &nodes, &edges).unwrap();
+
+        // 新画布名为 "test 2"（去重逻辑与画布节点创建语义一致），画布节点标题同步为 "test 2"，
+        // 日志里的 canvas_name 也是 "test 2"。
+        let canvases = canvas::service::list(false).unwrap();
+        let imported_2 = canvases
+            .iter()
+            .find(|c| c.name == "test 2")
+            .expect("canvas 'test 2' should exist after dedup import")
+            .clone();
+        // 去重导入的返回值同样为实际新建画布的 id。
+        assert_eq!(imported_id_2, imported_2.id);
+        let root_nodes_2 = node::service::list(&root_2.id, false).unwrap();
+        assert!(root_nodes_2
+            .iter()
+            .any(|n| n.title == "test 2" && n.canvas_ref_id.as_deref() == Some(imported_2.id.as_str())));
+        let logs = log::service::list(0, 10, LogFilter::default()).unwrap();
+        // 1 条 CanvasCreate（canvas::service::create）+ 1 条 NodesImport（聚合导入）。
+        assert_eq!(logs.total, 2);
+        assert!(logs.items.iter().any(|entry| matches!(
+            &entry.action,
+            entity::Action::NodesImport { canvas_name, node_count }
+                if canvas_name == "test 2" && *node_count == 2
+        )));
+
+        // 保存并关闭数据库，清理测试数据目录。
+        lifecycle::service::save().unwrap();
+        lifecycle::service::close().unwrap();
+        test::cleanup(&path);
+    }
+}
