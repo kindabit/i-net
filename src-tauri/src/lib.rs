@@ -2,6 +2,7 @@ pub mod argv;
 mod business;
 mod common;
 mod error_code;
+mod i18n;
 mod security;
 mod startup_error;
 mod state;

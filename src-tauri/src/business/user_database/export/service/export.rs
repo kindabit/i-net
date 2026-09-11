@@ -6,11 +6,11 @@ use rusqlite::Connection;
 use crate::business::user_database::canvas::dao as canvas_dao;
 use crate::business::user_database::edge::dao as edge_dao;
 use crate::business::user_database::entity::{Canvas, Edge, Node};
-use crate::business::user_database::export::service::i18n::{text_for, ExportText};
 use crate::business::user_database::node::dao as node_dao;
 use crate::business::user_database::node_field;
 use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
+use crate::i18n::{self, ExportTexts, Locale};
 use crate::util::file_system_util;
 
 /// 导出模式，决定字段及字段值的导出策略。
@@ -48,7 +48,8 @@ pub fn parse_mode(mode: &str) -> Result<ExportMode, ErrorCode> {
 ///
 /// # 参数
 /// - `mode`: 导出模式，决定字段及字段值的导出策略。
-/// - `locale`: 导出语言代码（如 "zh-CN"、"en-US"），决定固定文案的语言。
+/// - `locale`: 导出语言代码（如 "zh-CN"、"en-US"），决定固定文案的语言；
+///   无法识别的代码按未提供处理，取系统当前语言。
 /// - `target_path`: 导出目标文件路径。
 ///
 /// # 返回值
@@ -56,7 +57,7 @@ pub fn parse_mode(mode: &str) -> Result<ExportMode, ErrorCode> {
 pub fn export(mode: ExportMode, locale: &str, target_path: &str) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let metadata = state::metadata();
-    let text = text_for(locale);
+    let text = i18n::text(Locale::from_code(locale));
 
     let mut md = String::new();
 
@@ -64,15 +65,15 @@ pub fn export(mode: ExportMode, locale: &str, target_path: &str) -> Result<(), E
     let now = chrono::Local::now();
     let time_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
     let mode_str = match mode {
-        ExportMode::ExcludeFields => text.mode_exclude_fields,
-        ExportMode::MaskValues => text.mode_mask_values,
-        ExportMode::IncludeValues => text.mode_include_values,
+        ExportMode::ExcludeFields => text.export.mode_exclude_fields,
+        ExportMode::MaskValues => text.export.mode_mask_values,
+        ExportMode::IncludeValues => text.export.mode_include_values,
     };
     md.push_str(&format!("# {}\n\n", metadata.name));
     // 行尾两个空格是 markdown 硬换行，否则 blockquote 内连续行会被合并为同一段落。
-    md.push_str(&format!("> {}{}  \n", text.export_time, time_str));
-    md.push_str(&format!("> {}{}  \n", text.export_mode, mode_str));
-    md.push_str(&format!("> {}\n\n", text.warning));
+    md.push_str(&format!("> {}{}  \n", text.export.export_time, time_str));
+    md.push_str(&format!("> {}{}  \n", text.export.export_mode, mode_str));
+    md.push_str(&format!("> {}\n\n", text.export.warning));
 
     // 构建画布树：父 id 到子画布列表的映射，子画布按名称排序保证输出稳定。
     let canvases = canvas_dao::select_by_deleted(&connection, false)?;
@@ -91,7 +92,7 @@ pub fn export(mode: ExportMode, locale: &str, target_path: &str) -> Result<(), E
     // 紧随父画布输出，但所有画布分区的标题层级相同，互不嵌套）。
     if let Some(root_canvases) = children_map.get(&None) {
         for root_canvas in root_canvases {
-            handle_canvas(&mut md, &connection, root_canvas, &children_map, mode, &text)?;
+            handle_canvas(&mut md, &connection, root_canvas, &children_map, mode, &text.export)?;
         }
     }
 
@@ -120,7 +121,7 @@ fn handle_canvas(
     canvas: &Canvas,
     children_map: &HashMap<Option<&str>, Vec<&Canvas>>,
     mode: ExportMode,
-    text: &ExportText,
+    text: &ExportTexts,
 ) -> Result<(), ErrorCode> {
     md.push_str(&format!("## {}{}\n\n", text.canvas, canvas.name));
 
@@ -182,7 +183,7 @@ fn handle_node(
     md: &mut String,
     node: &Node,
     mode: ExportMode,
-    text: &ExportText,
+    text: &ExportTexts,
 ) -> Result<(), ErrorCode> {
     md.push_str(&format!("### {}{}\n\n", text.node, node.title));
 
@@ -224,7 +225,7 @@ fn handle_node(
 /// - `edge`: 待输出的边。
 /// - `node_map`: 节点 id 到节点的映射，用于解析端点标题；详情为空时省略分隔符和详情。
 /// - `text`: 当前语言的固定文案集合。
-fn write_edge_line(md: &mut String, edge: &Edge, node_map: &HashMap<&str, &Node>, text: &ExportText) {
+fn write_edge_line(md: &mut String, edge: &Edge, node_map: &HashMap<&str, &Node>, text: &ExportTexts) {
     let source_title = node_map
         .get(edge.source_id.as_str())
         .map(|n| n.title.as_str())
@@ -541,7 +542,7 @@ mod tests {
         // 英文导出中不含中文固定文案。
         assert!(!en_content.contains("画布："));
 
-        // 未识别的 locale 回退英文。
+        // 未识别的 locale 按未提供处理：回退系统当前语言。
         let fallback_path = export_dir.join("fallback.md");
         export(
             ExportMode::IncludeValues,
@@ -551,7 +552,8 @@ mod tests {
         .unwrap();
         let fallback_content =
             String::from_utf8(file_system_util::read(&fallback_path).unwrap()).unwrap();
-        assert!(fallback_content.contains("Canvas: root"));
+        let system_canvas_label = i18n::text(None).export.canvas;
+        assert!(fallback_content.contains(&format!("{system_canvas_label}root")));
 
         // 清理。
         let _ = std::fs::remove_dir_all(&export_dir);
