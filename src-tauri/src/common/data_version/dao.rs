@@ -2,6 +2,21 @@ use rusqlite::Connection;
 
 use super::entity::DataVersion;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    Alias, Asterisk, ColumnDef, ColumnType, Expr, ExprTrait, Func, Query, SqliteQueryBuilder,
+    Table,
+};
+
+/// data_version 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum DataVersionIden {
+    #[iden = "data_version"]
+    Table,
+    Major,
+    Minor,
+    Patch,
+}
 
 /// 新建 data_version 表。
 ///
@@ -11,15 +26,25 @@ use crate::error_code::ErrorCode;
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE data_version (
-                major INTEGER NOT NULL,
-                minor INTEGER NOT NULL,
-                patch INTEGER NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(DataVersionIden::Table)
+        .col(
+            ColumnDef::new_with_type(DataVersionIden::Major, ColumnType::custom("INTEGER"))
+                .not_null(),
         )
+        .col(
+            ColumnDef::new_with_type(DataVersionIden::Minor, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(DataVersionIden::Patch, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -34,12 +59,17 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回表是否存在的布尔值；若发生错误则返回对应的 `ErrorCode`。
 pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
+    let query = Query::select()
+        .expr(Func::count(Expr::col(Asterisk)))
+        .from(Alias::new("sqlite_master"))
+        .and_where(Expr::col(Alias::new("type")).eq("table"))
+        .and_where(Expr::col(Alias::new("name")).eq("data_version"))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
         .query_row(
-            "SELECT COUNT(*)
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'data_version'",
-            [],
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -57,16 +87,18 @@ pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, data_version: &DataVersion) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(DataVersionIden::Table)
+        .columns([DataVersionIden::Major, DataVersionIden::Minor, DataVersionIden::Patch])
+        .values_panic([
+            data_version.major.into(),
+            data_version.minor.into(),
+            data_version.patch.into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO data_version (major, minor, patch)
-            VALUES (:major, :minor, :patch)",
-            rusqlite::named_params! {
-                ":major": data_version.major,
-                ":minor": data_version.minor,
-                ":patch": data_version.patch,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -81,16 +113,18 @@ pub fn insert(connection: &Connection, data_version: &DataVersion) -> Result<(),
 /// # 返回值
 /// 返回表中全部数据版本；若发生错误则返回对应的 `ErrorCode`。
 pub fn select(connection: &Connection) -> Result<Vec<DataVersion>, ErrorCode> {
+    let query = Query::select()
+        .columns([DataVersionIden::Major, DataVersionIden::Minor, DataVersionIden::Patch])
+        .from(DataVersionIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT major, minor, patch
-            FROM data_version",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map([], |row| {
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), |row| {
             Ok(DataVersion {
                 major: row.get(0)?,
                 minor: row.get(1)?,
@@ -159,5 +193,19 @@ mod tests {
         // insert 属性：data_version 表允许插入多行（多行情况由 service 层校验）。
         insert(&connection, &version).unwrap();
         assert_eq!(select(&connection).unwrap().len(), 2);
+    }
+
+    /// STRICT 生效验证：向 INTEGER 列插入 TEXT 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_data_version_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO data_version (major, minor, patch) VALUES ('not-an-integer', 0, 0)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

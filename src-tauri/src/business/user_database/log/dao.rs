@@ -2,6 +2,19 @@ use rusqlite::{Connection, Row};
 
 use crate::business::user_database::entity::Log;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{Asterisk, ColumnDef, ColumnType, Expr, ExprTrait, Func, Order, Query, SqliteQueryBuilder, Table};
+
+/// log 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum LogIden {
+    #[iden = "log"]
+    Table,
+    Id,
+    Action,
+    Time,
+    Detail,
+}
 
 /// 从查询结果行构造 Log。
 fn map_row(row: &Row) -> rusqlite::Result<Log> {
@@ -21,16 +34,27 @@ fn map_row(row: &Row) -> rusqlite::Result<Log> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE log (
-                id TEXT PRIMARY KEY,
-                action TEXT NOT NULL,
-                time INTEGER NOT NULL,
-                detail BLOB NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(LogIden::Table)
+        .col(
+            ColumnDef::new_with_type(LogIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(
+            ColumnDef::new_with_type(LogIden::Action, ColumnType::custom("TEXT")).not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(LogIden::Time, ColumnType::custom("INTEGER")).not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(LogIden::Detail, ColumnType::custom("BLOB")).not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -46,17 +70,19 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, log: &Log) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(LogIden::Table)
+        .columns([LogIden::Id, LogIden::Action, LogIden::Time, LogIden::Detail])
+        .values_panic([
+            (&log.id).into(),
+            (&log.action).into(),
+            log.time.into(),
+            log.detail.clone().into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO log (id, action, time, detail)
-            VALUES (:id, :action, :time, :detail)",
-            rusqlite::named_params! {
-                ":id": log.id,
-                ":action": &log.action,
-                ":time": log.time,
-                ":detail": log.detail,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -72,49 +98,6 @@ pub struct LogQueryFilter {
     pub end_time: Option<i64>,
     /// 行为类型过滤（Action 的 variant 名列表），None 或空列表表示不限。
     pub actions: Option<Vec<String>>,
-}
-
-/// 构造过滤条件的 WHERE 子句与行为过滤的动态参数名列表。
-///
-/// # 参数
-/// - `filter`: 过滤条件。
-///
-/// # 返回值
-/// 返回 WHERE 子句（含开头的 WHERE 关键字）与 `:action{i}` 参数名列表；
-/// 行为过滤缺省时参数名列表为空，否则与 WHERE 子句中的 IN 占位符一一对应。
-fn build_where_clause(filter: &LogQueryFilter) -> (String, Vec<String>) {
-    let mut sql = String::from(
-        "WHERE (:start IS NULL OR time >= :start)
-        AND (:end IS NULL OR time <= :end)",
-    );
-    let actions: &[String] = filter.actions.as_deref().unwrap_or(&[]);
-    let keys: Vec<String> = (0..actions.len()).map(|i| format!(":action{i}")).collect();
-    if !keys.is_empty() {
-        sql.push_str(&format!(" AND action IN ({})", keys.join(", ")));
-    }
-    (sql, keys)
-}
-
-/// 组装过滤条件的查询参数（:start/:end 加上各行为参数值）。
-///
-/// # 参数
-/// - `filter`: 过滤条件。
-/// - `keys`: [`build_where_clause`] 返回的行为参数名列表（借此保证参数字符串存活足够久）。
-///
-/// # 返回值
-/// 返回可直接用于查询的命名参数数组。
-fn bind_filter_params<'a>(
-    filter: &'a LogQueryFilter,
-    keys: &'a [String],
-) -> Vec<(&'a str, &'a dyn rusqlite::ToSql)> {
-    let actions: &[String] = filter.actions.as_deref().unwrap_or(&[]);
-    let mut params: Vec<(&str, &dyn rusqlite::ToSql)> = Vec::new();
-    params.push((":start", &filter.start_time));
-    params.push((":end", &filter.end_time));
-    for (key, action) in keys.iter().zip(actions.iter()) {
-        params.push((key.as_str(), action));
-    }
-    params
 }
 
 /// 分页查询日志，按时间从大到小排序，时间相同的按 id 从大到小排序。
@@ -133,24 +116,33 @@ pub fn select_paged(
     limit: i64,
     filter: &LogQueryFilter,
 ) -> Result<Vec<Log>, ErrorCode> {
-    let (where_clause, keys) = build_where_clause(filter);
-    let sql = format!(
-        "SELECT id, action, time, detail
-        FROM log
-        {where_clause}
-        ORDER BY time DESC, id DESC
-        LIMIT :limit OFFSET :offset"
-    );
+    let mut query = Query::select();
+    query
+        .columns([LogIden::Id, LogIden::Action, LogIden::Time, LogIden::Detail])
+        .from(LogIden::Table);
+    if let Some(start) = filter.start_time {
+        query.and_where(Expr::col(LogIden::Time).gte(start));
+    }
+    if let Some(end) = filter.end_time {
+        query.and_where(Expr::col(LogIden::Time).lte(end));
+    }
+    let actions: &[String] = filter.actions.as_deref().unwrap_or(&[]);
+    if !actions.is_empty() {
+        query.and_where(Expr::col(LogIden::Action).is_in(actions.iter()));
+    }
+    query
+        .order_by(LogIden::Time, Order::Desc)
+        .order_by(LogIden::Id, Order::Desc)
+        .limit(limit as u64)
+        .offset(offset as u64);
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
         .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
-    let mut params = bind_filter_params(filter, &keys);
-    params.push((":limit", &limit));
-    params.push((":offset", &offset));
     let rows = statement
-        .query_map(&params[..], map_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -177,21 +169,29 @@ pub fn for_each(
     filter: &LogQueryFilter,
     mut f: impl FnMut(Log) -> Result<(), ErrorCode>,
 ) -> Result<(), ErrorCode> {
-    let (where_clause, keys) = build_where_clause(filter);
-    let sql = format!(
-        "SELECT id, action, time, detail
-        FROM log
-        {where_clause}
-        ORDER BY time DESC, id DESC"
-    );
+    let mut query = Query::select();
+    query
+        .columns([LogIden::Id, LogIden::Action, LogIden::Time, LogIden::Detail])
+        .from(LogIden::Table);
+    if let Some(start) = filter.start_time {
+        query.and_where(Expr::col(LogIden::Time).gte(start));
+    }
+    if let Some(end) = filter.end_time {
+        query.and_where(Expr::col(LogIden::Time).lte(end));
+    }
+    let actions: &[String] = filter.actions.as_deref().unwrap_or(&[]);
+    if !actions.is_empty() {
+        query.and_where(Expr::col(LogIden::Action).is_in(actions.iter()));
+    }
+    query.order_by(LogIden::Time, Order::Desc).order_by(LogIden::Id, Order::Desc);
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
         .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
-    let params = bind_filter_params(filter, &keys);
     let mut rows = statement
-        .query(&params[..])
+        .query(rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -214,11 +214,21 @@ pub fn for_each(
 /// # 返回值
 /// 返回日志总条数；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_count(connection: &Connection, filter: &LogQueryFilter) -> Result<i64, ErrorCode> {
-    let (where_clause, keys) = build_where_clause(filter);
-    let sql = format!("SELECT COUNT(*) FROM log\n{where_clause}");
-    let params = bind_filter_params(filter, &keys);
+    let mut query = Query::select();
+    query.expr(Func::count(Expr::col(Asterisk))).from(LogIden::Table);
+    if let Some(start) = filter.start_time {
+        query.and_where(Expr::col(LogIden::Time).gte(start));
+    }
+    if let Some(end) = filter.end_time {
+        query.and_where(Expr::col(LogIden::Time).lte(end));
+    }
+    let actions: &[String] = filter.actions.as_deref().unwrap_or(&[]);
+    if !actions.is_empty() {
+        query.and_where(Expr::col(LogIden::Action).is_in(actions.iter()));
+    }
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
-        .query_row(&sql, &params[..], |row| row.get(0))
+        .query_row(&sql, rusqlite::params_from_iter(values_to_params(values)), |row| row.get(0))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -283,6 +293,15 @@ mod tests {
 
         // create_table 成功路径。
         create_table(&connection).unwrap();
+
+        // STRICT 强制类型检查：向 INTEGER 列插入 TEXT 值时报错（非 STRICT 表会静默接受）。
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO log (id, action, time, detail) VALUES (?, ?, ?, ?)",
+                rusqlite::params!["strict-violation", "CanvasCreate", "not-an-integer", vec![1u8]],
+            ),
+            Err(_)
+        ));
 
         // select_count 成功路径：建表后、未插入任何数据前计数为 0。
         assert_eq!(

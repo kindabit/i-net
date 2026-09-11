@@ -1,7 +1,27 @@
 use rusqlite::{Connection, Row};
 
+use crate::business::user_database::dictionary::dao::DictionaryIden;
 use crate::business::user_database::entity::NodeField;
+use crate::business::user_database::node::dao::NodeIden;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    ColumnDef, ColumnType, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Index, Order, Query,
+    SqliteQueryBuilder, Table,
+};
+
+/// node_field 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+pub(crate) enum NodeFieldIden {
+    #[iden = "node_field"]
+    Table,
+    NodeId,
+    Name,
+    FieldType,
+    FieldValue,
+    Order,
+    DictionaryId,
+}
 
 /// 从查询结果行构造 NodeField。
 fn map_row(row: &Row) -> rusqlite::Result<NodeField> {
@@ -23,19 +43,36 @@ fn map_row(row: &Row) -> rusqlite::Result<NodeField> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE node_field (
-                node_id TEXT NOT NULL REFERENCES node(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                field_type TEXT NOT NULL,
-                field_value BLOB,
-                \"order\" INTEGER NOT NULL,
-                dictionary_id TEXT,
-                PRIMARY KEY (node_id, name)
-            ) STRICT",
-            [],
+    let mut fk_node = ForeignKey::create();
+    fk_node
+        .from(NodeFieldIden::Table, NodeFieldIden::NodeId)
+        .to(NodeIden::Table, NodeIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut pk = Index::create();
+    pk.primary()
+        .col(NodeFieldIden::NodeId)
+        .col(NodeFieldIden::Name);
+    let table = Table::create()
+        .table(NodeFieldIden::Table)
+        .col(
+            ColumnDef::new_with_type(NodeFieldIden::NodeId, ColumnType::custom("TEXT")).not_null(),
         )
+        .col(ColumnDef::new_with_type(NodeFieldIden::Name, ColumnType::custom("TEXT")).not_null())
+        .col(
+            ColumnDef::new_with_type(NodeFieldIden::FieldType, ColumnType::custom("TEXT")).not_null(),
+        )
+        .col(ColumnDef::new_with_type(NodeFieldIden::FieldValue, ColumnType::custom("BLOB")))
+        .col(
+            ColumnDef::new_with_type(NodeFieldIden::Order, ColumnType::custom("INTEGER")).not_null(),
+        )
+        .col(ColumnDef::new_with_type(NodeFieldIden::DictionaryId, ColumnType::custom("TEXT")))
+        .foreign_key(&mut fk_node)
+        .index(&mut pk)
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -51,19 +88,28 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, node_field: &NodeField) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(NodeFieldIden::Table)
+        .columns([
+            NodeFieldIden::NodeId,
+            NodeFieldIden::Name,
+            NodeFieldIden::FieldType,
+            NodeFieldIden::FieldValue,
+            NodeFieldIden::Order,
+            NodeFieldIden::DictionaryId,
+        ])
+        .values_panic([
+            (&node_field.node_id).into(),
+            (&node_field.name).into(),
+            (&node_field.field_type).into(),
+            node_field.field_value.clone().into(),
+            node_field.order.into(),
+            node_field.dictionary_id.clone().into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO node_field (node_id, name, field_type, field_value, \"order\", dictionary_id)
-            VALUES (:node_id, :name, :field_type, :field_value, :order, :dictionary_id)",
-            rusqlite::named_params! {
-                ":node_id": node_field.node_id,
-                ":name": node_field.name,
-                ":field_type": node_field.field_type,
-                ":field_value": node_field.field_value,
-                ":order": node_field.order,
-                ":dictionary_id": node_field.dictionary_id,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -82,21 +128,27 @@ pub fn select_by_node_id(
     connection: &Connection,
     node_id: &str,
 ) -> Result<Vec<NodeField>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            NodeFieldIden::NodeId,
+            NodeFieldIden::Name,
+            NodeFieldIden::FieldType,
+            NodeFieldIden::FieldValue,
+            NodeFieldIden::Order,
+            NodeFieldIden::DictionaryId,
+        ])
+        .from(NodeFieldIden::Table)
+        .and_where(Expr::col(NodeFieldIden::NodeId).eq(node_id))
+        .order_by(NodeFieldIden::Order, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT node_id, name, field_type, field_value, \"order\", dictionary_id
-            FROM node_field
-            WHERE node_id = :node_id
-            ORDER BY \"order\" ASC",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(
-            rusqlite::named_params! {":node_id": node_id},
-            map_row,
-        )
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -115,11 +167,13 @@ pub fn select_by_node_id(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_node_id(connection: &Connection, node_id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(NodeFieldIden::Table)
+        .and_where(Expr::col(NodeFieldIden::NodeId).eq(node_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM node_field WHERE node_id = :node_id",
-            rusqlite::named_params! {":node_id": node_id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -136,13 +190,17 @@ pub fn delete_by_node_id(connection: &Connection, node_id: &str) -> Result<(), E
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn clear_dangling_dictionary_ids(connection: &Connection) -> Result<(), ErrorCode> {
+    let mut sub = Query::select();
+    sub.column(DictionaryIden::Id).from(DictionaryIden::Table);
+    let query = Query::update()
+        .table(NodeFieldIden::Table)
+        .value(NodeFieldIden::DictionaryId, None::<String>)
+        .and_where(Expr::col(NodeFieldIden::DictionaryId).is_not_null())
+        .and_where(Expr::col(NodeFieldIden::DictionaryId).not_in_subquery(sub.take()))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE node_field SET dictionary_id = NULL
-            WHERE dictionary_id IS NOT NULL
-            AND dictionary_id NOT IN (SELECT id FROM dictionary)",
-            [],
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -277,5 +335,23 @@ mod tests {
         assert!(dangling_field.dictionary_id.is_none());
         let none_field = after.iter().find(|f| f.name == "f-none").unwrap();
         assert!(none_field.dictionary_id.is_none());
+    }
+
+    /// STRICT 生效验证：向 TEXT 列（field_type）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_node_field_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO node_field (node_id, name, field_type, field_value, \"order\", dictionary_id)
+                VALUES ('node-1', 'strict-violation', x'0102', NULL, 1, NULL)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

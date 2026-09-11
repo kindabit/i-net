@@ -1,7 +1,35 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 
+use crate::business::user_database::dictionary::dao::DictionaryIden;
 use crate::business::user_database::entity::{Template, TemplateField};
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    ColumnDef, ColumnType, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Func, Index, Order, Query,
+    SqliteQueryBuilder, Table,
+};
+
+/// template 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum TemplateIden {
+    #[iden = "template"]
+    Table,
+    Id,
+    Name,
+    Order,
+}
+
+/// template_field 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum TemplateFieldIden {
+    #[iden = "template_field"]
+    Table,
+    TemplateId,
+    Name,
+    FieldType,
+    Order,
+    DictionaryId,
+}
 
 /// 从查询结果行构造 Template。
 fn map_template_row(row: &Row) -> rusqlite::Result<Template> {
@@ -31,30 +59,62 @@ fn map_field_row(row: &Row) -> rusqlite::Result<TemplateField> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE template (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE,
-                \"order\" INTEGER NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(TemplateIden::Table)
+        .col(
+            ColumnDef::new_with_type(TemplateIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(
+            ColumnDef::new_with_type(TemplateIden::Name, ColumnType::custom("TEXT"))
+                .unique_key()
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(TemplateIden::Order, ColumnType::custom("INTEGER")).not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
-    connection
-        .execute(
-            "CREATE TABLE template_field (
-                template_id TEXT NOT NULL REFERENCES template(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                field_type TEXT NOT NULL,
-                \"order\" INTEGER NOT NULL,
-                dictionary_id TEXT,
-                PRIMARY KEY (template_id, name)
-            ) STRICT",
-            [],
+
+    let mut fk_template = ForeignKey::create();
+    fk_template
+        .from(TemplateFieldIden::Table, TemplateFieldIden::TemplateId)
+        .to(TemplateIden::Table, TemplateIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut pk = Index::create();
+    pk.primary()
+        .col(TemplateFieldIden::TemplateId)
+        .col(TemplateFieldIden::Name);
+    let table = Table::create()
+        .table(TemplateFieldIden::Table)
+        .col(
+            ColumnDef::new_with_type(TemplateFieldIden::TemplateId, ColumnType::custom("TEXT"))
+                .not_null(),
         )
+        .col(ColumnDef::new_with_type(TemplateFieldIden::Name, ColumnType::custom("TEXT")).not_null())
+        .col(
+            ColumnDef::new_with_type(TemplateFieldIden::FieldType, ColumnType::custom("TEXT"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(TemplateFieldIden::Order, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(ColumnDef::new_with_type(TemplateFieldIden::DictionaryId, ColumnType::custom("TEXT")))
+        .foreign_key(&mut fk_template)
+        .index(&mut pk)
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -70,16 +130,18 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, template: &Template) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(TemplateIden::Table)
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .values_panic([
+            (&template.id).into(),
+            (&template.name).into(),
+            template.order.into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO template (id, name, \"order\")
-            VALUES (:id, :name, :order)",
-            rusqlite::named_params! {
-                ":id": template.id,
-                ":name": template.name,
-                ":order": template.order,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -94,13 +156,19 @@ pub fn insert(connection: &Connection, template: &Template) -> Result<(), ErrorC
 /// # 返回值
 /// 返回查询到的模板列表；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_all(connection: &Connection) -> Result<Vec<Template>, ErrorCode> {
+    let query = Query::select()
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .from(TemplateIden::Table)
+        .order_by(TemplateIden::Order, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("SELECT id, name, \"order\" FROM template ORDER BY \"order\" ASC")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map([], map_template_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_template_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -119,10 +187,16 @@ pub fn select_all(connection: &Connection) -> Result<Vec<Template>, ErrorCode> {
 /// # 返回值
 /// 返回查询到的模板，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Template>, ErrorCode> {
+    let query = Query::select()
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .from(TemplateIden::Table)
+        .and_where(Expr::col(TemplateIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, name, \"order\" FROM template WHERE id = :id",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_template_row,
         )
         .optional()
@@ -143,10 +217,16 @@ pub fn select_by_name(
     connection: &Connection,
     name: &str,
 ) -> Result<Option<Template>, ErrorCode> {
+    let query = Query::select()
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .from(TemplateIden::Table)
+        .and_where(Expr::col(TemplateIden::Name).eq(name))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, name, \"order\" FROM template WHERE name = :name",
-            rusqlite::named_params! {":name": name},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_template_row,
         )
         .optional()
@@ -169,14 +249,14 @@ pub fn update_name(
     id: &str,
     new_name: &str,
 ) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(TemplateIden::Table)
+        .value(TemplateIden::Name, new_name)
+        .and_where(Expr::col(TemplateIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE template SET name = :name WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": id,
-                ":name": new_name,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -192,11 +272,13 @@ pub fn update_name(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(TemplateIden::Table)
+        .and_where(Expr::col(TemplateIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM template WHERE id = :id",
-            rusqlite::named_params! {":id": id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -211,8 +293,12 @@ pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> 
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_all_templates(connection: &Connection) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(TemplateIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute("DELETE FROM template", [])
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -227,8 +313,12 @@ pub fn delete_all_templates(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_all_fields(connection: &Connection) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(TemplateFieldIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute("DELETE FROM template_field", [])
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -243,15 +333,21 @@ pub fn delete_all_fields(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回最大 "order" 值（-1 表示表为空）；若发生错误则返回对应的 `ErrorCode`。
 pub fn max_order(connection: &Connection) -> Result<i64, ErrorCode> {
-    connection
+    let query = Query::select()
+        .expr(Func::coalesce([Expr::col(TemplateIden::Order).max(), Expr::val(-1)]))
+        .from(TemplateIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    let result: i64 = connection
         .query_row(
-            "SELECT COALESCE(MAX(\"order\"), -1) FROM template",
-            [],
-            |row| row.get(0),
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
+            |row| row.get::<_, i64>(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
-        })
+        })?;
+    Ok(result)
 }
 
 /// 向 template_field 表插入一条字段定义。
@@ -263,18 +359,26 @@ pub fn max_order(connection: &Connection) -> Result<i64, ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert_field(connection: &Connection, field: &TemplateField) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(TemplateFieldIden::Table)
+        .columns([
+            TemplateFieldIden::TemplateId,
+            TemplateFieldIden::Name,
+            TemplateFieldIden::FieldType,
+            TemplateFieldIden::Order,
+            TemplateFieldIden::DictionaryId,
+        ])
+        .values_panic([
+            (&field.template_id).into(),
+            (&field.name).into(),
+            (&field.field_type).into(),
+            field.order.into(),
+            field.dictionary_id.clone().into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO template_field (template_id, name, field_type, \"order\", dictionary_id)
-            VALUES (:template_id, :name, :field_type, :order, :dictionary_id)",
-            rusqlite::named_params! {
-                ":template_id": field.template_id,
-                ":name": field.name,
-                ":field_type": field.field_type,
-                ":order": field.order,
-                ":dictionary_id": field.dictionary_id,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -293,21 +397,26 @@ pub fn select_fields_by_template_id(
     connection: &Connection,
     template_id: &str,
 ) -> Result<Vec<TemplateField>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            TemplateFieldIden::TemplateId,
+            TemplateFieldIden::Name,
+            TemplateFieldIden::FieldType,
+            TemplateFieldIden::Order,
+            TemplateFieldIden::DictionaryId,
+        ])
+        .from(TemplateFieldIden::Table)
+        .and_where(Expr::col(TemplateFieldIden::TemplateId).eq(template_id))
+        .order_by(TemplateFieldIden::Order, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT template_id, name, field_type, \"order\", dictionary_id
-            FROM template_field
-            WHERE template_id = :template_id
-            ORDER BY \"order\" ASC",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(
-            rusqlite::named_params! {":template_id": template_id},
-            map_field_row,
-        )
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_field_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -329,11 +438,13 @@ pub fn delete_fields_by_template_id(
     connection: &Connection,
     template_id: &str,
 ) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(TemplateFieldIden::Table)
+        .and_where(Expr::col(TemplateFieldIden::TemplateId).eq(template_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM template_field WHERE template_id = :template_id",
-            rusqlite::named_params! {":template_id": template_id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -350,13 +461,17 @@ pub fn delete_fields_by_template_id(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn clear_dangling_field_dictionary_ids(connection: &Connection) -> Result<(), ErrorCode> {
+    let mut sub = Query::select();
+    sub.column(DictionaryIden::Id).from(DictionaryIden::Table);
+    let query = Query::update()
+        .table(TemplateFieldIden::Table)
+        .value(TemplateFieldIden::DictionaryId, None::<String>)
+        .and_where(Expr::col(TemplateFieldIden::DictionaryId).is_not_null())
+        .and_where(Expr::col(TemplateFieldIden::DictionaryId).not_in_subquery(sub.take()))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE template_field SET dictionary_id = NULL
-            WHERE dictionary_id IS NOT NULL
-            AND dictionary_id NOT IN (SELECT id FROM dictionary)",
-            [],
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -556,5 +671,40 @@ mod tests {
         assert!(dangling_field.dictionary_id.is_none());
         let none_field = after.iter().find(|f| f.name == "f-none").unwrap();
         assert!(none_field.dictionary_id.is_none());
+    }
+
+    /// STRICT 生效验证：向 template 表的 TEXT 列（name）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_template_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO template (id, name, \"order\") VALUES ('strict-violation', x'0102', 1)",
+                [],
+            ),
+            Err(_)
+        ));
+    }
+
+    /// STRICT 生效验证：向 template_field 表的 TEXT 列（field_type）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_template_field_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO template_field (template_id, name, field_type, \"order\", dictionary_id)
+                VALUES ('template-1', 'strict-violation', x'0102', 1, NULL)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

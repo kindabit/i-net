@@ -2,6 +2,20 @@ use rusqlite::{Connection, Row};
 
 use crate::business::user_database::entity::Dictionary;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{ColumnDef, ColumnType, Expr, ExprTrait, Order, Query, SqliteQueryBuilder, Table};
+
+/// dictionary 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+/// pub(crate) 供 node_field 与 template 的 NOT IN 子查询引用。
+#[derive(sea_query::Iden)]
+pub(crate) enum DictionaryIden {
+    #[iden = "dictionary"]
+    Table,
+    Id,
+    ParentId,
+    Value,
+    Order,
+}
 
 /// 从查询结果行构造 Dictionary。
 fn map_row(row: &Row) -> rusqlite::Result<Dictionary> {
@@ -21,16 +35,25 @@ fn map_row(row: &Row) -> rusqlite::Result<Dictionary> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE dictionary (
-                id TEXT PRIMARY KEY,
-                parent_id TEXT,
-                value TEXT NOT NULL,
-                \"order\" INTEGER NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(DictionaryIden::Table)
+        .col(
+            ColumnDef::new_with_type(DictionaryIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(ColumnDef::new_with_type(DictionaryIden::ParentId, ColumnType::custom("TEXT")))
+        .col(
+            ColumnDef::new_with_type(DictionaryIden::Value, ColumnType::custom("TEXT")).not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(DictionaryIden::Order, ColumnType::custom("INTEGER")).not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -48,22 +71,31 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn batch_insert(connection: &Connection, dictionaries: &[Dictionary]) -> Result<(), ErrorCode> {
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 columns 声明序（id, parent_id, value, order），
+    // 因此循环内按位绑定 params![id, parent_id, value, order]。
+    let (sql, _) = Query::insert()
+        .into_table(DictionaryIden::Table)
+        .columns([
+            DictionaryIden::Id,
+            DictionaryIden::ParentId,
+            DictionaryIden::Value,
+            DictionaryIden::Order,
+        ])
+        .values_panic(["".into(), None::<String>.into(), "".into(), 0i64.into()])
+        .build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "INSERT INTO dictionary (id, parent_id, value, \"order\")
-            VALUES (:id, :parent_id, :value, :order)",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     for dictionary in dictionaries {
         statement
-            .execute(rusqlite::named_params! {
-                ":id": dictionary.id,
-                ":parent_id": dictionary.parent_id,
-                ":value": dictionary.value,
-                ":order": dictionary.order,
-            })
+            .execute(rusqlite::params![
+                dictionary.id,
+                dictionary.parent_id,
+                dictionary.value,
+                dictionary.order,
+            ])
             .map_err(|e| ErrorCode::DatabaseError {
                 detail: e.to_string(),
             })?;
@@ -79,13 +111,24 @@ pub fn batch_insert(connection: &Connection, dictionaries: &[Dictionary]) -> Res
 /// # 返回值
 /// 返回查询到的字典条目列表；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_all(connection: &Connection) -> Result<Vec<Dictionary>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            DictionaryIden::Id,
+            DictionaryIden::ParentId,
+            DictionaryIden::Value,
+            DictionaryIden::Order,
+        ])
+        .from(DictionaryIden::Table)
+        .order_by(DictionaryIden::Order, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("SELECT id, parent_id, value, \"order\" FROM dictionary ORDER BY \"order\" ASC")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map([], map_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -103,8 +146,12 @@ pub fn select_all(connection: &Connection) -> Result<Vec<Dictionary>, ErrorCode>
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_all(connection: &Connection) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(DictionaryIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute("DELETE FROM dictionary", [])
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -120,10 +167,20 @@ pub fn delete_all(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 存在返回 `true`，不存在返回 `false`；若发生错误则返回对应的 `ErrorCode`。
 pub fn exist_by_id(connection: &Connection, id: &str) -> Result<bool, ErrorCode> {
+    let query = Query::select()
+        .expr(Expr::exists(
+            Query::select()
+                .expr(Expr::val(1))
+                .from(DictionaryIden::Table)
+                .and_where(Expr::col(DictionaryIden::Id).eq(id))
+                .take(),
+        ))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM dictionary WHERE id = :id)",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -233,5 +290,20 @@ mod tests {
         // delete_all 成功路径：删除后 select_all 为空。
         delete_all(&connection).unwrap();
         assert!(select_all(&connection).unwrap().is_empty());
+    }
+
+    /// STRICT 生效验证：向 TEXT 列（value）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_dictionary_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO dictionary (id, parent_id, value, \"order\")
+                VALUES ('strict-violation', NULL, x'0102', 1)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

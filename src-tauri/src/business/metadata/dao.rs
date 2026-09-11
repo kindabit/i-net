@@ -2,6 +2,24 @@ use rusqlite::{Connection, OptionalExtension, Row};
 
 use super::entity::Metadata;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    Alias, Asterisk, ColumnDef, ColumnType, Expr, ExprTrait, Func, Order, Query,
+    SqliteQueryBuilder, Table,
+};
+
+/// metadata 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum MetadataIden {
+    #[iden = "metadata"]
+    Table,
+    Id,
+    Name,
+    Archived,
+    CreateTime,
+    ModifyTime,
+    LastOpenTime,
+}
 
 /// 从查询结果行构造 Metadata。
 fn map_row(row: &Row) -> rusqlite::Result<Metadata> {
@@ -23,18 +41,37 @@ fn map_row(row: &Row) -> rusqlite::Result<Metadata> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE metadata (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE,
-                archived INTEGER NOT NULL,
-                create_time INTEGER NOT NULL,
-                modify_time INTEGER NOT NULL,
-                last_open_time INTEGER NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(MetadataIden::Table)
+        .col(
+            ColumnDef::new_with_type(MetadataIden::Id, ColumnType::custom("TEXT")).primary_key(),
         )
+        .col(
+            ColumnDef::new_with_type(MetadataIden::Name, ColumnType::custom("TEXT"))
+                .not_null()
+                .unique_key(),
+        )
+        .col(
+            ColumnDef::new_with_type(MetadataIden::Archived, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(MetadataIden::CreateTime, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(MetadataIden::ModifyTime, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(MetadataIden::LastOpenTime, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -49,12 +86,17 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回表是否存在的布尔值；若发生错误则返回对应的 `ErrorCode`。
 pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
+    let query = Query::select()
+        .expr(Func::count(Expr::col(Asterisk)))
+        .from(Alias::new("sqlite_master"))
+        .and_where(Expr::col(Alias::new("type")).eq("table"))
+        .and_where(Expr::col(Alias::new("name")).eq("metadata"))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
         .query_row(
-            "SELECT COUNT(*)
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'metadata'",
-            [],
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -72,19 +114,28 @@ pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, metadata: &Metadata) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(MetadataIden::Table)
+        .columns([
+            MetadataIden::Id,
+            MetadataIden::Name,
+            MetadataIden::Archived,
+            MetadataIden::CreateTime,
+            MetadataIden::ModifyTime,
+            MetadataIden::LastOpenTime,
+        ])
+        .values_panic([
+            (&metadata.id).into(),
+            (&metadata.name).into(),
+            (metadata.archived as i64).into(),
+            metadata.create_time.into(),
+            metadata.modify_time.into(),
+            metadata.last_open_time.into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO metadata (id, name, archived, create_time, modify_time, last_open_time)
-            VALUES (:id, :name, :archived, :create_time, :modify_time, :last_open_time)",
-            rusqlite::named_params! {
-                ":id": metadata.id,
-                ":name": metadata.name,
-                ":archived": metadata.archived as i64,
-                ":create_time": metadata.create_time,
-                ":modify_time": metadata.modify_time,
-                ":last_open_time": metadata.last_open_time,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -100,12 +151,23 @@ pub fn insert(connection: &Connection, metadata: &Metadata) -> Result<(), ErrorC
 /// # 返回值
 /// 返回查询到的元数据，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Metadata>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            MetadataIden::Id,
+            MetadataIden::Name,
+            MetadataIden::Archived,
+            MetadataIden::CreateTime,
+            MetadataIden::ModifyTime,
+            MetadataIden::LastOpenTime,
+        ])
+        .from(MetadataIden::Table)
+        .and_where(Expr::col(MetadataIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, name, archived, create_time, modify_time, last_open_time
-            FROM metadata
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -123,12 +185,23 @@ pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Metadata
 /// # 返回值
 /// 返回查询到的元数据，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_name(connection: &Connection, name: &str) -> Result<Option<Metadata>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            MetadataIden::Id,
+            MetadataIden::Name,
+            MetadataIden::Archived,
+            MetadataIden::CreateTime,
+            MetadataIden::ModifyTime,
+            MetadataIden::LastOpenTime,
+        ])
+        .from(MetadataIden::Table)
+        .and_where(Expr::col(MetadataIden::Name).eq(name))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, name, archived, create_time, modify_time, last_open_time
-            FROM metadata
-            WHERE name = :name",
-            rusqlite::named_params! {":name": name},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -150,21 +223,28 @@ pub fn select_by_archived(
     connection: &Connection,
     archived: bool,
 ) -> Result<Vec<Metadata>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            MetadataIden::Id,
+            MetadataIden::Name,
+            MetadataIden::Archived,
+            MetadataIden::CreateTime,
+            MetadataIden::ModifyTime,
+            MetadataIden::LastOpenTime,
+        ])
+        .from(MetadataIden::Table)
+        .and_where(Expr::col(MetadataIden::Archived).eq(archived as i64))
+        .order_by(MetadataIden::LastOpenTime, Order::Desc)
+        .order_by(MetadataIden::Name, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT id, name, archived, create_time, modify_time, last_open_time
-            FROM metadata
-            WHERE archived = :archived
-            ORDER BY last_open_time DESC, name ASC",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(
-            rusqlite::named_params! {":archived": archived as i64},
-            map_row,
-        )
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -183,24 +263,20 @@ pub fn select_by_archived(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn update(connection: &Connection, metadata: &Metadata) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(MetadataIden::Table)
+        .values([
+            (MetadataIden::Name, metadata.name.clone().into()),
+            (MetadataIden::Archived, (metadata.archived as i64).into()),
+            (MetadataIden::CreateTime, metadata.create_time.into()),
+            (MetadataIden::ModifyTime, metadata.modify_time.into()),
+            (MetadataIden::LastOpenTime, metadata.last_open_time.into()),
+        ])
+        .and_where(Expr::col(MetadataIden::Id).eq(metadata.id.clone()))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE metadata
-            SET name = :name,
-                archived = :archived,
-                create_time = :create_time,
-                modify_time = :modify_time,
-                last_open_time = :last_open_time
-            WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": metadata.id,
-                ":name": metadata.name,
-                ":archived": metadata.archived as i64,
-                ":create_time": metadata.create_time,
-                ":modify_time": metadata.modify_time,
-                ":last_open_time": metadata.last_open_time,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -216,12 +292,13 @@ pub fn update(connection: &Connection, metadata: &Metadata) -> Result<(), ErrorC
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(MetadataIden::Table)
+        .and_where(Expr::col(MetadataIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM metadata
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -319,5 +396,20 @@ mod tests {
         // delete_by_id 成功路径：删除后查不到该记录。
         delete_by_id(&connection, "id-1").unwrap();
         assert!(select_by_id(&connection, "id-1").unwrap().is_none());
+    }
+
+    /// STRICT 生效验证：向 INTEGER 列插入 TEXT 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_metadata_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO metadata (id, name, archived, create_time, modify_time, last_open_time)
+                VALUES ('strict-violation', 'db', 'not-an-integer', 0, 0, 0)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

@@ -1,6 +1,20 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    Alias, Asterisk, ColumnDef, ColumnType, Expr, ExprTrait, Func, OnConflict, Query,
+    SqliteQueryBuilder, Table,
+};
+
+/// variable 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum VariableIden {
+    #[iden = "variable"]
+    Table,
+    Name,
+    Value,
+}
 
 /// 新建 variable 表。
 ///
@@ -10,14 +24,19 @@ use crate::error_code::ErrorCode;
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE variable (
-                name TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(VariableIden::Table)
+        .col(
+            ColumnDef::new_with_type(VariableIden::Name, ColumnType::custom("TEXT")).primary_key(),
         )
+        .col(
+            ColumnDef::new_with_type(VariableIden::Value, ColumnType::custom("TEXT")).not_null(),
+        )
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -32,12 +51,17 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回表是否存在的布尔值；若发生错误则返回对应的 `ErrorCode`。
 pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
+    let query = Query::select()
+        .expr(Func::count(Expr::col(Asterisk)))
+        .from(Alias::new("sqlite_master"))
+        .and_where(Expr::col(Alias::new("type")).eq("table"))
+        .and_where(Expr::col(Alias::new("name")).eq("variable"))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
         .query_row(
-            "SELECT COUNT(*)
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'variable'",
-            [],
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -56,16 +80,19 @@ pub fn exist_table(connection: &Connection) -> Result<bool, ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn upsert(connection: &Connection, name: &str, value: &str) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "INSERT INTO variable (name, value)
-            VALUES (:name, :value)
-            ON CONFLICT(name) DO UPDATE SET value = excluded.value",
-            rusqlite::named_params! {
-                ":name": name,
-                ":value": value,
-            },
+    let query = Query::insert()
+        .into_table(VariableIden::Table)
+        .columns([VariableIden::Name, VariableIden::Value])
+        .values_panic([name.into(), value.into()])
+        .on_conflict(
+            OnConflict::column(VariableIden::Name)
+                .update_column(VariableIden::Value)
+                .to_owned(),
         )
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    connection
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -84,12 +111,16 @@ pub fn select_by_name(
     connection: &Connection,
     name: &str,
 ) -> Result<Option<String>, ErrorCode> {
+    let query = Query::select()
+        .column(VariableIden::Value)
+        .from(VariableIden::Table)
+        .and_where(Expr::col(VariableIden::Name).eq(name))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT value
-            FROM variable
-            WHERE name = :name",
-            rusqlite::named_params! {":name": name},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .optional()
@@ -148,5 +179,20 @@ mod tests {
             select_by_name(&connection, "theme").unwrap(),
             Some("light".to_string())
         );
+    }
+
+    /// STRICT 生效验证：向 TEXT 列插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    /// 注意：整数/实数会被 STRICT 表的亲和性规则无损转换为文本，因此用 BLOB 触发类型不匹配。
+    #[test]
+    fn test_variable_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO variable (name, value) VALUES ('strict-violation', x'0102')",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

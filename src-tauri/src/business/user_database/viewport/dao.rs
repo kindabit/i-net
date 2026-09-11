@@ -2,6 +2,21 @@ use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::business::user_database::entity::Viewport;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    ColumnDef, ColumnType, Expr, ExprTrait, OnConflict, Query, SqliteQueryBuilder, Table,
+};
+
+/// viewport 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum ViewportIden {
+    #[iden = "viewport"]
+    Table,
+    CanvasId,
+    X,
+    Y,
+    Zoom,
+}
 
 /// 从查询结果行构造 Viewport。
 fn map_row(row: &Row) -> rusqlite::Result<Viewport> {
@@ -21,16 +36,21 @@ fn map_row(row: &Row) -> rusqlite::Result<Viewport> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE viewport (
-                canvas_id TEXT PRIMARY KEY,
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                zoom REAL NOT NULL
-            ) STRICT",
-            [],
+    let table = Table::create()
+        .table(ViewportIden::Table)
+        .col(
+            ColumnDef::new_with_type(ViewportIden::CanvasId, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(ColumnDef::new_with_type(ViewportIden::X, ColumnType::custom("REAL")).not_null())
+        .col(ColumnDef::new_with_type(ViewportIden::Y, ColumnType::custom("REAL")).not_null())
+        .col(ColumnDef::new_with_type(ViewportIden::Zoom, ColumnType::custom("REAL")).not_null())
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -46,17 +66,24 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn upsert(connection: &Connection, viewport: &Viewport) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "INSERT OR REPLACE INTO viewport (canvas_id, x, y, zoom)
-            VALUES (:canvas_id, :x, :y, :zoom)",
-            rusqlite::named_params! {
-                ":canvas_id": viewport.canvas_id,
-                ":x": viewport.x,
-                ":y": viewport.y,
-                ":zoom": viewport.zoom,
-            },
+    let query = Query::insert()
+        .into_table(ViewportIden::Table)
+        .columns([ViewportIden::CanvasId, ViewportIden::X, ViewportIden::Y, ViewportIden::Zoom])
+        .values_panic([
+            (&viewport.canvas_id).into(),
+            viewport.x.into(),
+            viewport.y.into(),
+            viewport.zoom.into(),
+        ])
+        .on_conflict(
+            OnConflict::column(ViewportIden::CanvasId)
+                .update_columns([ViewportIden::X, ViewportIden::Y, ViewportIden::Zoom])
+                .to_owned(),
         )
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    connection
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -75,12 +102,16 @@ pub fn select_by_canvas_id(
     connection: &Connection,
     canvas_id: &str,
 ) -> Result<Option<Viewport>, ErrorCode> {
+    let query = Query::select()
+        .columns([ViewportIden::CanvasId, ViewportIden::X, ViewportIden::Y, ViewportIden::Zoom])
+        .from(ViewportIden::Table)
+        .and_where(Expr::col(ViewportIden::CanvasId).eq(canvas_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT canvas_id, x, y, zoom
-            FROM viewport
-            WHERE canvas_id = :canvas_id",
-            rusqlite::named_params! {":canvas_id": canvas_id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -98,12 +129,13 @@ pub fn select_by_canvas_id(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_canvas_id(connection: &Connection, canvas_id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(ViewportIden::Table)
+        .and_where(Expr::col(ViewportIden::CanvasId).eq(canvas_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM viewport
-            WHERE canvas_id = :canvas_id",
-            rusqlite::named_params! {":canvas_id": canvas_id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -207,5 +239,19 @@ mod tests {
         assert!(select_by_canvas_id(&connection, "canvas-2")
             .unwrap()
             .is_some());
+    }
+
+    /// STRICT 生效验证：向 REAL 列（x）插入无法转换的文本 'abc' 时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_viewport_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO viewport (canvas_id, x, y, zoom) VALUES ('strict-violation', 'abc', 0.0, 1.0)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

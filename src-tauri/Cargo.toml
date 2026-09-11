@@ -53,5 +53,6 @@ claxon = "0.4"
 reed-solomon-erasure = "6"
 tar = "0.4"
 walkdir = "2"
+sea-query = { version = "1", default-features = false, features = ["backend-sqlite", "derive"] }
 
 [dev-dependencies]

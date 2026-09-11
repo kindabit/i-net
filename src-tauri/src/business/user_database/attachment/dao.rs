@@ -1,7 +1,29 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::business::user_database::entity::Attachment;
+use crate::business::user_database::node::dao::NodeIden;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    ColumnDef, ColumnType, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Func, Index, Order, Query,
+    SqliteQueryBuilder, Table,
+};
+
+/// attachment 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+enum AttachmentIden {
+    #[iden = "attachment"]
+    Table,
+    Id,
+    NodeId,
+    FileName,
+    Size,
+    CreateTime,
+    Deleted,
+    SortOrder,
+    Compressed,
+    CompressParam,
+}
 
 /// 从查询结果行构造 Attachment。
 fn map_row(row: &Row) -> rusqlite::Result<Attachment> {
@@ -26,22 +48,56 @@ fn map_row(row: &Row) -> rusqlite::Result<Attachment> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE attachment (
-                id TEXT PRIMARY KEY,
-                node_id TEXT NOT NULL REFERENCES node(id) ON DELETE CASCADE,
-                file_name TEXT NOT NULL,
-                size INTEGER NOT NULL,
-                create_time INTEGER NOT NULL,
-                deleted INTEGER NOT NULL,
-                sort_order INTEGER NOT NULL,
-                compressed INTEGER NOT NULL,
-                compress_param TEXT NOT NULL,
-                UNIQUE (node_id, sort_order)
-            ) STRICT",
-            [],
+    let mut fk_node = ForeignKey::create();
+    fk_node
+        .from(AttachmentIden::Table, AttachmentIden::NodeId)
+        .to(NodeIden::Table, NodeIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut node_sort_unique = Index::create();
+    node_sort_unique
+        .unique()
+        .col(AttachmentIden::NodeId)
+        .col(AttachmentIden::SortOrder);
+    let table = Table::create()
+        .table(AttachmentIden::Table)
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::NodeId, ColumnType::custom("TEXT")).not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::FileName, ColumnType::custom("TEXT")).not_null(),
+        )
+        .col(ColumnDef::new_with_type(AttachmentIden::Size, ColumnType::custom("INTEGER")).not_null())
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::CreateTime, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::Deleted, ColumnType::custom("INTEGER")).not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::SortOrder, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::Compressed, ColumnType::custom("INTEGER"))
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new_with_type(AttachmentIden::CompressParam, ColumnType::custom("TEXT"))
+                .not_null(),
+        )
+        .foreign_key(&mut fk_node)
+        .index(&mut node_sort_unique)
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -57,22 +113,34 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, attachment: &Attachment) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(AttachmentIden::Table)
+        .columns([
+            AttachmentIden::Id,
+            AttachmentIden::NodeId,
+            AttachmentIden::FileName,
+            AttachmentIden::Size,
+            AttachmentIden::CreateTime,
+            AttachmentIden::Deleted,
+            AttachmentIden::SortOrder,
+            AttachmentIden::Compressed,
+            AttachmentIden::CompressParam,
+        ])
+        .values_panic([
+            (&attachment.id).into(),
+            (&attachment.node_id).into(),
+            (&attachment.file_name).into(),
+            attachment.size.into(),
+            attachment.create_time.into(),
+            (attachment.deleted as i64).into(),
+            attachment.sort_order.into(),
+            (attachment.compressed as i64).into(),
+            (&attachment.compress_param).into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO attachment (id, node_id, file_name, size, create_time, deleted, sort_order, compressed, compress_param)
-            VALUES (:id, :node_id, :file_name, :size, :create_time, :deleted, :sort_order, :compressed, :compress_param)",
-            rusqlite::named_params! {
-                ":id": attachment.id,
-                ":node_id": attachment.node_id,
-                ":file_name": attachment.file_name,
-                ":size": attachment.size,
-                ":create_time": attachment.create_time,
-                ":deleted": attachment.deleted as i64,
-                ":sort_order": attachment.sort_order,
-                ":compressed": attachment.compressed as i64,
-                ":compress_param": attachment.compress_param,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -88,12 +156,26 @@ pub fn insert(connection: &Connection, attachment: &Attachment) -> Result<(), Er
 /// # 返回值
 /// 返回查询到的附件，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Attachment>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            AttachmentIden::Id,
+            AttachmentIden::NodeId,
+            AttachmentIden::FileName,
+            AttachmentIden::Size,
+            AttachmentIden::CreateTime,
+            AttachmentIden::Deleted,
+            AttachmentIden::SortOrder,
+            AttachmentIden::Compressed,
+            AttachmentIden::CompressParam,
+        ])
+        .from(AttachmentIden::Table)
+        .and_where(Expr::col(AttachmentIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, node_id, file_name, size, create_time, deleted, sort_order, compressed, compress_param
-            FROM attachment
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -116,24 +198,31 @@ pub fn select_by_node_id(
     node_id: &str,
     deleted: bool,
 ) -> Result<Vec<Attachment>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            AttachmentIden::Id,
+            AttachmentIden::NodeId,
+            AttachmentIden::FileName,
+            AttachmentIden::Size,
+            AttachmentIden::CreateTime,
+            AttachmentIden::Deleted,
+            AttachmentIden::SortOrder,
+            AttachmentIden::Compressed,
+            AttachmentIden::CompressParam,
+        ])
+        .from(AttachmentIden::Table)
+        .and_where(Expr::col(AttachmentIden::NodeId).eq(node_id))
+        .and_where(Expr::col(AttachmentIden::Deleted).eq(deleted as i64))
+        .order_by(AttachmentIden::SortOrder, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT id, node_id, file_name, size, create_time, deleted, sort_order, compressed, compress_param
-            FROM attachment
-            WHERE node_id = :node_id AND deleted = :deleted
-            ORDER BY sort_order ASC",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(
-            rusqlite::named_params! {
-                ":node_id": node_id,
-                ":deleted": deleted as i64,
-            },
-            map_row,
-        )
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -159,23 +248,30 @@ pub fn select_by_node_ids(
     if node_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders = (1..=node_ids.len())
-        .map(|i| format!("?{i}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "SELECT id, node_id, file_name, size, create_time, deleted, sort_order, compressed, compress_param
-        FROM attachment
-        WHERE node_id IN ({placeholders})
-        ORDER BY sort_order ASC"
-    );
+    let query = Query::select()
+        .columns([
+            AttachmentIden::Id,
+            AttachmentIden::NodeId,
+            AttachmentIden::FileName,
+            AttachmentIden::Size,
+            AttachmentIden::CreateTime,
+            AttachmentIden::Deleted,
+            AttachmentIden::SortOrder,
+            AttachmentIden::Compressed,
+            AttachmentIden::CompressParam,
+        ])
+        .from(AttachmentIden::Table)
+        .and_where(Expr::col(AttachmentIden::NodeId).is_in(node_ids.iter()))
+        .order_by(AttachmentIden::SortOrder, Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
         .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(rusqlite::params_from_iter(node_ids.iter()), map_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -193,13 +289,18 @@ pub fn select_by_node_ids(
 /// # 返回值
 /// 返回全部附件 id 的列表；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_all_ids(connection: &Connection) -> Result<Vec<String>, ErrorCode> {
+    let query = Query::select()
+        .columns([AttachmentIden::Id])
+        .from(AttachmentIden::Table)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("SELECT id FROM attachment")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map([], |row| row.get(0))
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), |row| row.get(0))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -219,16 +320,14 @@ pub fn select_all_ids(connection: &Connection) -> Result<Vec<String>, ErrorCode>
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn update_deleted(connection: &Connection, id: &str, deleted: bool) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(AttachmentIden::Table)
+        .value(AttachmentIden::Deleted, deleted as i64)
+        .and_where(Expr::col(AttachmentIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE attachment
-            SET deleted = :deleted
-            WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": id,
-                ":deleted": deleted as i64,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -244,30 +343,23 @@ pub fn update_deleted(connection: &Connection, id: &str, deleted: bool) -> Resul
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn update(connection: &Connection, attachment: &Attachment) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(AttachmentIden::Table)
+        .values([
+            (AttachmentIden::NodeId, attachment.node_id.clone().into()),
+            (AttachmentIden::FileName, attachment.file_name.clone().into()),
+            (AttachmentIden::Size, attachment.size.into()),
+            (AttachmentIden::CreateTime, attachment.create_time.into()),
+            (AttachmentIden::Deleted, (attachment.deleted as i64).into()),
+            (AttachmentIden::SortOrder, attachment.sort_order.into()),
+            (AttachmentIden::Compressed, (attachment.compressed as i64).into()),
+            (AttachmentIden::CompressParam, attachment.compress_param.clone().into()),
+        ])
+        .and_where(Expr::col(AttachmentIden::Id).eq(attachment.id.clone()))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE attachment
-            SET node_id = :node_id,
-                file_name = :file_name,
-                size = :size,
-                create_time = :create_time,
-                deleted = :deleted,
-                sort_order = :sort_order,
-                compressed = :compressed,
-                compress_param = :compress_param
-            WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": attachment.id,
-                ":node_id": attachment.node_id,
-                ":file_name": attachment.file_name,
-                ":size": attachment.size,
-                ":create_time": attachment.create_time,
-                ":deleted": attachment.deleted as i64,
-                ":sort_order": attachment.sort_order,
-                ":compressed": attachment.compressed as i64,
-                ":compress_param": attachment.compress_param,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -293,33 +385,31 @@ pub fn swap_sort_order(
     order1: i64,
     order2: i64,
 ) -> Result<(), ErrorCode> {
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 value() 调用序（sort_order）与 WHERE 序（id），
+    // 因此三步交换逐条按位绑定 params![sort_order, id]。
+    let (sql, _) = Query::update()
+        .table(AttachmentIden::Table)
+        .value(AttachmentIden::SortOrder, 0i64)
+        .and_where(Expr::col(AttachmentIden::Id).eq(""))
+        .build(SqliteQueryBuilder);
     let mut stmt = connection
-        .prepare("UPDATE attachment SET sort_order = :sort_order WHERE id = :id")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     // 三步交换：id1 临时值 → id2 写入 order1 → id1 写入 order2
-    stmt.execute(rusqlite::named_params! {
-        ":id": id1,
-        ":sort_order": -1_i64,
-    })
-    .map_err(|e| ErrorCode::DatabaseError {
-        detail: e.to_string(),
-    })?;
-    stmt.execute(rusqlite::named_params! {
-        ":id": id2,
-        ":sort_order": order1,
-    })
-    .map_err(|e| ErrorCode::DatabaseError {
-        detail: e.to_string(),
-    })?;
-    stmt.execute(rusqlite::named_params! {
-        ":id": id1,
-        ":sort_order": order2,
-    })
-    .map_err(|e| ErrorCode::DatabaseError {
-        detail: e.to_string(),
-    })?;
+    stmt.execute(rusqlite::params![-1_i64, id1])
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    stmt.execute(rusqlite::params![order1, id2])
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    stmt.execute(rusqlite::params![order2, id1])
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
     Ok(())
 }
 
@@ -332,17 +422,18 @@ pub fn swap_sort_order(
 /// # 返回值
 /// 返回最大 sort_order；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_max_sort_order(connection: &Connection, node_id: &str) -> Result<i64, ErrorCode> {
-    let mut statement = connection
-        .prepare(
-            "SELECT COALESCE(MAX(sort_order), 0) FROM attachment WHERE node_id = :node_id",
+    let query = Query::select()
+        .expr(Func::coalesce([Expr::col(AttachmentIden::SortOrder).max(), Expr::val(0)]))
+        .from(AttachmentIden::Table)
+        .and_where(Expr::col(AttachmentIden::NodeId).eq(node_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    let result: i64 = connection
+        .query_row(
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
+            |row| row.get::<_, i64>(0),
         )
-        .map_err(|e| ErrorCode::DatabaseError {
-            detail: e.to_string(),
-        })?;
-    let result = statement
-        .query_row(rusqlite::named_params! { ":node_id": node_id }, |row| {
-            row.get::<_, i64>(0)
-        })
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -358,12 +449,13 @@ pub fn select_max_sort_order(connection: &Connection, node_id: &str) -> Result<i
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(AttachmentIden::Table)
+        .and_where(Expr::col(AttachmentIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM attachment
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -567,8 +659,8 @@ mod tests {
         // 通过直接 SQL 修改 a2 的 sort_order 为 10，为后续交换测试做准备。
         connection
             .execute(
-                "UPDATE attachment SET sort_order = :order WHERE id = :id",
-                rusqlite::named_params! { ":id": "a2", ":order": 10_i64 },
+                "UPDATE attachment SET sort_order = ? WHERE id = ?",
+                rusqlite::params![10_i64, "a2"],
             )
             .unwrap();
         assert_eq!(
@@ -592,5 +684,23 @@ mod tests {
         assert_eq!(select_max_sort_order(&connection, "n2").unwrap(), 3);
         // select_max_sort_order 成功路径：节点无附件时返回 0。
         assert_eq!(select_max_sort_order(&connection, "n-x").unwrap(), 0);
+    }
+
+    /// STRICT 生效验证：向 TEXT 列（file_name）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_attachment_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO attachment (id, node_id, file_name, size, create_time, deleted, sort_order, compressed, compress_param)
+                VALUES ('strict-violation', 'node-1', x'0102', 100, 1, 0, 0, 0, '')",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

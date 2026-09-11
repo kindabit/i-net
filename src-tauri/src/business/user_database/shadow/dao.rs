@@ -2,7 +2,10 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::dao::map_row;
+use crate::business::user_database::node::dao::NodeIden;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{Expr, ExprTrait, Query, SqliteQueryBuilder};
 
 /// 按产生边 id 查询其产生的影子节点（一条边至多产生一个影子）。
 ///
@@ -18,12 +21,27 @@ pub fn select_by_producing_edge_id(
     connection: &Connection,
     edge_id: &str,
 ) -> Result<Option<Node>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            NodeIden::Id,
+            NodeIden::CanvasId,
+            NodeIden::X,
+            NodeIden::Y,
+            NodeIden::Title,
+            NodeIden::SubTitle,
+            NodeIden::CanvasRefId,
+            NodeIden::Deleted,
+            NodeIden::Color,
+            NodeIden::ShadowId,
+        ])
+        .from(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::ShadowId).eq(edge_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
-            FROM node
-            WHERE shadow_id = :edge_id",
-            rusqlite::named_params! {":edge_id": edge_id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()

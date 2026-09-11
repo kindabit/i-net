@@ -1,9 +1,33 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 
+use crate::business::user_database::canvas::dao::CanvasIden;
+use crate::business::user_database::edge::dao::EdgeIden;
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::response::NodeColorEntry;
 use crate::business::user_database::node::response::NodeSearchResponse;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    ColumnDef, ColumnType, Cond, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Index, JoinType,
+    LikeExpr, Order, Query, SqliteQueryBuilder, Table,
+};
+
+/// node 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+pub(crate) enum NodeIden {
+    #[iden = "node"]
+    Table,
+    Id,
+    CanvasId,
+    X,
+    Y,
+    Title,
+    SubTitle,
+    CanvasRefId,
+    Deleted,
+    Color,
+    ShadowId,
+}
 
 /// 从查询结果行构造 Node。
 /// pub(crate) 供 shadow::dao 复用（影子节点存于 node 表，行映射保持单一来源）。
@@ -30,23 +54,53 @@ pub(crate) fn map_row(row: &Row) -> rusqlite::Result<Node> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE node (
-                id TEXT PRIMARY KEY,
-                canvas_id TEXT NOT NULL REFERENCES canvas(id) ON DELETE CASCADE,
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                title TEXT NOT NULL,
-                sub_title TEXT NOT NULL,
-                canvas_ref_id TEXT UNIQUE REFERENCES canvas(id) ON DELETE CASCADE,
-                deleted INTEGER NOT NULL,
-                color TEXT NOT NULL,
-                shadow_id TEXT REFERENCES edge(id) ON DELETE CASCADE,
-                UNIQUE (canvas_id, shadow_id)
-            ) STRICT",
-            [],
+    let mut fk_canvas = ForeignKey::create();
+    fk_canvas
+        .from(NodeIden::Table, NodeIden::CanvasId)
+        .to(CanvasIden::Table, CanvasIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut fk_ref = ForeignKey::create();
+    fk_ref
+        .from(NodeIden::Table, NodeIden::CanvasRefId)
+        .to(CanvasIden::Table, CanvasIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut fk_shadow = ForeignKey::create();
+    fk_shadow
+        .from(NodeIden::Table, NodeIden::ShadowId)
+        .to(EdgeIden::Table, EdgeIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut canvas_shadow_unique = Index::create();
+    canvas_shadow_unique
+        .unique()
+        .col(NodeIden::CanvasId)
+        .col(NodeIden::ShadowId);
+    let table = Table::create()
+        .table(NodeIden::Table)
+        .col(
+            ColumnDef::new_with_type(NodeIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(ColumnDef::new_with_type(NodeIden::CanvasId, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::X, ColumnType::custom("REAL")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::Y, ColumnType::custom("REAL")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::Title, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::SubTitle, ColumnType::custom("TEXT")).not_null())
+        .col(
+            ColumnDef::new_with_type(NodeIden::CanvasRefId, ColumnType::custom("TEXT")).unique_key(),
+        )
+        .col(ColumnDef::new_with_type(NodeIden::Deleted, ColumnType::custom("INTEGER")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::Color, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(NodeIden::ShadowId, ColumnType::custom("TEXT")))
+        .foreign_key(&mut fk_canvas)
+        .foreign_key(&mut fk_ref)
+        .foreign_key(&mut fk_shadow)
+        .index(&mut canvas_shadow_unique)
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -62,23 +116,36 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(NodeIden::Table)
+        .columns([
+            NodeIden::Id,
+            NodeIden::CanvasId,
+            NodeIden::X,
+            NodeIden::Y,
+            NodeIden::Title,
+            NodeIden::SubTitle,
+            NodeIden::CanvasRefId,
+            NodeIden::Deleted,
+            NodeIden::Color,
+            NodeIden::ShadowId,
+        ])
+        .values_panic([
+            (&node.id).into(),
+            (&node.canvas_id).into(),
+            node.x.into(),
+            node.y.into(),
+            (&node.title).into(),
+            (&node.sub_title).into(),
+            node.canvas_ref_id.clone().into(),
+            (node.deleted as i64).into(),
+            (&node.color).into(),
+            node.shadow_id.clone().into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO node (id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id)
-            VALUES (:id, :canvas_id, :x, :y, :title, :sub_title, :canvas_ref_id, :deleted, :color, :shadow_id)",
-            rusqlite::named_params! {
-                ":id": node.id,
-                ":canvas_id": node.canvas_id,
-                ":x": node.x,
-                ":y": node.y,
-                ":title": node.title,
-                ":sub_title": node.sub_title,
-                ":canvas_ref_id": node.canvas_ref_id,
-                ":deleted": node.deleted as i64,
-                ":color": node.color,
-                ":shadow_id": node.shadow_id,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -94,12 +161,27 @@ pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回查询到的节点，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Node>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            NodeIden::Id,
+            NodeIden::CanvasId,
+            NodeIden::X,
+            NodeIden::Y,
+            NodeIden::Title,
+            NodeIden::SubTitle,
+            NodeIden::CanvasRefId,
+            NodeIden::Deleted,
+            NodeIden::Color,
+            NodeIden::ShadowId,
+        ])
+        .from(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
-            FROM node
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -122,23 +204,31 @@ pub fn select_by_canvas_id_and_deleted(
     canvas_id: &str,
     deleted: bool,
 ) -> Result<Vec<Node>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            NodeIden::Id,
+            NodeIden::CanvasId,
+            NodeIden::X,
+            NodeIden::Y,
+            NodeIden::Title,
+            NodeIden::SubTitle,
+            NodeIden::CanvasRefId,
+            NodeIden::Deleted,
+            NodeIden::Color,
+            NodeIden::ShadowId,
+        ])
+        .from(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::CanvasId).eq(canvas_id))
+        .and_where(Expr::col(NodeIden::Deleted).eq(deleted as i64))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
-            FROM node
-            WHERE canvas_id = :canvas_id AND deleted = :deleted",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(
-            rusqlite::named_params! {
-                ":canvas_id": canvas_id,
-                ":deleted": deleted as i64,
-            },
-            map_row,
-        )
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -157,32 +247,24 @@ pub fn select_by_canvas_id_and_deleted(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn update(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(NodeIden::Table)
+        .values([
+            (NodeIden::CanvasId, node.canvas_id.clone().into()),
+            (NodeIden::X, node.x.into()),
+            (NodeIden::Y, node.y.into()),
+            (NodeIden::Title, node.title.clone().into()),
+            (NodeIden::SubTitle, node.sub_title.clone().into()),
+            (NodeIden::CanvasRefId, node.canvas_ref_id.clone().into()),
+            (NodeIden::Deleted, (node.deleted as i64).into()),
+            (NodeIden::Color, node.color.clone().into()),
+            (NodeIden::ShadowId, node.shadow_id.clone().into()),
+        ])
+        .and_where(Expr::col(NodeIden::Id).eq(node.id.clone()))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE node
-            SET canvas_id = :canvas_id,
-                x = :x,
-                y = :y,
-                title = :title,
-                sub_title = :sub_title,
-                canvas_ref_id = :canvas_ref_id,
-                deleted = :deleted,
-                color = :color,
-                shadow_id = :shadow_id
-            WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": node.id,
-                ":canvas_id": node.canvas_id,
-                ":x": node.x,
-                ":y": node.y,
-                ":title": node.title,
-                ":sub_title": node.sub_title,
-                ":canvas_ref_id": node.canvas_ref_id,
-                ":deleted": node.deleted as i64,
-                ":color": node.color,
-                ":shadow_id": node.shadow_id,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -198,12 +280,13 @@ pub fn update(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM node
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -222,12 +305,27 @@ pub fn select_by_canvas_ref_id(
     connection: &Connection,
     canvas_ref_id: &str,
 ) -> Result<Option<Node>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            NodeIden::Id,
+            NodeIden::CanvasId,
+            NodeIden::X,
+            NodeIden::Y,
+            NodeIden::Title,
+            NodeIden::SubTitle,
+            NodeIden::CanvasRefId,
+            NodeIden::Deleted,
+            NodeIden::Color,
+            NodeIden::ShadowId,
+        ])
+        .from(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::CanvasRefId).eq(canvas_ref_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id
-            FROM node
-            WHERE canvas_ref_id = :canvas_ref_id",
-            rusqlite::named_params! {":canvas_ref_id": canvas_ref_id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -272,31 +370,60 @@ pub fn search_by_keywords(
     connection: &Connection,
     keywords: &[String],
 ) -> Result<Vec<NodeSearchResponse>, ErrorCode> {
-    let mut sql = String::from(
-        "SELECT node.id, node.canvas_id, node.x, node.y, node.title, node.sub_title, node.canvas_ref_id, canvas.name
-         FROM node
-         JOIN canvas ON node.canvas_id = canvas.id
-         WHERE node.deleted = 0 AND canvas.deleted = 0 AND node.shadow_id IS NULL",
-    );
-    let mut params: Vec<String> = Vec::new();
+    let mut query = Query::select();
+    let cols: [sea_query::ColumnRef; 8] = [
+        (NodeIden::Table, NodeIden::Id).into(),
+        (NodeIden::Table, NodeIden::CanvasId).into(),
+        (NodeIden::Table, NodeIden::X).into(),
+        (NodeIden::Table, NodeIden::Y).into(),
+        (NodeIden::Table, NodeIden::Title).into(),
+        (NodeIden::Table, NodeIden::SubTitle).into(),
+        (NodeIden::Table, NodeIden::CanvasRefId).into(),
+        (CanvasIden::Table, CanvasIden::Name).into(),
+    ];
+    query
+        .columns(cols)
+        .from(NodeIden::Table)
+        .join(
+            JoinType::Join,
+            CanvasIden::Table,
+            Expr::col((NodeIden::Table, NodeIden::CanvasId))
+                .equals((CanvasIden::Table, CanvasIden::Id)),
+        )
+        .and_where(Expr::col((NodeIden::Table, NodeIden::Deleted)).eq(0))
+        .and_where(Expr::col((CanvasIden::Table, CanvasIden::Deleted)).eq(0))
+        .and_where(Expr::col((NodeIden::Table, NodeIden::ShadowId)).is_null());
     for keyword in keywords {
-        let escaped = escape_like_pattern(keyword);
-        let pattern = format!("%{escaped}%");
-        sql.push_str(
-            " AND (node.title LIKE ? ESCAPE '\\' OR node.sub_title LIKE ? ESCAPE '\\' OR canvas.name LIKE ? ESCAPE '\\')",
+        let pattern = format!("%{}%", escape_like_pattern(keyword));
+        query.and_where(
+            Cond::any()
+                .add(
+                    Expr::col((NodeIden::Table, NodeIden::Title))
+                        .like(LikeExpr::new(pattern.clone()).escape('\\')),
+                )
+                .add(
+                    Expr::col((NodeIden::Table, NodeIden::SubTitle))
+                        .like(LikeExpr::new(pattern.clone()).escape('\\')),
+                )
+                .add(
+                    Expr::col((CanvasIden::Table, CanvasIden::Name))
+                        .like(LikeExpr::new(pattern).escape('\\')),
+                )
+                .into(),
         );
-        params.push(pattern.clone());
-        params.push(pattern.clone());
-        params.push(pattern);
     }
-    sql.push_str(" ORDER BY canvas.name, node.title LIMIT 50");
+    query
+        .order_by((CanvasIden::Table, CanvasIden::Name), Order::Asc)
+        .order_by((NodeIden::Table, NodeIden::Title), Order::Asc)
+        .limit(50);
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
         .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(rusqlite::params_from_iter(params.iter()), map_search_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_search_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -315,18 +442,22 @@ pub fn search_by_keywords(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn batch_move(connection: &Connection, items: &[(String, f64, f64)]) -> Result<(), ErrorCode> {
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 value() 调用序（x, y）与 WHERE 序（id），
+    // 因此循环内按位绑定 params![x, y, id]。
+    let (sql, _) = Query::update()
+        .table(NodeIden::Table)
+        .value(NodeIden::X, 0.0_f64)
+        .value(NodeIden::Y, 0.0_f64)
+        .and_where(Expr::col(NodeIden::Id).eq(""))
+        .build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("UPDATE node SET x = :x, y = :y WHERE id = :id")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     for (id, x, y) in items {
         statement
-            .execute(rusqlite::named_params! {
-                ":id": id,
-                ":x": x,
-                ":y": y,
-            })
+            .execute(rusqlite::params![x, y, id])
             .map_err(|e| ErrorCode::DatabaseError {
                 detail: e.to_string(),
             })?;
@@ -348,19 +479,23 @@ pub fn batch_relocate(
     target_canvas_id: &str,
     items: &[(String, f64, f64)],
 ) -> Result<(), ErrorCode> {
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 value() 调用序（canvas_id, x, y）与
+    // WHERE 序（id），因此循环内按位绑定 params![target_canvas_id, x, y, id]。
+    let (sql, _) = Query::update()
+        .table(NodeIden::Table)
+        .value(NodeIden::CanvasId, "")
+        .value(NodeIden::X, 0.0_f64)
+        .value(NodeIden::Y, 0.0_f64)
+        .and_where(Expr::col(NodeIden::Id).eq(""))
+        .build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("UPDATE node SET canvas_id = :canvas_id, x = :x, y = :y WHERE id = :id")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     for (id, x, y) in items {
         statement
-            .execute(rusqlite::named_params! {
-                ":id": id,
-                ":canvas_id": target_canvas_id,
-                ":x": x,
-                ":y": y,
-            })
+            .execute(rusqlite::params![target_canvas_id, x, y, id])
             .map_err(|e| ErrorCode::DatabaseError {
                 detail: e.to_string(),
             })?;
@@ -376,17 +511,20 @@ pub fn batch_relocate(
 /// # 返回值
 /// 返回符合条件的节点颜色条目列表；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_colored(connection: &Connection) -> Result<Vec<NodeColorEntry>, ErrorCode> {
+    let query = Query::select()
+        .columns([NodeIden::Title, NodeIden::Color])
+        .from(NodeIden::Table)
+        .and_where(Expr::col(NodeIden::Deleted).eq(0))
+        .and_where(Expr::col(NodeIden::Color).ne(""))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT title, color
-            FROM node
-            WHERE deleted = 0 AND color != ''",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map([], |row| {
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), |row| {
             Ok(NodeColorEntry {
                 title: row.get(0)?,
                 color: row.get(1)?,
@@ -845,5 +983,23 @@ mod tests {
         crate::business::user_database::canvas::dao::insert(&connection, &canvas_shadow).unwrap();
         let results = search_by_keywords(&connection, &["Findable".to_string()]).unwrap();
         assert!(!results.iter().any(|n| n.id == "shadow-searchable"));
+    }
+
+    /// STRICT 生效验证：向 TEXT 列（title）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_node_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO node (id, canvas_id, x, y, title, sub_title, canvas_ref_id, deleted, color, shadow_id)
+                VALUES ('strict-violation', 'canvas-1', 0.0, 0.0, x'0102', '', NULL, 0, '', NULL)",
+                [],
+            ),
+            Err(_)
+        ));
     }
 }

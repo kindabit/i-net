@@ -1,7 +1,29 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 
+use crate::business::user_database::canvas::dao::CanvasIden;
 use crate::business::user_database::entity::Edge;
+use crate::business::user_database::node::dao::NodeIden;
 use crate::error_code::ErrorCode;
+use crate::util::sea_query_util::values_to_params;
+use sea_query::{
+    Asterisk, ColumnDef, ColumnType, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Func, Index,
+    Query, SqliteQueryBuilder, Table,
+};
+
+/// edge 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
+#[derive(sea_query::Iden)]
+pub(crate) enum EdgeIden {
+    #[iden = "edge"]
+    Table,
+    Id,
+    CanvasId,
+    SourceId,
+    SourcePort,
+    TargetId,
+    TargetPort,
+    Title,
+    Description,
+}
 
 /// 从查询结果行构造 Edge。
 fn map_row(row: &Row) -> rusqlite::Result<Edge> {
@@ -25,21 +47,57 @@ fn map_row(row: &Row) -> rusqlite::Result<Edge> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
-    connection
-        .execute(
-            "CREATE TABLE edge (
-                id TEXT PRIMARY KEY,
-                canvas_id TEXT NOT NULL REFERENCES canvas(id) ON DELETE CASCADE,
-                source_id TEXT NOT NULL REFERENCES node(id) ON DELETE CASCADE,
-                source_port TEXT NOT NULL,
-                target_id TEXT NOT NULL REFERENCES node(id) ON DELETE CASCADE,
-                target_port TEXT NOT NULL,
-                title TEXT NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT '',
-                UNIQUE (source_id, target_id)
-            ) STRICT",
-            [],
+    let mut fk_canvas = ForeignKey::create();
+    fk_canvas
+        .from(EdgeIden::Table, EdgeIden::CanvasId)
+        .to(CanvasIden::Table, CanvasIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut fk_source = ForeignKey::create();
+    fk_source
+        .from(EdgeIden::Table, EdgeIden::SourceId)
+        .to(NodeIden::Table, NodeIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut fk_target = ForeignKey::create();
+    fk_target
+        .from(EdgeIden::Table, EdgeIden::TargetId)
+        .to(NodeIden::Table, NodeIden::Id)
+        .on_delete(ForeignKeyAction::Cascade);
+    let mut source_target_unique = Index::create();
+    source_target_unique
+        .unique()
+        .col(EdgeIden::SourceId)
+        .col(EdgeIden::TargetId);
+    let table = Table::create()
+        .table(EdgeIden::Table)
+        .col(
+            ColumnDef::new_with_type(EdgeIden::Id, ColumnType::custom("TEXT"))
+                .primary_key()
+                .not_null(),
         )
+        .col(ColumnDef::new_with_type(EdgeIden::CanvasId, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::SourceId, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::SourcePort, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::TargetId, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::TargetPort, ColumnType::custom("TEXT")).not_null())
+        .col(
+            ColumnDef::new_with_type(EdgeIden::Title, ColumnType::custom("TEXT"))
+                .not_null()
+                .default(""),
+        )
+        .col(
+            ColumnDef::new_with_type(EdgeIden::Description, ColumnType::custom("TEXT"))
+                .not_null()
+                .default(""),
+        )
+        .foreign_key(&mut fk_canvas)
+        .foreign_key(&mut fk_source)
+        .foreign_key(&mut fk_target)
+        .index(&mut source_target_unique)
+        .extra("STRICT")
+        .take();
+    let sql = table.to_string(SqliteQueryBuilder);
+    connection
+        .execute(&sql, [])
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -55,21 +113,32 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn insert(connection: &Connection, edge: &Edge) -> Result<(), ErrorCode> {
+    let query = Query::insert()
+        .into_table(EdgeIden::Table)
+        .columns([
+            EdgeIden::Id,
+            EdgeIden::CanvasId,
+            EdgeIden::SourceId,
+            EdgeIden::SourcePort,
+            EdgeIden::TargetId,
+            EdgeIden::TargetPort,
+            EdgeIden::Title,
+            EdgeIden::Description,
+        ])
+        .values_panic([
+            (&edge.id).into(),
+            (&edge.canvas_id).into(),
+            (&edge.source_id).into(),
+            (&edge.source_port).into(),
+            (&edge.target_id).into(),
+            (&edge.target_port).into(),
+            (&edge.title).into(),
+            (&edge.description).into(),
+        ])
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "INSERT INTO edge (id, canvas_id, source_id, source_port, target_id, target_port, title, description)
-            VALUES (:id, :canvas_id, :source_id, :source_port, :target_id, :target_port, :title, :description)",
-            rusqlite::named_params! {
-                ":id": edge.id,
-                ":canvas_id": edge.canvas_id,
-                ":source_id": edge.source_id,
-                ":source_port": edge.source_port,
-                ":target_id": edge.target_id,
-                ":target_port": edge.target_port,
-                ":title": edge.title,
-                ":description": edge.description,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -85,12 +154,25 @@ pub fn insert(connection: &Connection, edge: &Edge) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 返回查询到的边，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Edge>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            EdgeIden::Id,
+            EdgeIden::CanvasId,
+            EdgeIden::SourceId,
+            EdgeIden::SourcePort,
+            EdgeIden::TargetId,
+            EdgeIden::TargetPort,
+            EdgeIden::Title,
+            EdgeIden::Description,
+        ])
+        .from(EdgeIden::Table)
+        .and_where(Expr::col(EdgeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, canvas_id, source_id, source_port, target_id, target_port, title, description
-            FROM edge
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -115,17 +197,17 @@ pub fn update_title_and_description(
     title: &str,
     description: &str,
 ) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(EdgeIden::Table)
+        .values([
+            (EdgeIden::Title, title.into()),
+            (EdgeIden::Description, description.into()),
+        ])
+        .and_where(Expr::col(EdgeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE edge
-            SET title = :title, description = :description
-            WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": id,
-                ":title": title,
-                ":description": description,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -148,15 +230,17 @@ pub fn update_ports(
     source_port: &str,
     target_port: &str,
 ) -> Result<(), ErrorCode> {
+    let query = Query::update()
+        .table(EdgeIden::Table)
+        .values([
+            (EdgeIden::SourcePort, source_port.into()),
+            (EdgeIden::TargetPort, target_port.into()),
+        ])
+        .and_where(Expr::col(EdgeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "UPDATE edge SET source_port = :source_port, target_port = :target_port WHERE id = :id",
-            rusqlite::named_params! {
-                ":id": id,
-                ":source_port": source_port,
-                ":target_port": target_port,
-            },
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -175,17 +259,28 @@ pub fn select_by_canvas_id(
     connection: &Connection,
     canvas_id: &str,
 ) -> Result<Vec<Edge>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            EdgeIden::Id,
+            EdgeIden::CanvasId,
+            EdgeIden::SourceId,
+            EdgeIden::SourcePort,
+            EdgeIden::TargetId,
+            EdgeIden::TargetPort,
+            EdgeIden::Title,
+            EdgeIden::Description,
+        ])
+        .from(EdgeIden::Table)
+        .and_where(Expr::col(EdgeIden::CanvasId).eq(canvas_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare(
-            "SELECT id, canvas_id, source_id, source_port, target_id, target_port, title, description
-            FROM edge
-            WHERE canvas_id = :canvas_id",
-        )
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     let rows = statement
-        .query_map(rusqlite::named_params! {":canvas_id": canvas_id}, map_row)
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_row)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -204,12 +299,13 @@ pub fn select_by_canvas_id(
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn delete_by_id(connection: &Connection, id: &str) -> Result<(), ErrorCode> {
+    let query = Query::delete()
+        .from_table(EdgeIden::Table)
+        .and_where(Expr::col(EdgeIden::Id).eq(id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
-        .execute(
-            "DELETE FROM edge
-            WHERE id = :id",
-            rusqlite::named_params! {":id": id},
-        )
+        .execute(&sql, rusqlite::params_from_iter(values_to_params(values)))
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
@@ -230,17 +326,21 @@ pub fn batch_update_canvas_id(
     ids: &[String],
     canvas_id: &str,
 ) -> Result<(), ErrorCode> {
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 value() 调用序（canvas_id）与 WHERE 序（id），
+    // 因此循环内按位绑定 params![canvas_id, id]。
+    let (sql, _) = Query::update()
+        .table(EdgeIden::Table)
+        .value(EdgeIden::CanvasId, "")
+        .and_where(Expr::col(EdgeIden::Id).eq(""))
+        .build(SqliteQueryBuilder);
     let mut statement = connection
-        .prepare("UPDATE edge SET canvas_id = :canvas_id WHERE id = :id")
+        .prepare(&sql)
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
     for id in ids {
         statement
-            .execute(rusqlite::named_params! {
-                ":id": id,
-                ":canvas_id": canvas_id,
-            })
+            .execute(rusqlite::params![canvas_id, id])
             .map_err(|e| ErrorCode::DatabaseError {
                 detail: e.to_string(),
             })?;
@@ -263,15 +363,17 @@ pub fn exists_between(
     source_id: &str,
     target_id: &str,
 ) -> Result<bool, ErrorCode> {
+    let query = Query::select()
+        .expr(Func::count(Expr::col(Asterisk)))
+        .from(EdgeIden::Table)
+        .and_where(Expr::col(EdgeIden::SourceId).eq(source_id))
+        .and_where(Expr::col(EdgeIden::TargetId).eq(target_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     let count: i64 = connection
         .query_row(
-            "SELECT COUNT(*)
-            FROM edge
-            WHERE source_id = :source_id AND target_id = :target_id",
-            rusqlite::named_params! {
-                ":source_id": source_id,
-                ":target_id": target_id,
-            },
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             |row| row.get(0),
         )
         .map_err(|e| ErrorCode::DatabaseError {
@@ -294,12 +396,26 @@ pub fn select_between(
     source_id: &str,
     target_id: &str,
 ) -> Result<Option<Edge>, ErrorCode> {
+    let query = Query::select()
+        .columns([
+            EdgeIden::Id,
+            EdgeIden::CanvasId,
+            EdgeIden::SourceId,
+            EdgeIden::SourcePort,
+            EdgeIden::TargetId,
+            EdgeIden::TargetPort,
+            EdgeIden::Title,
+            EdgeIden::Description,
+        ])
+        .from(EdgeIden::Table)
+        .and_where(Expr::col(EdgeIden::SourceId).eq(source_id))
+        .and_where(Expr::col(EdgeIden::TargetId).eq(target_id))
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
     connection
         .query_row(
-            "SELECT id, canvas_id, source_id, source_port, target_id, target_port, title, description
-            FROM edge
-            WHERE source_id = :source_id AND target_id = :target_id",
-            rusqlite::named_params! {":source_id": source_id, ":target_id": target_id},
+            &sql,
+            rusqlite::params_from_iter(values_to_params(values)),
             map_row,
         )
         .optional()
@@ -478,6 +594,24 @@ mod tests {
         assert!(matches!(
             batch_update_canvas_id(&connection2, &["any-id".to_string()], "canvas-x"),
             Err(ErrorCode::DatabaseError { .. })
+        ));
+    }
+
+    /// STRICT 生效验证：向 TEXT 列（title）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。
+    #[test]
+    fn test_edge_strict_type_enforced() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .unwrap();
+        create_table(&connection).unwrap();
+        assert!(matches!(
+            connection.execute(
+                "INSERT INTO edge (id, canvas_id, source_id, source_port, target_id, target_port, title, description)
+                VALUES ('strict-violation', 'canvas-1', 'node-1', 'right', 'node-2', 'left', x'0102', '')",
+                [],
+            ),
+            Err(_)
         ));
     }
 }
