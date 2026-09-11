@@ -30,10 +30,12 @@ const emit = defineEmits<{
 /** 按字段类型解析出的值编辑器组件；无对应编辑器时为 undefined。 */
 const editorComponent = computed(() => fieldEditorComponent(props.fieldType));
 
+/** 按字段类型解析出的类型定义；类型不存在时为 undefined。 */
+const fieldTypeDef = computed(() => getFieldTypeDef(props.fieldType));
+
 /** 字段类型支持字典绑定且已绑定字典时，获取绑定节点的直接子节点 value 作为候选值；否则为 undefined。 */
 const editorDictionaryItems = computed(() => {
-  if (!getFieldTypeDef(props.fieldType)?.supportsDictionary)
-    return undefined;
+  if (!fieldTypeDef.value?.supportsDictionary) return undefined;
   if (!props.dictionaryId) return undefined;
   return getDictionaryDirectChildren(props.dictionaryId);
 });
@@ -64,6 +66,7 @@ async function copyFieldValue(): Promise<void> {
       :dictionary-items="editorDictionaryItems"
       :error-highlight="errorHighlight"
       :readonly="readonly"
+      :field-type-def="fieldTypeDef"
       @update:model-value="emit('update:modelValue', $event)"
     />
     <VBtn
