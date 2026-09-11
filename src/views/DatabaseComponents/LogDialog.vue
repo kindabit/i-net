@@ -7,11 +7,11 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { d, t, te, tm, currentLocale } from "@/i18n";
+import { d, t, tm, currentLocale } from "@/i18n";
 import { userDatabaseLogList } from "@/api";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
-import type { LogListResponse, NodeFieldChange } from "@/api-types";
-import { fieldTypeDisplayName, isFieldTypeMasked } from "@/field-types";
+import type { LogListResponse } from "@/api-types";
+import LogActionContent from "./LogActionContent.vue";
 
 const PAGE_SIZE = 20;
 
@@ -60,98 +60,6 @@ const actionOptions = computed(() => {
     value: variant,
   }));
 });
-
-/**
- * 将日志条目的 action.data 转换为 i18n 插值参数。
- * @param entry 日志条目
- * @returns 键值对形式的插值参数对象
- */
-function detailParams(entry: LogListResponse): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(entry.action.data).map(([k, v]) => [k, String(v)]),
-  );
-}
-
-/**
- * 判断日志条目是否为节点字段修改操作。
- * @param entry 日志条目
- * @returns 是节点字段修改操作时返回 true，否则返回 false
- */
-function isNodeFieldsModify(entry: LogListResponse): boolean {
-  return entry.action.variant === "NodeFieldsModify";
-}
-
-/**
- * 从日志条目中提取节点字段修改的详细数据。
- * @param entry 日志条目，必须为 NodeFieldsModify 类型
- * @returns 包含节点标题和变更列表的数据对象
- */
-function getNodeFieldsModifyData(entry: LogListResponse) {
-  return entry.action.data as unknown as {
-    node_title: string;
-    changes: NodeFieldChange[];
-  };
-}
-
-/**
- * 格式化日志中的字段变更值：无值显示空值文案；掩码且未开启明文显示时显示圆点；否则直接显示值原文。
- * @param value 字段值字符串
- * @param masked 该字段类型是否掩码显示
- * @returns 用于展示的字符串
- */
-function formatChangeValue(value: unknown, masked: boolean): string {
-  const str = value as string | null;
-  if (str === null || str === undefined) return t("log.empty-value");
-  if (masked && !showSensitive.value) return "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
-  return str;
-}
-
-/**
- * 渲染单条字段变更的日志文案。
- * @param change 节点字段变更对象
- * @returns 可直接展示的文案字符串
- */
-function renderChange(change: NodeFieldChange): string {
-  switch (change.variant) {
-    case "Added": {
-      const typeName = fieldTypeDisplayName(change.data.field_type);
-      const masked = isFieldTypeMasked(change.data.field_type);
-      const value = formatChangeValue(change.data.value, masked);
-      return t("log.node-fields-change-added", {
-        name: change.data.name,
-        type: typeName,
-        value,
-      });
-    }
-    case "Modified": {
-      const oldTypeName = fieldTypeDisplayName(change.data.old_field_type);
-      const newTypeName = fieldTypeDisplayName(change.data.new_field_type);
-      // 新旧类型任一为掩码类型时，新旧值均掩码显示。
-      const masked =
-        isFieldTypeMasked(change.data.old_field_type) ||
-        isFieldTypeMasked(change.data.new_field_type);
-      const oldValue = formatChangeValue(change.data.old_value, masked);
-      const newValue = formatChangeValue(change.data.new_value, masked);
-      return t("log.node-fields-change-modified", {
-        name: change.data.name,
-        oldType: oldTypeName,
-        newType: newTypeName,
-        oldValue,
-        newValue,
-      });
-    }
-    case "Removed": {
-      const typeName = fieldTypeDisplayName(change.data.field_type);
-      const masked = isFieldTypeMasked(change.data.field_type);
-      const oldValue = formatChangeValue(change.data.old_value, masked);
-      return t("log.node-fields-change-removed", {
-        name: change.data.name,
-        type: typeName,
-        oldValue,
-      });
-    }
-  }
-}
 
 /**
  * 加载当前页的日志数据。
@@ -361,49 +269,10 @@ defineExpose({ open, close });
         </p>
         <VList v-else class="pa-0">
           <VListItem v-for="entry in items" :key="entry.id">
-            <template v-if="isNodeFieldsModify(entry)">
-              <div>
-                <div class="text-body-2 font-weight-medium">
-                  {{ t("log.action.NodeFieldsModify.name") }}
-                </div>
-                <div class="text-body-2">
-                  {{
-                    t("log.action.NodeFieldsModify.detail", {
-                      node_title: getNodeFieldsModifyData(entry).node_title,
-                    })
-                  }}
-                </div>
-                <div class="log-changes ml-4 mt-1">
-                  <div
-                    v-for="(change, ci) in getNodeFieldsModifyData(entry)
-                      .changes"
-                    :key="ci"
-                    class="text-caption log-change-item"
-                  >
-                    {{ renderChange(change) }}
-                  </div>
-                </div>
-              </div>
-            </template>
-            <template v-else>
-              <VListItemTitle>
-                {{
-                  te(`log.action.${entry.action.variant}.name`)
-                    ? t(`log.action.${entry.action.variant}.name`)
-                    : entry.action.variant
-                }}
-              </VListItemTitle>
-              <VListItemSubtitle>
-                {{
-                  te(`log.action.${entry.action.variant}.detail`)
-                    ? t(
-                        `log.action.${entry.action.variant}.detail`,
-                        detailParams(entry),
-                      )
-                    : ""
-                }}
-              </VListItemSubtitle>
-            </template>
+            <LogActionContent
+              :action="entry.action"
+              :show-sensitive="showSensitive"
+            />
             <template #append>
               <span class="text-caption text-secondary">
                 {{ d(new Date(entry.time), "short") }}
@@ -464,13 +333,5 @@ defineExpose({ open, close });
   max-height: 30rem;
   overflow-y: auto;
   padding: 0;
-}
-
-.log-changes {
-  .log-change-item {
-    padding-top: 0.125rem;
-    padding-bottom: 0.125rem;
-    color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  }
 }
 </style>

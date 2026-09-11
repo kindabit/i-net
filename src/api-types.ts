@@ -113,10 +113,14 @@ export interface Edge {
 /**
  * 日志行为（对应后端 Action 枚举），采用 serde tag = "variant"、content = "data"
  * 的序列化格式；variant 和 data 直接透传给 i18n 模块做文案插值（见 i18n 的 log 模块）。
+ * data 为不透明键值对；个别行为（如节点字段编辑）的嵌套数据形状由使用处自行收窄。
  */
-export type LogAction =
-  | { variant: string; data: Record<string, unknown> }
-  | { variant: "NodeFieldsModify"; data: { node_title: string; changes: NodeFieldChange[] } };
+export interface LogAction {
+  /** 行为名（Action 枚举的 variant 名） */
+  variant: string;
+  /** 行为数据载荷 */
+  data: Record<string, unknown>;
+}
 
 /** 日志条目（对应后端 LogListResponse） */
 export interface LogListResponse {
