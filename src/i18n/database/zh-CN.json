@@ -236,7 +236,9 @@
       "tz-converted-hint": "该值原时区为 {tz}，已转换为本地时区显示",
       "instant-empty": "未设置",
       "calendar-title": "{year}年{monthNumber}月",
-      "calendar-year-title": "{year}年"
+      "calendar-year-title": "{year}年",
+      "open-value": "打开",
+      "open-failed": "打开失败，请检查系统是否已注册对应应用"
     },
     "dictionary": {
       "manager-title": "字典管理",

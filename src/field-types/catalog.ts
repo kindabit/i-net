@@ -8,6 +8,8 @@
 import { isValidInstantValue, validateRangeValue } from "./date-time";
 import type { Precision } from "./date-time";
 import { t } from "@/i18n";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { snackbarText } from "@/composables/use-snackbar";
 
 /** 底层数据类型，与字段类型 key 的冒号前缀一致。 */
 export type ValueKind = "string" | "decimal" | "instant" | "instant-range";
@@ -32,6 +34,12 @@ export interface FieldTypeDef {
    * @returns 校验不通过时返回错误提示的 i18n key 后缀（配合 database.field-type. 前缀使用），通过时返回 null；一个类型可返回多种不同的错误 key
    */
   validator: (value: string) => string | null;
+  /**
+   * 快捷打开函数：将字段值归一化后调用系统默认应用打开，失败时自行弹出错误提示。
+   * 仅 email/url 类型定义；未定义时编辑器不显示打开按钮。
+   * @param value 字段值字符串（非空；调用方保证）
+   */
+  opener?: (value: string) => Promise<void>;
 }
 
 /**
@@ -41,6 +49,21 @@ export interface FieldTypeDef {
  */
 function noValidation(_value: string): string | null {
   return null;
+}
+
+/**
+ * email/url 类型共用的快捷打开实现：归一化字段值后调用系统默认应用打开。
+ * 已含 scheme 前缀（如 https:、mailto:、ftp:）的值原样传递；裸邮箱地址拼接 mailto: 前缀。
+ * 打开失败时弹出错误提示，不向调用方抛出异常。
+ * @param value 字段值字符串（非空；调用方保证）
+ */
+async function openFieldValue(value: string): Promise<void> {
+  const url = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `mailto:${value}`;
+  try {
+    await openUrl(url);
+  } catch {
+    snackbarText(t("database.field-editor.open-failed"), "error");
+  }
 }
 
 /** 全部字段类型定义，顺序即类型选择器中的展示顺序。 */
@@ -63,6 +86,7 @@ export const FIELD_TYPES: readonly FieldTypeDef[] = [
     supportsDictionary: false,
     validator: (value: string): string | null =>
       /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value) ? null : "invalid-email",
+    opener: openFieldValue,
   },
   {
     key: "string:url",
@@ -77,6 +101,7 @@ export const FIELD_TYPES: readonly FieldTypeDef[] = [
       )
         ? null
         : "invalid-url",
+    opener: openFieldValue,
   },
   {
     key: "string:multiple-line",

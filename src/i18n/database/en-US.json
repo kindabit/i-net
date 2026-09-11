@@ -236,7 +236,9 @@
       "tz-converted-hint": "Original timezone: {tz}; displayed after conversion to the local timezone",
       "instant-empty": "Not set",
       "calendar-title": "{month} {year}",
-      "calendar-year-title": "{year}"
+      "calendar-year-title": "{year}",
+      "open-value": "Open",
+      "open-failed": "Failed to open. Check that a default app is registered."
     },
     "dictionary": {
       "manager-title": "Dictionary Manager",
