@@ -17,7 +17,6 @@ import { Controls } from "@vue-flow/controls";
 import { t } from "@/i18n";
 import {
   userDatabaseCanvasList,
-  userDatabaseCanvasMoveCanvas,
   userDatabaseCanvasMoveCanvases,
   userDatabaseCanvasRename,
 } from "@/api";
@@ -226,7 +225,7 @@ function onDrop(event: DragEvent) {
  * vue-flow store 已持有每个被拖动节点的最终 position；此处把每个新 position 整体替换回
  * 父组件 nodes.value 中对应节点，避免后续 filter / push 操作触发 parseNode 把 store 中
  * 已拖动位置覆盖回 props 的初始坐标。
- * 持久化：单节点 userDatabaseCanvasMoveCanvas；多节点 userDatabaseCanvasMoveCanvases。
+ * 持久化：统一走批量移动接口 userDatabaseCanvasMoveCanvases（单个画布移动由后端归一为同一条目处理）。
  * @param event vue-flow NodeDragEvent（event / node / nodes）
  * @returns 无返回值
  */
@@ -239,9 +238,7 @@ function onNodeDragStop(event: { event: MouseEvent | TouchEvent; node: VFNode; n
     node.position = { x: m.position.x, y: m.position.y };
   }
   const items = moved.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
-  if (items.length === 1) {
-    userDatabaseCanvasMoveCanvas(items[0].id, items[0].x, items[0].y).catch(snackbarErrorCode);
-  } else if (items.length > 1) {
+  if (items.length > 0) {
     userDatabaseCanvasMoveCanvases(items).catch(snackbarErrorCode);
   }
 }

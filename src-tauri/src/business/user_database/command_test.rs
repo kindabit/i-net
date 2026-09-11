@@ -80,15 +80,6 @@ fn test_user_database_command_all_functions() {
         canvas::command::create::preprocess(root_id.clone(), " child ".to_string()).unwrap();
     assert_eq!(child.name, "child");
 
-    // canvas::command::move_canvas::preprocess 失败路径：id 非法时报 InvalidCanvasId。
-    assert!(matches!(
-        canvas::command::move_canvas::preprocess("no-such-id".to_string(), 0.0, 0.0),
-        Err(ErrorCode::InvalidCanvasId { .. })
-    ));
-
-    // canvas::command::move_canvas::preprocess 成功路径。
-    canvas::command::move_canvas::preprocess(child.id.clone(), 100.0, 200.0).unwrap();
-
     // canvas::command::rename::preprocess 失败路径：id 非法时报 InvalidCanvasId，名称为空时报 EmptyCanvasName。
     assert!(matches!(
         canvas::command::rename::preprocess("no-such-id".to_string(), "x".to_string()),
@@ -283,15 +274,6 @@ fn test_user_database_command_all_functions() {
     .unwrap();
     assert_eq!(cv_node_2.title, "cv-node 2");
     assert!(cv_node_2.canvas_ref_id.is_some());
-
-    // node::command::move_node::preprocess 失败路径：id 非法时报 InvalidNodeId。
-    assert!(matches!(
-        node::command::move_node::preprocess("no-such-id".to_string(), 0.0, 0.0),
-        Err(ErrorCode::InvalidNodeId { .. })
-    ));
-
-    // node::command::move_node::preprocess 成功路径。
-    node::command::move_node::preprocess(node_1.id.clone(), 30.0, 40.0).unwrap();
 
     // node::command::modify::preprocess 失败路径：id 非法时报 InvalidNodeId。
     assert!(matches!(

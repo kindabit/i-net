@@ -32,13 +32,13 @@ pub enum NodeFieldChange {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "variant", content = "data")]
 pub enum Action {
-    /// 对画布宇宙中的画布节点执行自动布局，包含实际位移的画布数量。
+    /// 批量移动画布且实际位移数量大于 1（含画布宇宙自动布局），包含实际位移的画布数量。
     AutoLayoutCanvasNodes { canvas_count: i64 },
-    /// 对画布内节点执行自动布局，包含实际位移的节点数量。
+    /// 批量移动节点且实际位移数量大于 1（含画布内自动布局），包含实际位移的节点数量。
     AutoLayoutDataNodes { node_count: i64 },
     /// 创建画布，包含画布名称。
     CanvasCreate { name: String },
-    /// 移动画布，包含画布名称、旧坐标和新坐标。
+    /// 移动画布且实际位移数量为 1，包含画布名称、旧坐标和新坐标。
     CanvasMove {
         name: String,
         old_x: f64,
@@ -62,7 +62,7 @@ pub enum Action {
     CanvasRename { old_name: String, new_name: String },
     /// 创建节点，包含节点标题和副标题。
     NodeCreate { title: String, sub_title: String },
-    /// 移动节点，包含节点标题、旧坐标和新坐标。
+    /// 移动节点且实际位移数量为 1，包含节点标题、旧坐标和新坐标。
     NodeMove {
         title: String,
         old_x: f64,

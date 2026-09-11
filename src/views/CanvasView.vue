@@ -22,7 +22,6 @@ import { t } from "@/i18n";
 import {
   userDatabaseNodeList,
   userDatabaseEdgeList,
-  userDatabaseNodeMoveNode,
   userDatabaseNodeMoveNodes,
   userDatabaseNodeRelocateNodes,
   userDatabaseNodeCreate,
@@ -633,7 +632,7 @@ function onNodeDragStop(event: NodeDragEvent) {
 /**
  * 画布内移动持久化：先把被拖动节点的最终 position 回写进 nodes.value
  * （避免后续 filter/push 触发 parseNode 用 props 旧坐标回滚 store），
- * 再单节点走单条 API、多节点走批量 API。
+ * 再统一走批量移动接口（单个节点移动由后端归一为同一条目处理）。
  * @param moved 被拖动的节点数组
  * @returns 无返回值
  */
@@ -645,9 +644,7 @@ function persistMove(moved: VFNode[]) {
     node.position = { x: m.position.x, y: m.position.y };
   }
   const items = moved.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
-  if (items.length === 1) {
-    userDatabaseNodeMoveNode(items[0].id, items[0].x, items[0].y).catch(snackbarErrorCode);
-  } else if (items.length > 1) {
+  if (items.length > 0) {
     userDatabaseNodeMoveNodes(items).catch(snackbarErrorCode);
   }
 }

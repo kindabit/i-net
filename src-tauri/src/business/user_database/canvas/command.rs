@@ -2,7 +2,6 @@ pub mod color_list;
 pub mod create;
 pub mod list;
 pub mod logical_delete;
-pub mod move_canvas;
 pub mod move_canvases;
 pub mod physical_delete;
 pub mod rename;

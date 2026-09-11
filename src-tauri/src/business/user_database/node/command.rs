@@ -4,7 +4,6 @@ pub mod create;
 pub mod list;
 pub mod logical_delete;
 pub mod modify;
-pub mod move_node;
 pub mod move_nodes;
 pub mod physical_delete;
 pub mod relocate_nodes;

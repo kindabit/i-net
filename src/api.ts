@@ -166,22 +166,7 @@ export async function userDatabaseCanvasCreate(
 }
 
 /**
- * 修改画布的坐标。
- * @param id 画布 id
- * @param x 新 x 坐标
- * @param y 新 y 坐标
- * @returns 无返回值
- */
-export async function userDatabaseCanvasMoveCanvas(
-  id: string,
-  x: number,
-  y: number,
-): Promise<void> {
-  return invoke("user_database_canvas_move_canvas", { id, x, y });
-}
-
-/**
- * 批量移动画布的坐标。
+ * 批量移动画布的坐标（单个画布移动也走此接口）。
  * @param items 画布坐标列表，每个元素包含 id、x、y
  * @returns 无返回值
  */
@@ -342,22 +327,7 @@ export async function userDatabaseNodeCopy(
 }
 
 /**
- * 修改节点的坐标。
- * @param id 节点 id
- * @param x 新 x 坐标
- * @param y 新 y 坐标
- * @returns 无返回值
- */
-export async function userDatabaseNodeMoveNode(
-  id: string,
-  x: number,
-  y: number,
-): Promise<void> {
-  return invoke("user_database_node_move_node", { id, x, y });
-}
-
-/**
- * 批量移动节点的坐标。
+ * 批量移动节点的坐标（单个节点移动也走此接口）。
  * @param items 节点坐标列表，每个元素包含 id、x、y
  * @returns 无返回值
  */

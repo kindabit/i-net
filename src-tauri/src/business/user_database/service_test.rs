@@ -71,24 +71,39 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::CanvasNameAlreadyExists { .. })
     ));
 
-    // canvas::move_canvas 失败路径：画布不存在时报 NoCanvasWithSuchId。
+    // canvas::move_canvases 失败路径：画布不存在时报 NoCanvasWithSuchId。
     assert!(matches!(
-        canvas::service::move_canvas("no-such-id", 0.0, 0.0),
+        canvas::service::move_canvases(&[canvas::vo::MoveNodeVO {
+            id: "no-such-id".to_string(),
+            x: 0.0,
+            y: 0.0,
+        }]),
         Err(ErrorCode::NoCanvasWithSuchId { .. })
     ));
 
-    // canvas::move_canvas 成功路径：子画布坐标被更新为 (1000, 1000)。
-    canvas::service::move_canvas(&child.id, 1000.0, 1000.0).unwrap();
+    // canvas::move_canvases 成功路径（单个条目）：子画布坐标被更新为 (1000, 1000)，
+    // 实际位移数量为 1，产生 CanvasMove 日志（在阶段五的日志断言中覆盖）。
+    canvas::service::move_canvases(&[canvas::vo::MoveNodeVO {
+        id: child.id.clone(),
+        x: 1000.0,
+        y: 1000.0,
+    }])
+    .unwrap();
     let moved = canvas::service::list(false)
         .unwrap()
         .into_iter()
         .find(|canvas| canvas.id == child.id)
         .unwrap();
     assert_eq!((moved.x, moved.y), (1000.0, 1000.0));
-    // canvas::move_canvas 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
+    // canvas::move_canvases 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
     // 且不产生新日志（日志总数不变）。
     let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
-    canvas::service::move_canvas(&child.id, 1000.0, 1000.0).unwrap();
+    canvas::service::move_canvases(&[canvas::vo::MoveNodeVO {
+        id: child.id.clone(),
+        x: 1000.0,
+        y: 1000.0,
+    }])
+    .unwrap();
     assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before);
 
     // canvas::create 成功路径：在子画布下新建孙画布，layout 以子画布新坐标为圆心。
@@ -730,14 +745,23 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::EdgeWouldFormCycle)
     ));
 
-    // node::move_node 失败路径：节点不存在时报 NoNodeWithSuchId。
+    // node::move_nodes 失败路径：节点不存在时报 NoNodeWithSuchId。
     assert!(matches!(
-        node::service::move_node("no-such-id", 0.0, 0.0),
+        node::service::move_nodes(&[node::vo::MoveNodeVO {
+            id: "no-such-id".to_string(),
+            x: 0.0,
+            y: 0.0,
+        }]),
         Err(ErrorCode::NoNodeWithSuchId { .. })
     ));
 
-    // node::move_node 成功路径：坐标被更新。
-    node::service::move_node(&node_1.id, 30.0, 40.0).unwrap();
+    // node::move_nodes 成功路径（单个条目）：坐标被更新。
+    node::service::move_nodes(&[node::vo::MoveNodeVO {
+        id: node_1.id.clone(),
+        x: 30.0,
+        y: 40.0,
+    }])
+    .unwrap();
 
     // node::modify 失败路径：节点不存在时报 NoNodeWithSuchId。
     assert!(matches!(
@@ -760,10 +784,15 @@ fn test_user_database_service_all_functions() {
     assert_eq!(modified.title, "title-1-new");
     assert_eq!(modified.sub_title, "sub-1-new");
     assert_eq!((modified.x, modified.y), (30.0, 40.0));
-    // node::move_node 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
+    // node::move_nodes 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
     // 且不产生新日志（日志总数不变）。
     let log_total_before_node = log::service::list(0, 1, LogFilter::default()).unwrap().total;
-    node::service::move_node(&node_1.id, 30.0, 40.0).unwrap();
+    node::service::move_nodes(&[node::vo::MoveNodeVO {
+        id: node_1.id.clone(),
+        x: 30.0,
+        y: 40.0,
+    }])
+    .unwrap();
     assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before_node);
 
     // node::logical_delete 失败路径：节点不存在时报 NoNodeWithSuchId。
@@ -2382,7 +2411,7 @@ fn test_user_database_service_all_functions() {
     lifecycle::service::close().unwrap();
     }
 
-    // == 阶段六：move_nodes / move_canvases 自动布局批量移动 ==
+    // == 阶段六：move_nodes / move_canvases 批量移动 ==
     {
     let id = registered.id.clone();
     lifecycle::service::initialize(&id, test::test_key()).unwrap();
@@ -2533,6 +2562,67 @@ fn test_user_database_service_all_functions() {
         log_total_before_no_move
     );
 
+    // move_nodes 成功路径（单个条目实际位移）：产生 NodeMove 日志，载荷为节点标题、旧坐标和新坐标。
+    let log_total_before_single = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    node::service::move_nodes(&[node::vo::MoveNodeVO {
+        id: node_a.id.clone(),
+        x: 150.0,
+        y: 250.0,
+    }])
+    .unwrap();
+    let updated_a_single = node::service::list(&child.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == node_a.id)
+        .unwrap();
+    assert_eq!((updated_a_single.x, updated_a_single.y), (150.0, 250.0));
+    let logs_after_single = log::service::list(0, 1000, LogFilter::default()).unwrap();
+    assert_eq!(logs_after_single.total, log_total_before_single + 1);
+    assert!(logs_after_single.items.iter().any(|e| matches!(
+        &e.action,
+        entity::Action::NodeMove { title, old_x, old_y, new_x, new_y }
+        if title == "batch-node-a" && *old_x == 100.0 && *old_y == 200.0 && *new_x == 150.0 && *new_y == 250.0
+    )));
+
+    // move_nodes 成功路径（多条目仅 1 个实际位移）：node_c 原地移动，
+    // 仅 node_b 实际位移，同样产生 NodeMove 日志而非 AutoLayoutDataNodes。
+    let log_total_before_partial = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    let items_partial = vec![
+        node::vo::MoveNodeVO {
+            id: node_b.id.clone(),
+            x: 350.0,
+            y: 450.0,
+        },
+        node::vo::MoveNodeVO {
+            id: node_c.id.clone(),
+            x: 50.0,
+            y: 60.0,
+        },
+    ];
+    node::service::move_nodes(&items_partial).unwrap();
+    let updated_b_partial = node::service::list(&child.id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.id == node_b.id)
+        .unwrap();
+    assert_eq!((updated_b_partial.x, updated_b_partial.y), (350.0, 450.0));
+    let logs_after_partial = log::service::list(0, 1000, LogFilter::default()).unwrap();
+    assert_eq!(logs_after_partial.total, log_total_before_partial + 1);
+    assert!(logs_after_partial.items.iter().any(|e| matches!(
+        &e.action,
+        entity::Action::NodeMove { title, old_x, old_y, new_x, new_y }
+        if title == "batch-node-b" && *old_x == 300.0 && *old_y == 400.0 && *new_x == 350.0 && *new_y == 450.0
+    )));
+    // AutoLayoutDataNodes 日志仍只有前面批量移动产生的一条。
+    assert_eq!(
+        logs_after_partial
+            .items
+            .iter()
+            .filter(|e| matches!(e.action, entity::Action::AutoLayoutDataNodes { .. }))
+            .count(),
+        1
+    );
+
     // move_canvases 失败路径：含不存在 id 时报 NoCanvasWithSuchId 且其它画布坐标未被更新。
     let canvas_d = canvas::service::create(&root_id, "canvas-d".to_string()).unwrap();
     let canvas_e = canvas::service::create(&root_id, "canvas-e".to_string()).unwrap();
@@ -2561,9 +2651,15 @@ fn test_user_database_service_all_functions() {
     // 只要没变成 (500, 600) 即可证明未更新。
     assert_ne!((unchanged_d.x, unchanged_d.y), (500.0, 600.0));
 
-    // move_canvases 成功路径：批量移动（canvas_e 原地移动，实际位移 1 个）。
+    // move_canvases 成功路径：批量移动（canvas_e 原地移动，实际位移 1 个），
+    // 实际位移数量为 1 时产生 CanvasMove 日志而非 AutoLayoutCanvasNodes。
     // canvas_d 移动到固定坐标 (500, 600)，其移动前坐标不等于该值已由上方失败路径的断言证明；
-    // canvas_e 的坐标由布局计算得出，需先读取才能构造原地移动项并校验其坐标不变。
+    // canvas_d 与 canvas_e 的移动前坐标由布局计算得出，需先读取以构造日志断言与原地移动项。
+    let canvas_d_before = canvas::service::list(false)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == canvas_d.id)
+        .unwrap();
     let canvas_e_before = canvas::service::list(false)
         .unwrap()
         .into_iter()
@@ -2597,18 +2693,16 @@ fn test_user_database_service_all_functions() {
         .find(|c| c.id == canvas_e.id)
         .unwrap();
     assert_eq!((updated_e.x, updated_e.y), (canvas_e_before.x, canvas_e_before.y));
-    // 验证只产生一条日志，action 为 AutoLayoutCanvasNodes，canvas_count=1。
+    // 验证只产生一条日志，action 为 CanvasMove，载荷记录 canvas_d 的名称与新旧坐标。
     let logs_after_canvas = log::service::list(0, 1000, LogFilter::default()).unwrap();
     assert_eq!(logs_after_canvas.total, log_total_before_canvas + 1);
-    let auto_layout_canvas_log = logs_after_canvas
-        .items
-        .iter()
-        .find(|e| matches!(e.action, entity::Action::AutoLayoutCanvasNodes { .. }))
-        .unwrap();
-    assert!(matches!(
-        auto_layout_canvas_log.action,
-        entity::Action::AutoLayoutCanvasNodes { canvas_count } if canvas_count == 1
-    ));
+    assert!(logs_after_canvas.items.iter().any(|e| matches!(
+        &e.action,
+        entity::Action::CanvasMove { name, old_x, old_y, new_x, new_y }
+        if name == "canvas-d"
+            && *old_x == canvas_d_before.x && *old_y == canvas_d_before.y
+            && *new_x == 500.0 && *new_y == 600.0
+    )));
 
     // move_canvases 成功路径：空列表成功返回且不产日志。
     let log_total_before_empty_canvas = log::service::list(0, 1, LogFilter::default()).unwrap().total;
@@ -2630,6 +2724,44 @@ fn test_user_database_service_all_functions() {
         log::service::list(0, 1, LogFilter::default()).unwrap().total,
         log_total_before_no_move_canvas
     );
+
+    // move_canvases 成功路径（多条目全部实际位移）：产生 AutoLayoutCanvasNodes 日志，canvas_count=2。
+    // canvas_d 当前位于 (500, 600)，canvas_e 仍位于 canvas_e_before，两者目标坐标均不同。
+    let log_total_before_multi_canvas = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    let items_canvas_multi = vec![
+        canvas::vo::MoveNodeVO {
+            id: canvas_d.id.clone(),
+            x: 700.0,
+            y: 800.0,
+        },
+        canvas::vo::MoveNodeVO {
+            id: canvas_e.id.clone(),
+            x: canvas_e_before.x + 100.0,
+            y: canvas_e_before.y + 100.0,
+        },
+    ];
+    canvas::service::move_canvases(&items_canvas_multi).unwrap();
+    let updated_d_multi = canvas::service::list(false)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == canvas_d.id)
+        .unwrap();
+    assert_eq!((updated_d_multi.x, updated_d_multi.y), (700.0, 800.0));
+    let updated_e_multi = canvas::service::list(false)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.id == canvas_e.id)
+        .unwrap();
+    assert_eq!(
+        (updated_e_multi.x, updated_e_multi.y),
+        (canvas_e_before.x + 100.0, canvas_e_before.y + 100.0)
+    );
+    let logs_after_multi_canvas = log::service::list(0, 1000, LogFilter::default()).unwrap();
+    assert_eq!(logs_after_multi_canvas.total, log_total_before_multi_canvas + 1);
+    assert!(logs_after_multi_canvas.items.iter().any(|e| matches!(
+        e.action,
+        entity::Action::AutoLayoutCanvasNodes { canvas_count } if canvas_count == 2
+    )));
 
     lifecycle::service::save().unwrap();
     lifecycle::service::close().unwrap();
