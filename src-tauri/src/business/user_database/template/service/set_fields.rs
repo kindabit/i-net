@@ -39,7 +39,7 @@ pub fn set_fields(template_id: &str, fields: &[TemplateFieldVO]) -> Result<(), E
     for f in fields {
         if let Some(ref dict_id) = f.dictionary_id {
             if !dictionary::dao::exist_by_id(&connection, dict_id)? {
-                return Err(ErrorCode::NoDictionaryEntryWithSuchId {
+                return Err(ErrorCode::NoDictionaryWithSuchId {
                     id: dict_id.clone(),
                 });
             }
@@ -53,7 +53,7 @@ pub fn set_fields(template_id: &str, fields: &[TemplateFieldVO]) -> Result<(), E
             template_id: template_id.to_string(),
             name: f.name.clone(),
             field_type: f.field_type.clone(),
-            order: i as i64,
+            sort_order: i as i64,
             dictionary_id: f.dictionary_id.clone(),
         };
         dao::insert_field(&connection, &field)?;

@@ -2,7 +2,7 @@ use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
 use crate::util::file_system_util;
 
-/// 删除孤儿附件文件：物理删除附件目录中无元数据的附件文件。
+/// 删除孤儿文件：物理删除附件目录中无元数据的附件文件。
 /// 不动表、不记日志（该文件无元数据身份）；文件不存在时不视为错误。
 ///
 /// # 参数

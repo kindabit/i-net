@@ -27,11 +27,11 @@ pub fn backup_restore_probe(app_handle: AppHandle) -> Result<Option<ProbeResult>
         })?,
         None => return Ok(None),
     };
-    let (recoverable, lost, limit) = service::probe(&target)?;
+    let (recoverable, lost, recoverable_limit) = service::probe(&target)?;
     Ok(Some(ProbeResult {
         recoverable,
         lost,
-        limit,
+        recoverable_limit,
         source_path: target.to_string_lossy().to_string(),
     }))
 }

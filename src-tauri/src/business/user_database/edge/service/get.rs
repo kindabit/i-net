@@ -51,11 +51,11 @@ mod tests {
                 x: 0.0,
                 y: 0.0,
                 title: node_id.to_string(),
-                sub_title: String::new(),
+                subtitle: String::new(),
                 canvas_ref_id: None,
                 deleted: false,
                 color: String::new(),
-                shadow_id: None,
+                shadow_producing_edge_id: None,
             };
             node_dao::insert(connection, &node).unwrap();
         }
@@ -68,9 +68,9 @@ mod tests {
             id: id.to_string(),
             canvas_id: canvas_id.to_string(),
             source_id: source_id.to_string(),
-            source_port: "right".to_string(),
+            source_handle: "right".to_string(),
             target_id: target_id.to_string(),
-            target_port: "left".to_string(),
+            target_handle: "left".to_string(),
             title: String::new(),
             description: String::new(),
         }

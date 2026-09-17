@@ -45,7 +45,7 @@ pub fn import(source_path: &str) -> Result<(), ErrorCode> {
     dictionary_set(&dictionaries)?;
 
     node_field_dao::clear_dangling_dictionary_ids(&connection)?;
-    template_dao::clear_dangling_field_dictionary_ids(&connection)?;
+    template_dao::clear_dangling_dictionary_ids(&connection)?;
 
     Ok(())
 }

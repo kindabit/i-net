@@ -6,7 +6,7 @@ use crate::business::user_database::{canvas, dictionary, edge, log, node, node_f
 use crate::error_code::ErrorCode;
 
 /// 数据迁移聚合导入（KeePass 2.0）：接收前端已构造好的节点与边数据，在根画布内创建一个
-/// 画布节点，其引用的新画布内批量写入全部普通节点、字段与父子边。全部写库操作聚合为一条
+/// 画布数据节点，其引用的新画布内批量写入全部数据节点、字段与父子边。全部写库操作聚合为一条
 /// NodesImport 日志（不逐节点/逐字段/逐边产生日志，因为被导入数据库的条目可能非常多）。
 ///
 /// 先校验后写库（两阶段）：校验阶段任何失败都不写库。
@@ -16,9 +16,9 @@ use crate::error_code::ErrorCode;
 /// 前端按深度优先先序产出节点，父节点下标恒小于子节点，强制前向即保证导入图无环。
 ///
 /// # 参数
-/// - `canvas_name`: 新画布的名称（画布节点标题与其保持一致），重名时自动追加 " 2"、" 3"…。
-/// - `canvas_node_x`: 画布节点在根画布中的 x 坐标。
-/// - `canvas_node_y`: 画布节点在根画布中的 y 坐标。
+/// - `canvas_name`: 新画布的名称（画布数据节点标题与其保持一致），重名时自动追加 " 2"、" 3"…。
+/// - `canvas_node_x`: 画布数据节点在根画布中的 x 坐标。
+/// - `canvas_node_y`: 画布数据节点在根画布中的 y 坐标。
 /// - `nodes`: 前端构造好的导入节点列表（第一个节点表示数据库本身，为树的根）。
 /// - `edges`: 前端构造好的父子边列表（下标引用 `nodes`）。
 ///
@@ -26,7 +26,7 @@ use crate::error_code::ErrorCode;
 /// 成功时返回 `Ok(新画布的 id)`（前端凭此跳转至新画布）；根画布不存在时返回
 /// `ErrorCode::NoCanvasWithSuchId`，
 /// 字段名重复时返回 `ErrorCode::DuplicateNodeFieldName`，
-/// 字典引用悬空时返回 `ErrorCode::NoDictionaryEntryWithSuchId`，
+/// 字典引用悬空时返回 `ErrorCode::NoDictionaryWithSuchId`，
 /// 边下标无效时返回 `ErrorCode::InvalidImportedEdgeIndex`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn import_keepass2(
@@ -56,7 +56,7 @@ pub fn import_keepass2(
         for field in &imported.fields {
             if let Some(ref dict_id) = field.dictionary_id {
                 if !dictionary::dao::exist_by_id(&connection, dict_id)? {
-                    return Err(ErrorCode::NoDictionaryEntryWithSuchId {
+                    return Err(ErrorCode::NoDictionaryWithSuchId {
                         id: dict_id.clone(),
                     });
                 }
@@ -76,7 +76,7 @@ pub fn import_keepass2(
     }
 
     // ===== 写库阶段 =====
-    // 画布名去重：从 canvas_name 开始，重名时追加 " 2"、" 3"…（与画布节点创建的去重逻辑语义一致）。
+    // 画布名去重：从 canvas_name 开始，重名时追加 " 2"、" 3"…（与画布数据节点创建的去重逻辑语义一致）。
     let mut final_name = canvas_name.to_string();
     let mut suffix = 2u32;
     while canvas::dao::select_by_name(&connection, &final_name)?.is_some() {
@@ -99,22 +99,22 @@ pub fn import_keepass2(
     };
     canvas::dao::insert(&connection, &canvas)?;
 
-    // 创建根画布内的画布节点（标题与画布名保持一致）。
+    // 创建根画布内的画布数据节点（标题与画布名保持一致）。
     let canvas_node = Node {
         id: uuid::Uuid::new_v4().to_string(),
         canvas_id: root.id.clone(),
         x: canvas_node_x,
         y: canvas_node_y,
         title: final_name.clone(),
-        sub_title: String::new(),
+        subtitle: String::new(),
         canvas_ref_id: Some(canvas.id.clone()),
         deleted: false,
         color: String::new(),
-        shadow_id: None,
+        shadow_producing_edge_id: None,
     };
     node::dao::insert(&connection, &canvas_node)?;
 
-    // 逐个创建普通节点并写入字段（order 为字段在数组中的索引），不逐条产生日志；
+    // 逐个创建数据节点并写入字段（sort_order 为字段在数组中的索引），不逐条产生日志；
     // 按产出顺序记录节点 id，供边按下标回填端点。
     let key = state::key();
     let mut node_ids = Vec::with_capacity(nodes.len());
@@ -125,17 +125,17 @@ pub fn import_keepass2(
             x: imported.x,
             y: imported.y,
             title: imported.title.clone(),
-            sub_title: imported.sub_title.clone(),
+            subtitle: imported.subtitle.clone(),
             canvas_ref_id: None,
             deleted: false,
             color: String::new(),
-            shadow_id: None,
+            shadow_producing_edge_id: None,
         };
         node::dao::insert(&connection, &node)?;
         node_ids.push(node.id.clone());
 
         for (i, field) in imported.fields.iter().enumerate() {
-            let field_value = match &field.value {
+            let value = match &field.value {
                 Some(s) => Some(crate::security::aes::encrypt(s.as_bytes().to_vec(), key)?),
                 None => None,
             };
@@ -143,8 +143,8 @@ pub fn import_keepass2(
                 node_id: node.id.clone(),
                 name: field.name.clone(),
                 field_type: field.field_type.clone(),
-                field_value,
-                order: i as i64,
+                value,
+                sort_order: i as i64,
                 dictionary_id: field.dictionary_id.clone(),
             };
             node_field::dao::insert(&connection, &node_field)?;
@@ -152,15 +152,15 @@ pub fn import_keepass2(
     }
 
     // 批量写入父子边：树形布局父左子右，连接桩固定为 right → left，不逐条产生日志。
-    // 导入的均为普通节点，不触发影子机制，直接 dao 写入。
+    // 导入的均为数据节点，不触发影子机制，直接 dao 写入。
     for imported_edge in edges {
         let new_edge = Edge {
             id: uuid::Uuid::new_v4().to_string(),
             canvas_id: canvas.id.clone(),
             source_id: node_ids[imported_edge.source_index as usize].clone(),
-            source_port: "right".to_string(),
+            source_handle: "right".to_string(),
             target_id: node_ids[imported_edge.target_index as usize].clone(),
-            target_port: "left".to_string(),
+            target_handle: "left".to_string(),
             title: String::new(),
             description: String::new(),
         };
@@ -187,7 +187,7 @@ mod tests {
     use crate::test;
 
     /// 数据迁移聚合导入（service 层）：失败路径（字段名重复、悬空字典引用、非前向边与越界边，
-    /// 均不写库）与成功路径（画布与画布节点创建、节点/字段/父子边写入、全部操作聚合为恰好一条
+    /// 均不写库）与成功路径（画布与画布数据节点创建、节点/字段/父子边写入、全部操作聚合为恰好一条
     /// 日志），以及同名画布的去重导入。
     #[test]
     fn test_import_keepass2() {
@@ -213,7 +213,7 @@ mod tests {
         let nodes = vec![
             ImportedNodeVO {
                 title: "User Name".to_string(),
-                sub_title: "Sample Entry".to_string(),
+                subtitle: "Sample Entry".to_string(),
                 x: 0.0,
                 y: 0.0,
                 fields: vec![
@@ -224,7 +224,7 @@ mod tests {
             },
             ImportedNodeVO {
                 title: "General".to_string(),
-                sub_title: String::new(),
+                subtitle: String::new(),
                 x: 240.0,
                 y: 160.0,
                 fields: Vec::new(),
@@ -247,12 +247,12 @@ mod tests {
         assert!(node::service::list(&root.id, false).unwrap().is_empty());
         assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
 
-        // ===== 失败路径：悬空字典引用返回 NoDictionaryEntryWithSuchId，且不写库 =====
+        // ===== 失败路径：悬空字典引用返回 NoDictionaryWithSuchId，且不写库 =====
         let mut dangling = nodes.clone();
         dangling[0].fields[1].dictionary_id = Some(uuid::Uuid::new_v4().to_string());
         assert!(matches!(
             import_keepass2("test", 0.0, 240.0, &dangling, &edges),
-            Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
+            Err(ErrorCode::NoDictionaryWithSuchId { .. })
         ));
         assert_eq!(canvas::service::list(false).unwrap().len(), 1);
         assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
@@ -278,7 +278,7 @@ mod tests {
         assert_eq!(canvas::service::list(false).unwrap().len(), 1);
         assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, 0);
 
-        // ===== 成功路径：service 层导入，画布名 "test"，画布节点坐标 (0, 240) =====
+        // ===== 成功路径：service 层导入，画布名 "test"，画布数据节点坐标 (0, 240) =====
         let imported_id =
             import_keepass2("test", 0.0, 240.0, &nodes, &edges).unwrap();
 
@@ -291,14 +291,14 @@ mod tests {
             .clone();
         assert_eq!(imported_id, imported.id);
 
-        // 根画布内新增引用新画布的画布节点，标题与画布名一致。
+        // 根画布内新增引用新画布的画布数据节点，标题与画布名一致。
         let root_nodes = node::service::list(&root.id, false).unwrap();
         let canvas_node = root_nodes
             .iter()
             .find(|n| n.canvas_ref_id.as_deref() == Some(imported.id.as_str()))
             .expect("canvas node referencing imported canvas should exist in root canvas");
         assert_eq!(canvas_node.title, "test");
-        assert_eq!(canvas_node.sub_title, "");
+        assert_eq!(canvas_node.subtitle, "");
         assert_eq!((canvas_node.x, canvas_node.y), (0.0, 240.0));
 
         // 新画布内恰好 2 个节点，标题/副标题/坐标与传入一致。
@@ -309,17 +309,17 @@ mod tests {
             .find(|n| n.title == "User Name")
             .expect("imported node 'User Name' should exist")
             .clone();
-        assert_eq!(first.sub_title, "Sample Entry");
+        assert_eq!(first.subtitle, "Sample Entry");
         assert_eq!((first.x, first.y), (0.0, 0.0));
         let second = imported_nodes
             .iter()
             .find(|n| n.title == "General")
             .expect("imported node 'General' should exist")
             .clone();
-        assert_eq!(second.sub_title, "");
+        assert_eq!(second.subtitle, "");
         assert_eq!((second.x, second.y), (240.0, 160.0));
 
-        // 字段解密读回：name/field_type/value 与传入一致，返回顺序即存储 order 与传入一致，
+        // 字段解密读回：name/field_type/value 与传入一致，返回顺序即存储 sort_order 与传入一致，
         // 无值字段的 value 为 None；第二个节点无字段。
         let fields = node_field::service::get(&first.id).unwrap();
         assert_eq!(fields.len(), 3);
@@ -340,8 +340,8 @@ mod tests {
         assert_eq!(imported_edges.len(), 1);
         assert_eq!(imported_edges[0].source_id, first.id);
         assert_eq!(imported_edges[0].target_id, second.id);
-        assert_eq!(imported_edges[0].source_port, "right");
-        assert_eq!(imported_edges[0].target_port, "left");
+        assert_eq!(imported_edges[0].source_handle, "right");
+        assert_eq!(imported_edges[0].target_handle, "left");
         assert_eq!(imported_edges[0].title, "");
         assert_eq!(imported_edges[0].description, "");
 
@@ -370,7 +370,7 @@ mod tests {
         let imported_id_2 =
             import_keepass2("test", 0.0, 240.0, &nodes, &edges).unwrap();
 
-        // 新画布名为 "test 2"（去重逻辑与画布节点创建语义一致），画布节点标题同步为 "test 2"，
+        // 新画布名为 "test 2"（去重逻辑与画布数据节点创建语义一致），画布数据节点标题同步为 "test 2"，
         // 日志里的 canvas_name 也是 "test 2"。
         let canvases = canvas::service::list(false).unwrap();
         let imported_2 = canvases

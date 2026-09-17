@@ -12,7 +12,7 @@ import {
   type ImportedTree,
   type Keepass2FieldText,
 } from "./keepass2";
-import type { ImportedEdge, ImportedNode } from "@/api-types";
+import type { ImportedEdgeVO, ImportedNodeVO } from "@/api-types";
 
 /** 测试用字段名文案（取 zh-CN 表，与旧后端实现的中文文案一致） */
 const TEXT: Keepass2FieldText = {
@@ -74,14 +74,14 @@ async function createKdbx4Database(): Promise<Uint8Array> {
 }
 
 /** 构造布局测试用的无字段节点。 */
-function blankNode(): ImportedNode {
-  return { title: "", sub_title: "", x: 0, y: 0, fields: [] };
+function blankNode(): ImportedNodeVO {
+  return { title: "", subtitle: "", x: 0, y: 0, fields: [] };
 }
 
 /**
  * 构造布局测试用的树：count 个无字段节点加给定的边（下标引用节点列表）。
  */
-function blankTree(nodeCount: number, edges: ImportedEdge[]): ImportedTree {
+function blankTree(nodeCount: number, edges: ImportedEdgeVO[]): ImportedTree {
   return {
     nodes: Array.from({ length: nodeCount }, () => blankNode()),
     edges,
@@ -101,12 +101,12 @@ describe("parseKeepass2Database", () => {
 
     // 索引 0：表示数据库本身的根节点（title=根 group 名、无字段）。
     expect(nodes[0].title).toBe("sample");
-    expect(nodes[0].sub_title).toBe("");
+    expect(nodes[0].subtitle).toBe("");
     expect(nodes[0].fields).toEqual([]);
 
-    // 索引 1：UserName 非空 → title 取 UserName、sub_title 取 Title，3 个字段。
+    // 索引 1：UserName 非空 → title 取 UserName、subtitle 取 Title，3 个字段。
     expect(nodes[1].title).toBe("User Name");
-    expect(nodes[1].sub_title).toBe("Sample Entry");
+    expect(nodes[1].subtitle).toBe("Sample Entry");
     expect(nodes[1].fields).toEqual([
       { name: "密码", field_type: "string:password", value: "Password", dictionary_id: null },
       {
@@ -118,9 +118,9 @@ describe("parseKeepass2Database", () => {
       { name: "备注", field_type: "string:multiple-line", value: "Notes", dictionary_id: null },
     ]);
 
-    // 索引 2：UserName 与 Title 均空 → title/sub_title 均为空串，仅 1 个备注字段。
+    // 索引 2：UserName 与 Title 均空 → title/subtitle 均为空串，仅 1 个备注字段。
     expect(nodes[2].title).toBe("");
-    expect(nodes[2].sub_title).toBe("");
+    expect(nodes[2].subtitle).toBe("");
     expect(nodes[2].fields).toEqual([
       {
         name: "备注",
@@ -132,12 +132,12 @@ describe("parseKeepass2Database", () => {
 
     // 索引 3：group 节点（title=group 名、无字段）。
     expect(nodes[3].title).toBe("General");
-    expect(nodes[3].sub_title).toBe("");
+    expect(nodes[3].subtitle).toBe("");
     expect(nodes[3].fields).toEqual([]);
 
     // 索引 4：无备注 → 仅密码与访问链接 2 个字段。
     expect(nodes[4].title).toBe("Michael321");
-    expect(nodes[4].sub_title).toBe("Sample Entry #2");
+    expect(nodes[4].subtitle).toBe("Sample Entry #2");
     expect(nodes[4].fields).toEqual([
       { name: "密码", field_type: "string:password", value: "12345", dictionary_id: null },
       {
@@ -154,7 +154,7 @@ describe("parseKeepass2Database", () => {
 
     // 索引 9：仅 1 个密码字段（无访问链接与备注）。
     expect(nodes[9].title).toBe("asdf");
-    expect(nodes[9].sub_title).toBe("asdf");
+    expect(nodes[9].subtitle).toBe("asdf");
     expect(nodes[9].fields).toEqual([
       {
         name: "密码",
@@ -208,10 +208,10 @@ describe("parseKeepass2Database（KDBX 4.0 / Argon2id）", () => {
     expect(nodes[0].title).toBe("Kdbx4Root");
     expect(nodes[0].fields).toEqual([]);
 
-    // 索引 1：根 group 的 entry（UserName 非空 → title=UserName、sub_title=Title），
+    // 索引 1：根 group 的 entry（UserName 非空 → title=UserName、subtitle=Title），
     // 密码（ProtectedValue 存储）与访问链接（明文存储）两种形式均应取出明文。
     expect(nodes[1].title).toBe("kdbx4-user");
-    expect(nodes[1].sub_title).toBe("Kdbx4 Entry");
+    expect(nodes[1].subtitle).toBe("Kdbx4 Entry");
     expect(nodes[1].fields).toEqual([
       { name: "密码", field_type: "string:password", value: "kdbx4-secret", dictionary_id: null },
       {
@@ -224,12 +224,12 @@ describe("parseKeepass2Database（KDBX 4.0 / Argon2id）", () => {
 
     // 索引 2：子 group 节点（title=group 名、无字段）。
     expect(nodes[2].title).toBe("Kdbx4Group");
-    expect(nodes[2].sub_title).toBe("");
+    expect(nodes[2].subtitle).toBe("");
     expect(nodes[2].fields).toEqual([]);
 
     // 索引 3：子 group 内 UserName 为空的 entry → title=Title，仅 1 个备注字段。
     expect(nodes[3].title).toBe("Sub Entry");
-    expect(nodes[3].sub_title).toBe("");
+    expect(nodes[3].subtitle).toBe("");
     expect(nodes[3].fields).toEqual([
       {
         name: "备注",

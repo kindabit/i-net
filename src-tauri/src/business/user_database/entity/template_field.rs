@@ -10,7 +10,7 @@ pub struct TemplateField {
     /// 字段类型 key。后端不校验其合法性，仅作为不透明标签存取。
     pub field_type: String,
     /// 字段在模板内的排序序号。
-    pub order: i64,
+    pub sort_order: i64,
     /// 引用的字典条目 id，不引用为 None。
     pub dictionary_id: Option<String>,
 }

@@ -4,21 +4,21 @@
       "title": "数据库错误",
       "text": "{detail}"
     },
-    "DatabaseNameAlreadyExists": {
-      "title": "数据库名称已存在",
-      "text": "名为\u201c{name}\u201d的数据库已存在，请更换名称"
+    "UserDatabaseNameAlreadyExists": {
+      "title": "用户数据库名称已存在",
+      "text": "名为\u201c{name}\u201d的用户数据库已存在，请更换名称"
     },
-    "DatabaseMustBeArchivedBeforeDelete": {
+    "UserDatabaseMustBeArchivedBeforeDelete": {
       "title": "删除前需归档",
-      "text": "数据库必须先归档才能删除"
+      "text": "用户数据库必须先归档才能删除"
     },
     "DataCorruptionCanvasRefMissing": {
-      "title": "画布节点引用缺失",
-      "text": "画布节点（{node_id}）引用的画布（{canvas_id}）不存在"
+      "title": "画布数据节点引用缺失",
+      "text": "画布数据节点（{node_id}）引用的画布（{canvas_id}）不存在"
     },
     "DataCorruptionDanglingShadow": {
       "title": "影子节点引用悬空",
-      "text": "影子节点（{shadow_id}）引用的节点（{missing_id}）不存在"
+      "text": "产生影子节点（{shadow_id}）的边（{missing_id}）不存在"
     },
     "DataCorruptionEdgeEndpointMissing": {
       "title": "边的端点缺失",
@@ -48,9 +48,9 @@
       "title": "影子节点互连",
       "text": "影子节点（{shadow_id}）与另一个影子节点（{neighbor_id}）相连"
     },
-    "DataCorruptionShadowRootTypeMismatch": {
-      "title": "影子根本体类型异常",
-      "text": "影子节点（{shadow_id}）的根本体节点（{root_id}）类型与影子方向矛盾"
+    "DataCorruptionShadowOriginTypeMismatch": {
+      "title": "影子本体类型异常",
+      "text": "影子节点（{shadow_id}）的本体节点（{origin_id}）类型与影子方向矛盾"
     },
     "DataVersionMismatch": {
       "title": "数据版本不匹配",
@@ -69,8 +69,8 @@
       "text": "密码不能为空"
     },
     "EmptyUserDatabaseName": {
-      "title": "数据库名称为空",
-      "text": "数据库名称不能为空"
+      "title": "用户数据库名称为空",
+      "text": "用户数据库名称不能为空"
     },
     "FailToDeserializeAction": {
       "title": "反序列化日志行为失败"
@@ -123,8 +123,8 @@
       "text": "{detail}\uff08路径：{path}\uff09"
     },
     "InvalidUserDatabaseId": {
-      "title": "无效的数据库 ID",
-      "text": "无效的数据库 ID：{id}"
+      "title": "无效的用户数据库 ID",
+      "text": "无效的用户数据库 ID：{id}"
     },
     "FailToWriteFile": {
       "title": "写入文件失败",
@@ -138,9 +138,9 @@
       "title": "存在多个数据版本",
       "text": "数据版本表内存在多行数据"
     },
-    "NoDatabaseWithSuchId": {
-      "title": "未找到数据库",
-      "text": "未找到 ID 为 {id} 的数据库"
+    "NoUserDatabaseWithSuchId": {
+      "title": "未找到用户数据库",
+      "text": "未找到 ID 为 {id} 的用户数据库"
     },
     "NoDataVersion": {
       "title": "未找到数据版本",
@@ -150,9 +150,9 @@
       "title": "画布名称已存在",
       "text": "名为\u201c{name}\u201d的画布已存在，请更换名称"
     },
-    "CanvasToPlainNodeEdge": {
-      "title": "画布节点不能直接连接普通节点",
-      "text": "目标节点需要依赖画布中的节点时，请先新建子画布并迁移目标节点，再将画布节点与新的子画布节点相连，以避免依赖项散落在各个画布中"
+    "CanvasToDataNodeEdge": {
+      "title": "画布数据节点不能直接连接数据节点",
+      "text": "目标节点需要依赖画布中的节点时，请先新建子画布并迁移目标节点，再将画布数据节点与新的子画布数据节点相连，以避免依赖项散落在各个画布中"
     },
     "NoCanvasWithSuchId": {
       "title": "未找到画布",
@@ -186,9 +186,9 @@
       "title": "边会形成环",
       "text": "新建此边会在画布内形成环"
     },
-    "InvalidNodePort": {
-      "title": "无效的节点连接桩",
-      "text": "无效的节点连接桩：{port}"
+    "InvalidHandle": {
+      "title": "无效的连接桩",
+      "text": "无效的连接桩：{handle}"
     },
     "RootCanvasCannotBeDeleted": {
       "title": "根画布不可删除",
@@ -231,7 +231,7 @@
       "title": "永久删除节点将断开连接",
       "text": "以下节点将失去连接：{nodes}"
     },
-    "NoDictionaryEntryWithSuchId": {
+    "NoDictionaryWithSuchId": {
       "title": "字典条目不存在",
       "text": "id：{id}"
     },
@@ -287,17 +287,17 @@
       "title": "删除边将断开连接",
       "text": "以下节点将失去连接：{nodes}"
     },
-    "EdgeSameNodePort": {
+    "EdgeSameHandle": {
       "title": "连接桩相同",
       "text": "源节点和目标节点使用了相同的连接桩，不允许建立这条边"
     },
     "InvalidShadowEdge": {
       "title": "影子节点连线无效",
-      "text": "入向影子（普通节点的影子）只能作为连线的起点，出向影子（画布节点的影子）只能作为连线的终点"
+      "text": "入向影子（数据节点的影子）只能作为连线的起点，出向影子（画布数据节点的影子）只能作为连线的终点"
     },
-    "NodeIsCanvasNode": {
-      "title": "不允许操作画布节点",
-      "text": "画布节点引用了子画布，不支持此操作"
+    "NodeIsCanvasDataNode": {
+      "title": "不允许操作画布数据节点",
+      "text": "画布数据节点引用了子画布，不支持此操作"
     },
     "NodeIsShadow": {
       "title": "不允许操作影子节点",
@@ -314,6 +314,46 @@
     "InvalidLogTimeRange": {
       "title": "日志查询时间范围无效",
       "text": "开始时间不能晚于结束时间"
+    },
+    "AttachmentNotInSameNode": {
+      "title": "附件不属于同一节点",
+      "text": "两个附件不属于同一节点，无法交换排序位置"
+    },
+    "AttachmentDeleted": {
+      "title": "附件已删除",
+      "text": "该附件已被删除，无法进行此操作"
+    },
+    "FailToCompress": {
+      "title": "压缩失败",
+      "text": "{detail}"
+    },
+    "FailToDecompress": {
+      "title": "解压失败",
+      "text": "{detail}"
+    },
+    "ClipboardError": {
+      "title": "剪贴板操作失败",
+      "text": "{detail}"
+    },
+    "InvalidBackupFile": {
+      "title": "备份文件无效",
+      "text": "备份文件无效：{detail}"
+    },
+    "UnsupportedBackupVersion": {
+      "title": "备份文件版本不兼容",
+      "text": "备份文件版本（{version}）与当前应用程序不兼容"
+    },
+    "BackupTooManyShardsLost": {
+      "title": "备份文件损坏过多",
+      "text": "备份文件有 {lost} 个损坏块，超过可恢复上限 {recoverable_limit} 个"
+    },
+    "FailToPackBackup": {
+      "title": "备份打包失败",
+      "text": "{detail}"
+    },
+    "FailToUnpackBackup": {
+      "title": "备份解包失败",
+      "text": "{detail}"
     }
   }
 }

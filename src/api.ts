@@ -7,16 +7,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AttachmentVO,
   Canvas,
-  CanvasColorEntry,
+  CanvasNodeColorEntry,
+  DataNodeColorEntry,
   Dictionary,
   Edge,
-  ImportedEdge,
-  ImportedNode,
+  ImportedEdgeVO,
+  ImportedNodeVO,
   LogPageResponse,
   Metadata,
   MoveNodeVO,
   Node,
-  NodeColorEntry,
   NodeFieldVO,
   NodeVO,
   Template,
@@ -214,14 +214,14 @@ export async function userDatabaseCanvasPhysicalDelete(
 /**
  * 重命名画布。
  * @param id 画布 id
- * @param name 新名称
+ * @param newName 新名称
  * @returns 无返回值
  */
 export async function userDatabaseCanvasRename(
   id: string,
-  name: string,
+  newName: string,
 ): Promise<void> {
-  return invoke("user_database_canvas_rename", { id, name });
+  return invoke("user_database_canvas_rename", { id, newName });
 }
 
 /**
@@ -236,13 +236,13 @@ export async function userDatabaseCanvasList(
 }
 
 /**
- * 查询画布的自定义颜色列表（用于颜色组合历史聚合）。
- * @returns 带自定义颜色的画布条目列表
+ * 查询画布节点的自定义颜色列表（用于颜色组合历史聚合）。
+ * @returns 带自定义颜色的画布节点条目列表
  */
-export async function userDatabaseCanvasColorList(): Promise<
-  CanvasColorEntry[]
+export async function userDatabaseCanvasNodeColorList(): Promise<
+  CanvasNodeColorEntry[]
 > {
-  return invoke<CanvasColorEntry[]>("user_database_canvas_color_list");
+  return invoke<CanvasNodeColorEntry[]>("user_database_canvas_node_color_list");
 }
 
 // ==================== user_database / viewport ====================
@@ -261,8 +261,8 @@ export async function userDatabaseViewportGet(
 /**
  * 插入或更新视口；不传画布 id 时作用于画布宇宙的视口。
  * @param canvasId 画布 id，null 表示画布宇宙
- * @param x 视口中心的 x 坐标
- * @param y 视口中心的 y 坐标
+ * @param x 视口 x（屏幕坐标：画布原点相对视口中心的水平偏移）
+ * @param y 视口 y（屏幕坐标：画布原点相对视口中心的垂直偏移）
  * @param zoom 缩放比例
  * @returns 无返回值
  */
@@ -281,7 +281,7 @@ export async function userDatabaseViewportSet(
  * 在指定画布内新建节点。
  * @param canvasId 画布 id
  * @param title 节点标题
- * @param subTitle 节点副标题
+ * @param subtitle 节点副标题
  * @param x 节点的 x 坐标
  * @param y 节点的 y 坐标
  * @param templateId 模板 id，不指定时为 null
@@ -291,7 +291,7 @@ export async function userDatabaseViewportSet(
 export async function userDatabaseNodeCreate(
   canvasId: string,
   title: string,
-  subTitle: string,
+  subtitle: string,
   x: number,
   y: number,
   templateId: string | null = null,
@@ -300,7 +300,7 @@ export async function userDatabaseNodeCreate(
   return invoke<Node>("user_database_node_create", {
     canvasId,
     title,
-    subTitle,
+    subtitle,
     x,
     y,
     templateId,
@@ -312,7 +312,7 @@ export async function userDatabaseNodeCreate(
  * 在指定位置创建指定节点的副本。
  *
  * 副本继承源节点的标题、副标题、颜色和字段结构（不含字段值），不复制附件和边；
- * 影子节点与画布节点不允许复制。
+ * 影子节点与画布数据节点不允许复制。
  * @param id 被复制的节点 id
  * @param x 副本节点的 x 坐标
  * @param y 副本节点的 y 坐标
@@ -352,15 +352,15 @@ export async function userDatabaseNodeRelocateNodes(items: MoveNodeVO[], targetC
  * 修改节点的标题和副标题。
  * @param id 节点 id
  * @param title 新标题
- * @param subTitle 新副标题
+ * @param subtitle 新副标题
  * @returns 无返回值
  */
 export async function userDatabaseNodeModify(
   id: string,
   title: string,
-  subTitle: string,
+  subtitle: string,
 ): Promise<void> {
-  return invoke("user_database_node_modify", { id, title, subTitle });
+  return invoke("user_database_node_modify", { id, title, subtitle });
 }
 
 /**
@@ -393,7 +393,7 @@ export async function userDatabaseNodeRestore(
  * 关联节点且 `confirmed` 为 false，后端返回 ErrorCode `NodeDeleteDisconnectsNodes`，
  * 其 data 为 `{ nodes: string[] }`，列出将失去连接的节点标题（可能跨多级画布）。
  * @param id 节点 id
- * @param confirmed 是否确认级联断开节点连接
+ * @param confirmed 是否确认级联断连影响
  * @returns 无返回值
  */
 export async function userDatabaseNodePhysicalDelete(
@@ -405,8 +405,8 @@ export async function userDatabaseNodePhysicalDelete(
 
 /**
  * 查询指定画布内的节点列表。
- * 影子节点（返回项中 `shadow_origin_id` 非 null 的项）的 title / sub_title / color /
- * canvas_ref_id 已被后端合并为原始节点的值；调用方无需另行解析原始节点。
+ * 影子节点（返回项中 `shadow_origin_id` 非 null 的项）的 title / subtitle / color /
+ * canvas_ref_id 已被后端合并为本体节点的值；调用方无需另行解析本体节点。
  * @param canvasId 画布 id
  * @param deleted false 查询正常节点，true 查询已逻辑删除的节点
  * @returns 节点列表
@@ -430,68 +430,68 @@ export async function userDatabaseNodeSearch(
 }
 
 /**
- * 设置指定节点的自定义颜色。
- * @param id 节点 id
+ * 设置指定数据节点的自定义颜色。
+ * @param id 数据节点 id
  * @param color 规范化后的颜色字符串
  * @returns 无返回值
  */
-export async function userDatabaseNodeSetColor(
+export async function userDatabaseDataNodeSetColor(
   id: string,
   color: string,
 ): Promise<void> {
-  return invoke("user_database_node_set_color", { id, color });
+  return invoke("user_database_data_node_set_color", { id, color });
 }
 
 /**
  * 设置指定画布节点的自定义颜色。
- * @param id 画布 id
+ * @param id 画布节点 id
  * @param color 规范化后的颜色字符串
  * @returns 无返回值
  */
-export async function userDatabaseCanvasSetColor(
+export async function userDatabaseCanvasNodeSetColor(
   id: string,
   color: string,
 ): Promise<void> {
-  return invoke("user_database_canvas_set_color", { id, color });
+  return invoke("user_database_canvas_node_set_color", { id, color });
 }
 
 /**
- * 查询画布内节点的自定义颜色列表（用于颜色组合历史聚合）。
- * @returns 带自定义颜色的节点条目列表
+ * 查询数据节点的自定义颜色列表（用于颜色组合历史聚合）。
+ * @returns 带自定义颜色的数据节点条目列表
  */
-export async function userDatabaseNodeColorList(): Promise<NodeColorEntry[]> {
-  return invoke<NodeColorEntry[]>("user_database_node_color_list");
+export async function userDatabaseDataNodeColorList(): Promise<DataNodeColorEntry[]> {
+  return invoke<DataNodeColorEntry[]>("user_database_data_node_color_list");
 }
 
 // ==================== user_database / edge ====================
 
 /**
  * 在指定画布内新建边。后端校验重复连接与成环：
- * 1. 同向已有边时直接更新旧边的 port；
+ * 1. 同向已有边时直接更新旧边的 handle；
  * 2. 反向已有边时执行删旧建新替换，级联删除影子节点，副作用未确认时后端返回 EdgeDeleteDisconnectsNodes；
  * 3. 两节点间没有已存在的边则正常新建
  * @param canvasId 画布 id
  * @param sourceId 源节点 id
- * @param sourcePort 源节点连接桩
+ * @param sourceHandle 源连接桩
  * @param targetId 目标节点 id
- * @param targetPort 目标节点连接桩
- * @param confirmed 是否确认替换造成的级联断开
+ * @param targetHandle 目标连接桩
+ * @param confirmed 是否确认替换造成的级联断连影响
  * @returns 新建的边
  */
 export async function userDatabaseEdgeCreate(
   canvasId: string,
   sourceId: string,
-  sourcePort: string,
+  sourceHandle: string,
   targetId: string,
-  targetPort: string,
+  targetHandle: string,
   confirmed: boolean,
 ): Promise<Edge> {
   return invoke<Edge>("user_database_edge_create", {
     canvasId,
     sourceId,
-    sourcePort,
+    sourceHandle,
     targetId,
-    targetPort,
+    targetHandle,
     confirmed,
   });
 }
@@ -502,7 +502,7 @@ export async function userDatabaseEdgeCreate(
  * `confirmed` 为 false，后端返回 ErrorCode `EdgeDeleteDisconnectsNodes`，
  * 其 data 为 `{ nodes: string[] }`，列出将失去连接的节点标题。
  * @param id 边 id
- * @param confirmed 是否确认级联断开节点连接
+ * @param confirmed 是否确认级联断连影响
  * @returns 无返回值
  */
 export async function userDatabaseEdgeDelete(
@@ -696,7 +696,7 @@ export async function userDatabaseTemplateDelete(id: string): Promise<void> {
 
 /**
  * 查询全部模板。
- * @returns 模板列表（按 order 排序）
+ * @returns 模板列表（按 sort_order 排序）
  */
 export async function userDatabaseTemplateList(): Promise<Template[]> {
   return invoke<Template[]>("user_database_template_list");
@@ -847,18 +847,18 @@ export async function userDatabaseAttachmentPhysicalDelete(
 /**
  * 重命名附件：修改附件的文件名（仅元数据，附件文件内容不受影响）。
  * @param id 附件 id
- * @param fileName 新的文件名
+ * @param newFileName 新的文件名
  * @returns 无返回值
  */
 export async function userDatabaseAttachmentRename(
   id: string,
-  fileName: string,
+  newFileName: string,
 ): Promise<void> {
-  return invoke("user_database_attachment_rename", { id, fileName });
+  return invoke("user_database_attachment_rename", { id, newFileName });
 }
 
 /**
- * 列出孤儿附件文件（附件目录中存在但没有对应元数据的文件 id）。
+ * 列出孤儿文件（附件目录中存在但没有对应元数据的文件 id）。
  * 仅上报，由用户显式删除。
  * @returns 孤儿文件的 id 列表
  */
@@ -869,7 +869,7 @@ export async function userDatabaseAttachmentListOrphanFiles(): Promise<
 }
 
 /**
- * 删除指定的孤儿附件文件（不动元数据表，不记日志）。
+ * 删除指定的孤儿文件（不动元数据表，不记日志）。
  * @param id 孤儿文件 id（uuid）
  * @returns 无返回值
  */
@@ -882,14 +882,14 @@ export async function userDatabaseAttachmentRemoveOrphanFile(
 /**
  * 更新附件文件内容：将新的明文内容加密后覆盖附件文件，并更新元数据中的文件大小。
  * @param id 附件 id
- * @param content 新的明文内容（UTF-8 字节）
+ * @param plaintext 新的明文内容（UTF-8 字节）
  * @returns 无返回值
  */
 export async function userDatabaseAttachmentUpdateFile(
   id: string,
-  content: Uint8Array,
+  plaintext: Uint8Array,
 ): Promise<void> {
-  return invoke("user_database_attachment_update_file", { id, content });
+  return invoke("user_database_attachment_update_file", { id, plaintext });
 }
 
 /**
@@ -908,7 +908,7 @@ export async function userDatabaseAttachmentSwapSortOrder(
 // ==================== user_database / export ====================
 
 /** 数据库导出模式。 */
-export type DatabaseExportMode =
+export type UserDatabaseExportMode =
   | "exclude-fields"
   | "mask-values"
   | "include-values";
@@ -920,7 +920,7 @@ export type DatabaseExportMode =
  * @returns 导出成功返回 true，用户取消返回 false
  */
 export async function userDatabaseExport(
-  mode: DatabaseExportMode,
+  mode: UserDatabaseExportMode,
 ): Promise<boolean> {
   return invoke<boolean>("user_database_export_export", {
     mode,
@@ -950,11 +950,11 @@ export async function userDatabaseMigrationReadFile(path: string): Promise<Uint8
 }
 
 /**
- * 将前端已构造好的节点与边数据聚合导入用户数据库：后端在根画布创建新画布与画布节点，
- * 批量创建普通节点、写入字段并创建父子边，全部操作聚合成一条日志条目。
- * @param canvasName 新画布名称（画布节点标题），重名时后端自动追加 " 2"、" 3"…
- * @param canvasNodeX 画布节点在根画布中的 x 坐标
- * @param canvasNodeY 画布节点在根画布中的 y 坐标
+ * 将前端已构造好的节点与边数据聚合导入用户数据库：后端在根画布创建新画布与画布数据节点，
+ * 批量创建数据节点、写入字段并创建父子边，全部操作聚合成一条日志条目。
+ * @param canvasName 新画布名称（画布数据节点标题），重名时后端自动追加 " 2"、" 3"…
+ * @param canvasNodeX 画布数据节点在根画布中的 x 坐标
+ * @param canvasNodeY 画布数据节点在根画布中的 y 坐标
  * @param nodes 待导入的节点列表（含字段；第一个节点表示数据库本身，为树的根）
  * @param edges 待导入的父子边列表（下标引用 nodes）
  * @returns 新建画布的 id（供跳转至新画布）
@@ -963,8 +963,8 @@ export async function userDatabaseMigrationImportKeepass2(
   canvasName: string,
   canvasNodeX: number,
   canvasNodeY: number,
-  nodes: ImportedNode[],
-  edges: ImportedEdge[],
+  nodes: ImportedNodeVO[],
+  edges: ImportedEdgeVO[],
 ): Promise<string> {
   return invoke("user_database_migration_import_keepass2", {
     canvasName,
@@ -999,13 +999,13 @@ export async function backupRestore(sourcePath: string): Promise<void> {
 }
 
 /** 后端探测备份文件的返回结构。 */
-export interface RestoreProbeResult {
+export interface BackupProbeResult {
   /** 是否可还原（损坏 shard 数 ≤ parity）。 */
   recoverable: boolean;
   /** 损坏 shard 数。 */
   lost: number;
   /** 可恢复上限（parity shard 数）。 */
-  limit: number;
+  recoverable_limit: number;
   /** 探测通过的文件路径，可继续用于 restoreDataDirectory。 */
   source_path: string;
 }
@@ -1014,8 +1014,8 @@ export interface RestoreProbeResult {
  * 探测备份文件：弹文件对话框、校验 Header 与 shard SHA-256，但不替换数据。
  * @returns 用户取消返回 null；否则返回探测结果（含可继续使用的源路径）
  */
-export async function backupRestoreProbe(): Promise<RestoreProbeResult | null> {
-  return invoke<RestoreProbeResult | null>("backup_restore_probe");
+export async function backupRestoreProbe(): Promise<BackupProbeResult | null> {
+  return invoke<BackupProbeResult | null>("backup_restore_probe");
 }
 
 /**

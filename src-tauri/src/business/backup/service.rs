@@ -108,10 +108,10 @@ mod tests {
         drop(file);
 
         // probe 应报告可恢复。
-        let (recoverable, lost, limit) = probe(&backup_path).unwrap();
+        let (recoverable, lost, recoverable_limit) = probe(&backup_path).unwrap();
         assert!(recoverable);
         assert_eq!(lost, 1);
-        assert!(limit >= 1);
+        assert!(recoverable_limit >= 1);
 
         // 校验 shard 区域：第 0 块应被标记为 None。
         let mut file = File::open(&backup_path).unwrap();
@@ -312,7 +312,7 @@ mod tests {
             std::fs::read(path.log_directory.join("today.log")).unwrap();
         assert_eq!(restored_log, log_bytes);
 
-        // 验证系统 temp 下没有残留的 inet-restore-* 临时目录。
+        // 验证系统 temp 下没有残留的 i-net-restore-* 临时目录。
         let temp_root = std::env::temp_dir();
         let leftover: Vec<_> = std::fs::read_dir(&temp_root)
             .unwrap()
@@ -320,7 +320,7 @@ mod tests {
             .filter(|e| {
                 e.file_name()
                     .to_string_lossy()
-                    .starts_with("inet-restore-")
+                    .starts_with("i-net-restore-")
             })
             .collect();
         assert!(
@@ -391,7 +391,7 @@ mod tests {
     /// 手工构造一个内容非合法 tar 流（32 字节，远不足 512 字节的 tar 头块大小，
     /// tar::Archive::unpack 必报错）的备份文件，验证：
     /// 1. unpack 返回 `FailToUnpackBackup`；
-    /// 2. 系统 temp 目录下没有 `inet-restore-*` 残留目录；
+    /// 2. 系统 temp 目录下没有 `i-net-restore-*` 残留目录；
     /// 3. 数据目录里的内容保持原样（extract 在 clear 之前，失败时数据目录未被动）。
     /// 不需要调用 pack，因此不初始化 preference/metadata 的内存 connection。
     #[test]
@@ -439,7 +439,7 @@ mod tests {
             .filter(|e| {
                 e.file_name()
                     .to_string_lossy()
-                    .starts_with("inet-restore-")
+                    .starts_with("i-net-restore-")
             })
             .collect();
         assert!(
@@ -498,10 +498,10 @@ mod tests {
         drop(file);
 
         // probe 应报告可恢复，丢失数恰好等于 parity（校验和表完整，仅尾部校验 shard 缺失）。
-        let (recoverable, lost, limit) = probe(&backup_path).unwrap();
+        let (recoverable, lost, recoverable_limit) = probe(&backup_path).unwrap();
         assert!(recoverable);
         assert_eq!(lost, header.parity_shards as usize);
-        assert_eq!(limit, header.parity_shards as usize);
+        assert_eq!(recoverable_limit, header.parity_shards as usize);
 
         // unpack 应成功，数据目录内容逐字节还原。
         unpack(&backup_path, &noop_progress).unwrap();
@@ -557,10 +557,10 @@ mod tests {
         drop(file);
 
         // probe 应报告不可恢复（丢失数 = parity + 1 > 上限）。
-        let (recoverable, lost, limit) = probe(&backup_path).unwrap();
+        let (recoverable, lost, recoverable_limit) = probe(&backup_path).unwrap();
         assert!(!recoverable);
         assert_eq!(lost, header.parity_shards as usize + 1);
-        assert_eq!(limit, header.parity_shards as usize);
+        assert_eq!(recoverable_limit, header.parity_shards as usize);
 
         // unpack 应返回 BackupTooManyShardsLost。
         let result = unpack(&backup_path, &noop_progress);

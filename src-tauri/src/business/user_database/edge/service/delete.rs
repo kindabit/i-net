@@ -5,7 +5,7 @@ use crate::error_code::ErrorCode;
 
 /// 物理删除指定边（边没有逻辑删除字段）。
 ///
-/// 影子节点联动：边被删除后，其产生的影子节点经 node.shadow_id 外键级联删除；
+/// 影子节点联动：边被删除后，其产生的影子节点经 node.shadow_producing_edge_id 外键级联删除；
 /// 影子的相连边经 edge.source_id/target_id 外键级联删除；这些相连边若也是产生影子节点的边，
 /// 其影子递归级联删除（嵌套影子沿外键链递归坍塌），应用层不再手动删除影子。
 /// 受影响节点的收集通过 [`shadow::service::collect_edge_disconnected`] 沿同一外键链
@@ -18,7 +18,7 @@ use crate::error_code::ErrorCode;
 ///
 /// # 参数
 /// - `id`: 边 id。
-/// - `confirmed`: 调用方已确认影子节点删除带来的连接断开影响。
+/// - `confirmed`: 调用方已确认影子节点删除带来的断连影响。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；边不存在时返回 `ErrorCode::NoEdgeWithSuchId`，
@@ -50,11 +50,11 @@ pub fn delete(id: &str, confirmed: bool) -> Result<(), ErrorCode> {
     if !affected.is_empty() && !confirmed {
         return Err(ErrorCode::EdgeDeleteDisconnectsNodes { nodes: affected });
     }
-    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析根本体标题；
+    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析本体标题；
     // 解析须在删除边之前完成（影子链解析依赖产生边链完好）。
     let source_title = shadow::service::display_title(&connection, &source)?;
     let target_title = shadow::service::display_title(&connection, &target)?;
-    // 删除边：其产生的影子经 node.shadow_id 外键级联删除，影子的相连边经
+    // 删除边：其产生的影子经 node.shadow_producing_edge_id 外键级联删除，影子的相连边经
     // edge.source_id/target_id 外键级联删除，下游嵌套影子沿外键链递归坍塌，
     // 应用层禁止手写递归删除。
     dao::delete_by_id(&connection, id)?;

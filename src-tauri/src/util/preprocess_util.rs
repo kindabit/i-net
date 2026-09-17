@@ -178,15 +178,15 @@ pub fn preprocess_canvas_name(name: String) -> Result<String, ErrorCode> {
 /// 上下左右四个连接桩之一（"top" / "right" / "bottom" / "left"）。
 ///
 /// # 参数
-/// - `port`: 原始节点连接桩。
+/// - `handle`: 原始节点连接桩。
 ///
 /// # 返回值
-/// 返回清洗后的节点连接桩；连接桩无效时返回 `ErrorCode::InvalidNodePort`。
-pub fn preprocess_node_port(port: String) -> Result<String, ErrorCode> {
-    let port = port.trim().to_string();
-    match port.as_str() {
-        "top" | "right" | "bottom" | "left" => Ok(port),
-        _ => Err(ErrorCode::InvalidNodePort { port }),
+/// 返回清洗后的节点连接桩；连接桩无效时返回 `ErrorCode::InvalidHandle`。
+pub fn preprocess_handle(handle: String) -> Result<String, ErrorCode> {
+    let handle = handle.trim().to_string();
+    match handle.as_str() {
+        "top" | "right" | "bottom" | "left" => Ok(handle),
+        _ => Err(ErrorCode::InvalidHandle { handle }),
     }
 }
 
@@ -419,19 +419,19 @@ mod tests {
             Err(ErrorCode::EmptyCanvasName)
         ));
 
-        // preprocess_node_port 成功路径：上下左右四个连接桩均被接受，首尾空白被去除。
-        for port in ["top", "right", "bottom", "left"] {
-            assert_eq!(preprocess_node_port(format!("  {port}  ")).unwrap(), port);
+        // preprocess_handle 成功路径：上下左右四个连接桩均被接受，首尾空白被去除。
+        for handle in ["top", "right", "bottom", "left"] {
+            assert_eq!(preprocess_handle(format!("  {handle}  ")).unwrap(), handle);
         }
 
-        // preprocess_node_port 失败路径：其它字符串返回 InvalidNodePort，且错误中携带 trim 后的连接桩。
-        match preprocess_node_port("  middle  ".to_string()) {
-            Err(ErrorCode::InvalidNodePort { port }) => assert_eq!(port, "middle"),
-            other => panic!("expected InvalidNodePort, got {other:?}"),
+        // preprocess_handle 失败路径：其它字符串返回 InvalidHandle，且错误中携带 trim 后的连接桩。
+        match preprocess_handle("  middle  ".to_string()) {
+            Err(ErrorCode::InvalidHandle { handle }) => assert_eq!(handle, "middle"),
+            other => panic!("expected InvalidHandle, got {other:?}"),
         }
         assert!(matches!(
-            preprocess_node_port("".to_string()),
-            Err(ErrorCode::InvalidNodePort { .. })
+            preprocess_handle("".to_string()),
+            Err(ErrorCode::InvalidHandle { .. })
         ));
 
         // preprocess_attachment_id 成功路径：标准小写连字符格式的 uuid 原样返回，首尾空白被去除。

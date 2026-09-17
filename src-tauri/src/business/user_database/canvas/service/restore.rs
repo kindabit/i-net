@@ -7,10 +7,10 @@ use crate::error_code::ErrorCode;
 /// 恢复被逻辑删除的画布：恢复该画布以及它祖先链上所有被逻辑删除的画布，
 /// 并将该画布的坐标修改为新坐标；同时计算该画布新旧坐标之差，
 /// 使用该差值计算其它被恢复的祖先画布的新坐标（其它一起被恢复的画布的位置会跟着这个画布走）；
-/// 同时恢复所有引用这些画布的画布节点。
+/// 同时恢复所有引用这些画布的画布数据节点。
 ///
 /// 每个被恢复的画布产生一条 CanvasRestore 日志，载荷内记录画布名称、旧坐标和新坐标。
-/// 每个被恢复的画布节点产生一条 NodeRestore 日志（坐标保持节点库存坐标不变）。
+/// 每个被恢复的画布数据节点产生一条 NodeRestore 日志（坐标保持节点库存坐标不变）。
 ///
 /// # 参数
 /// - `id`: 画布 id。
@@ -61,7 +61,7 @@ pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
             new_x,
             new_y,
         });
-        // 恢复引用该画布的画布节点（若存在且已逻辑删除）
+        // 恢复引用该画布的画布数据节点（若存在且已逻辑删除）
         if let Some(mut ref_node) = node::dao::select_by_canvas_ref_id(&connection, &canvas_id)? {
             if ref_node.deleted {
                 let old_x = ref_node.x;

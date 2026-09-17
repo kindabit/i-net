@@ -8,7 +8,7 @@ use crate::util::preprocess_util;
 ///
 /// # 参数
 /// - `id`: 节点 id。
-/// - `confirmed`: 用户已确认影子子树删除带来的跨画布连接断开影响。
+/// - `confirmed`: 用户已确认影子子树删除带来的跨画布断连影响。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
@@ -21,7 +21,7 @@ pub fn user_database_node_physical_delete(id: String, confirmed: bool) -> Result
 ///
 /// # 参数
 /// - `id`: 节点 id。
-/// - `confirmed`: 用户已确认影子子树删除带来的跨画布连接断开影响。
+/// - `confirmed`: 用户已确认影子子树删除带来的跨画布断连影响。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。

@@ -39,13 +39,13 @@ fn test_user_database_command_all_functions() {
         Err(ErrorCode::EmptyPassword)
     ));
 
-    // lifecycle::command::initialize::preprocess 失败路径：id 格式合法但不存在时报 NoDatabaseWithSuchId。
+    // lifecycle::command::initialize::preprocess 失败路径：id 格式合法但不存在时报 NoUserDatabaseWithSuchId。
     assert!(matches!(
         lifecycle::command::initialize::preprocess(
             uuid::Uuid::new_v4().to_string(),
             "password".to_string()
         ),
-        Err(ErrorCode::NoDatabaseWithSuchId { .. })
+        Err(ErrorCode::NoUserDatabaseWithSuchId { .. })
     ));
 
     // lifecycle::command::initialize::preprocess 成功路径：打开数据库后 state 处于打开状态。
@@ -236,7 +236,7 @@ fn test_user_database_command_all_functions() {
     )
     .unwrap();
 
-    // node::command::create::preprocess 成功路径：create_canvas=true，创建画布节点并返回 canvas_ref_id 为 Some。
+    // node::command::create::preprocess 成功路径：create_canvas=true，创建画布数据节点并返回 canvas_ref_id 为 Some。
     let cv_node_1 = node::command::create::preprocess(
         child.id.clone(),
         " cv-node ".to_string(),
@@ -249,7 +249,7 @@ fn test_user_database_command_all_functions() {
     .unwrap();
     assert!(cv_node_1.canvas_ref_id.is_some());
     assert_eq!(cv_node_1.title, "cv-node");
-    assert!(cv_node_1.sub_title.is_empty());
+    assert!(cv_node_1.subtitle.is_empty());
     // 交叉验证画布确实被创建
     {
         let conn = state::lock_connection();
@@ -334,10 +334,10 @@ fn test_user_database_command_all_functions() {
         node::command::copy::preprocess(node_2.id.clone(), 500.0, 600.0).unwrap();
     assert_ne!(copied_node_2.id, node_2.id);
     assert_eq!(copied_node_2.title, "title-2");
-    assert_eq!(copied_node_2.sub_title, "sub-2");
+    assert_eq!(copied_node_2.subtitle, "sub-2");
     assert_eq!((copied_node_2.x, copied_node_2.y), (500.0, 600.0));
     assert!(copied_node_2.canvas_ref_id.is_none());
-    assert!(copied_node_2.shadow_id.is_none());
+    assert!(copied_node_2.shadow_producing_edge_id.is_none());
 
     // node::command::list::preprocess 失败路径：画布 id 非法时报 InvalidCanvasId。
     assert!(matches!(
@@ -396,7 +396,7 @@ fn test_user_database_command_all_functions() {
         Err(ErrorCode::InvalidNodeId { .. })
     ));
 
-    // edge::command::create::preprocess 失败路径：连接桩非法时报 InvalidNodePort。
+    // edge::command::create::preprocess 失败路径：连接桩非法时报 InvalidHandle。
     assert!(matches!(
         edge::command::create::preprocess(
             child.id.clone(),
@@ -406,7 +406,7 @@ fn test_user_database_command_all_functions() {
             "left".to_string(),
             false
         ),
-        Err(ErrorCode::InvalidNodePort { .. })
+        Err(ErrorCode::InvalidHandle { .. })
     ));
 
     // edge::command::create::preprocess 成功路径：连接桩两侧空白字符被裁剪。
@@ -419,10 +419,10 @@ fn test_user_database_command_all_functions() {
         false,
     )
     .unwrap();
-    assert_eq!(edge_1.source_port, "right");
+    assert_eq!(edge_1.source_handle, "right");
 
-    // edge::command::create::preprocess 失败路径：两端连接桩相同时报 EdgeSameNodePort
-    // （preprocess 不再吃掉端口字符串，业务层拒收）。
+    // edge::command::create::preprocess 失败路径：两端连接桩相同时报 EdgeSameHandle
+    // （preprocess 不再吃掉连接桩字符串，业务层拒收）。
     assert!(matches!(
         edge::command::create::preprocess(
             child.id.clone(),
@@ -432,7 +432,7 @@ fn test_user_database_command_all_functions() {
             "top".to_string(),
             false
         ),
-        Err(ErrorCode::EdgeSameNodePort)
+        Err(ErrorCode::EdgeSameHandle)
     ));
 
     // edge::command::update::preprocess 失败路径：id 非法时报 InvalidEdgeId。
@@ -609,7 +609,7 @@ fn test_user_database_command_all_functions() {
             id: "not-a-uuid".to_string(),
             parent_id: None,
             value: "val".to_string(),
-            order: 1,
+            sort_order: 1,
         }]),
         Err(ErrorCode::InvalidDictionaryId { .. })
     ));
@@ -620,7 +620,7 @@ fn test_user_database_command_all_functions() {
             id: uuid::Uuid::new_v4().to_string(),
             parent_id: Some("not-a-uuid".to_string()),
             value: "val".to_string(),
-            order: 1,
+            sort_order: 1,
         }]),
         Err(ErrorCode::InvalidDictionaryId { .. })
     ));
@@ -631,7 +631,7 @@ fn test_user_database_command_all_functions() {
             id: uuid::Uuid::new_v4().to_string(),
             parent_id: None,
             value: "  ".to_string(),
-            order: 1,
+            sort_order: 1,
         }]),
         Err(ErrorCode::EmptyDictionaryValue)
     ));
@@ -642,7 +642,7 @@ fn test_user_database_command_all_functions() {
         id: dict_id.clone(),
         parent_id: None,
         value: " trimmed ".to_string(),
-        order: 1,
+        sort_order: 1,
     }])
     .unwrap();
     let list = dictionary::command::list::preprocess().unwrap();
@@ -1154,10 +1154,10 @@ fn test_user_database_command_all_functions() {
     let node_after = node::command::list::preprocess(root_id.clone(), false).unwrap().into_iter().find(|n| n.id == node.id).unwrap();
     assert_eq!(node_after.color, node_color);
 
-    // == node::command::color_list::preprocess 成功路径：设置若干节点颜色（含空色、已删除节点）后返回结果符合预期 ==
-    let plain_node = node::command::create::preprocess(
+    // == node::command::color_list::preprocess 成功路径：设置若干数据节点颜色（含空色、已删除节点）后返回结果符合预期 ==
+    let data_node = node::command::create::preprocess(
         root_id.clone(),
-        "plain-node".to_string(),
+        "data-node".to_string(),
         String::new(),
         0.0,
         0.0,
@@ -1177,7 +1177,7 @@ fn test_user_database_command_all_functions() {
     .unwrap();
     node::command::set_color::preprocess(deleted_colored.id.clone(), "{\"fill\":\"#0000ff\"}".to_string()).unwrap();
     node::command::logical_delete::preprocess(deleted_colored.id.clone()).unwrap();
-    let _ = plain_node;
+    let _ = data_node;
 
     let entries = node::command::color_list::preprocess().unwrap();
     // 只有 color-node 符合条件（未删除且 color 非空）

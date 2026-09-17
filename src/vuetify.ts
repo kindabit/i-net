@@ -35,10 +35,10 @@ export const vuetify = createVuetify({
 
 /**
  * 同步 Vuetify 语言到当前 i18n 语言。
- * @param lang i18n locale code（如 "zh-CN" / "en-US"）
+ * @param locale i18n locale code（如 "zh-CN" / "en-US"）
  */
-export function setVuetifyLocale(lang: string): void {
-  if (lang.startsWith("zh")) {
+export function setVuetifyLocale(locale: string): void {
+  if (locale.startsWith("zh")) {
     vuetify.locale.current.value = "zhHans";
   } else {
     vuetify.locale.current.value = "en";

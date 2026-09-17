@@ -10,21 +10,21 @@ export interface DataNodeData {
   /** 节点标题 */
   title: string;
   /** 节点副标题 */
-  subTitle: string;
-  /** 引用的子画布 id，仅画布节点有值；影子节点恒为 null（后端不合并根本体的 canvas_ref_id，出向影子的跳转目标见 shadowOriginCanvasRefId） */
+  subtitle: string;
+  /** 引用的子画布 id，仅画布数据节点有值；影子节点恒为 null（后端不合并本体的 canvas_ref_id，出向影子的跳转目标见 shadowOriginCanvasRefId） */
   canvasRefId: string | null;
-  /** 节点自定义颜色字符串，空串 = 默认 */
+  /** 数据节点自定义颜色字符串，空串 = 默认 */
   color: string;
-  /** 影子节点根本体节点的 id（对应后端 shadow_origin_id）；null 表示普通节点（用于判断是否影子节点、以及影子节点编辑对话框与迁移落点的定位锚点） */
+  /** 影子节点本体节点的 id（对应后端 shadow_origin_id）；null 表示数据节点（用于判断是否影子节点、以及影子节点编辑对话框与迁移落点的定位锚点） */
   shadowOriginId: string | null;
-  /** 影子节点的原始节点是否已被逻辑删除（普通节点恒为 false） */
+  /** 影子节点的本体节点是否已被逻辑删除（数据节点恒为 false） */
   shadowOriginDeleted: boolean;
-  /** 影子节点的方向（inflow=入向，只有出度；outflow=出向，只有入度）；普通节点为 null */
+  /** 影子节点的方向（inflow=入向，只有出度；outflow=出向，只有入度）；数据节点为 null */
   shadowDirection: "inflow" | "outflow" | null;
-  /** 影子节点根本体（画布节点）引用的子画布 id；仅出向影子有值，双击出向影子时的跳转目标 */
+  /** 影子节点本体（画布数据节点）引用的子画布 id；仅出向影子有值，双击出向影子时的跳转目标 */
   shadowOriginCanvasRefId: string | null;
-  /** 产生该影子节点的边 id（对应后端 shadow_id，与后端字段名保持一致：影子是边的映射）；null 表示普通节点，点击虚拟边时据此查询产生边 */
-  shadowId: string | null;
+  /** 产生该影子节点的边 id（对应后端 shadow_producing_edge_id）；null 表示数据节点，点击虚拟边时据此查询产生边 */
+  shadowProducingEdgeId: string | null;
 }
 
 /**
@@ -33,7 +33,7 @@ export interface DataNodeData {
  * 入参 `node` 的实际类型由调用方决定：
  * - `user_database_node_list` 返回 `NodeVO`，携带影子扩展字段；
  * - `create` / `restore` 等返回普通 `Node`，不带扩展字段。
- * 这里按 `Partial<NodeVO>` 兜底，影子相关字段不存在时按默认值处理（普通节点）。
+ * 这里按 `Partial<NodeVO>` 兜底，影子相关字段不存在时按默认值处理（数据节点）。
  */
 export function toVFNode(node: Node, position?: { x: number; y: number }): VFNode {
   // node_list 返回的 NodeVO 带有影子扩展字段；create 等返回的普通 Node 没有，按默认值兜底。
@@ -44,14 +44,14 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
     position: position ?? { x: node.x, y: node.y },
     data: {
       title: node.title,
-      subTitle: node.sub_title,
+      subtitle: node.subtitle,
       canvasRefId: node.canvas_ref_id,
       color: node.color,
       shadowOriginId: vo.shadow_origin_id ?? null,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
       shadowDirection: vo.shadow_direction ?? null,
       shadowOriginCanvasRefId: vo.shadow_origin_canvas_ref_id ?? null,
-      shadowId: node.shadow_id,
+      shadowProducingEdgeId: node.shadow_producing_edge_id,
     } satisfies DataNodeData,
   };
 }
@@ -62,8 +62,8 @@ export function toVFEdge(edge: Edge): VFEdge {
     id: edge.id,
     source: edge.source_id,
     target: edge.target_id,
-    sourceHandle: edge.source_port,
-    targetHandle: edge.target_port,
+    sourceHandle: edge.source_handle,
+    targetHandle: edge.target_handle,
     type: "custom",
     data: {
       title: edge.title,
@@ -72,15 +72,15 @@ export function toVFEdge(edge: Edge): VFEdge {
   };
 }
 
-/** VFEdge 转后端 Edge。canvas_id 不存在于视图模型，需显式提供；handle 即后端的 port。 */
+/** VFEdge 转后端 Edge。canvas_id 不存在于视图模型，需显式提供；sourceHandle/targetHandle 即后端的 source_handle/target_handle。 */
 export function fromVFEdge(vfEdge: VFEdge, canvasId: string): Edge {
   return {
     id: vfEdge.id,
     canvas_id: canvasId,
     source_id: vfEdge.source,
     target_id: vfEdge.target,
-    source_port: vfEdge.sourceHandle ?? "",
-    target_port: vfEdge.targetHandle ?? "",
+    source_handle: vfEdge.sourceHandle ?? "",
+    target_handle: vfEdge.targetHandle ?? "",
     title: vfEdge.data?.title ?? "",
     description: vfEdge.data?.description ?? "",
   };

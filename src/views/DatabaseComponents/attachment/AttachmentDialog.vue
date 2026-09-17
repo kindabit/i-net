@@ -2,7 +2,7 @@
   节点附件管理对话框。
 
   管理单个节点的附件：新建文本附件、导入、重命名、预览、导出、逻辑删除；回收站分区提供恢复与物理删除；
-  无主附件文件（有文件无元数据）以警示区上报并由用户显式清理。
+  孤儿文件（有文件无元数据）以警示区上报并由用户显式清理。
   所有操作即时生效并局部刷新，不单独触发保存，随数据库"保存并退出"统一持久化。
   通过 defineExpose 的 open() 打开。
 -->
@@ -49,7 +49,7 @@ const createNameError = ref(false);
 const attachments = ref<AttachmentVO[]>([]);
 /** 回收站（已逻辑删除）附件列表 */
 const deletedAttachments = ref<AttachmentVO[]>([]);
-/** 无主附件文件 id 列表 */
+/** 孤儿文件 id 列表 */
 const orphanFiles = ref<string[]>([]);
 /** 当前拖拽的源附件 id */
 const draggingId = ref<string | null>(null);
@@ -84,7 +84,7 @@ function open(id: string, title: string): void {
 }
 
 /**
- * 加载正常附件、回收站附件与无主文件列表；打开对话框时及各操作成功后统一调用本函数刷新。
+ * 加载正常附件、回收站附件与孤儿文件列表；打开对话框时及各操作成功后统一调用本函数刷新。
  * 无输入参数，无返回值；失败提示并关闭对话框。
  */
 async function loadData(): Promise<void> {
@@ -255,8 +255,8 @@ async function physicalDeleteAttachment(attachment: AttachmentVO): Promise<void>
 }
 
 /**
- * 删除无主附件文件（永久删除，不可恢复），需用户确认。
- * @param id 无主文件 id
+ * 删除孤儿文件（永久删除，不可恢复），需用户确认。
+ * @param id 孤儿文件 id
  */
 async function removeOrphanFile(id: string): Promise<void> {
   const confirmed = await confirmDialogRef.value?.open({

@@ -10,9 +10,9 @@ pub struct NodeField {
     /// 字段类型 key。后端不校验其合法性，仅作为不透明标签存取。
     pub field_type: String,
     /// 加密后的字段值（明文为字段值字符串，格式由前端定义，后端不解析其内容），无值为 None。
-    pub field_value: Option<Vec<u8>>,
+    pub value: Option<Vec<u8>>,
     /// 字段在节点内的排序序号。
-    pub order: i64,
+    pub sort_order: i64,
     /// 引用的字典条目 id，不引用为 None。
     pub dictionary_id: Option<String>,
 }

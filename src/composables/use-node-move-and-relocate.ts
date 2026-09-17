@@ -15,8 +15,8 @@ import { DataNodeData } from "@/vf-convert";
 
 /**
  * 迁移目标的类型以及相关数据
- * canvas-node - 画布节点，迁移至其引用的子画布
- * shadow-node - 出向影子节点，迁移至其根本体（画布节点）引用的子画布
+ * canvas-node - 画布数据节点，迁移至其引用的子画布
+ * shadow-node - 出向影子节点，迁移至其本体（画布数据节点）引用的子画布
  * breadcrumb-segment - 面包屑祖先片段，迁移至片段对应的画布
  */
 export type RelocatingTarget =
@@ -28,7 +28,7 @@ export type RelocatingTarget =
  * 节点集的迁移合法性
  * legal - 合法
  * has-shadow - 有影子节点
- * has-canvas - 有画布节点
+ * has-canvas - 有画布数据节点
  * has-external - 节点集与外部之间存在边
  */
 export type RelocatingLegality = 'legal' | 'has-shadow' | 'has-canvas' | 'has-external';
@@ -41,7 +41,7 @@ export type RelocatingLegality = 'legal' | 'has-shadow' | 'has-canvas' | 'has-ex
 export type Mode = 'move' | 'relocate';
 
 /**
- * 拖拽结束事件的监听器的类型
+ * 拖拽结束事件的监听器的类型，其中 pointerPosition 为屏幕坐标
  */
 export type OnDragStopEffectFn = (mode: Mode, draggedNodes: VFNode[], draggedNodesRelocatingLegality: RelocatingLegality, pointerPosition: { x: number, y: number }, relocatingTarget: RelocatingTarget | null) => void;
 
@@ -65,12 +65,12 @@ function useNodeMoveAndRelocate() {
   /**
    * 用户正在拖动的节点集是否是合法的可迁移节点集
    * 只有当节点集中的每个节点都是合法的可迁移节点、并且节点集中的每个节点的边都只与节点集内部的节点相连时，这个节点集才是合法的可迁移节点集
-   * 非画布节点，且非影子节点的节点是合法的可迁移节点
+   * 非画布数据节点，且非影子节点的节点是合法的可迁移节点
    */
   let nodeSetRelocatingLegality: Ref<RelocatingLegality | null> = ref(null);
 
   /**
-   * 光标位置
+   * 光标位置（屏幕坐标）
    */
   let pointerPosition: Ref<{ x: number; y: number; } | null> = ref(null);
 
@@ -159,9 +159,9 @@ function useNodeMoveAndRelocate() {
     let nodes = queryNodeAtPosition!(position);
     for (let node of nodes) {
       let data = node.data as DataNodeData;
-      // 影子节点中只有出向影子（根本体为画布节点）携带根本体引用的子画布 id，是合法迁移目标；
-      // 入向影子的根本体是普通节点，不指向任何画布，跳过并继续考察下层节点；
-      // 根本体已被逻辑删除时其引用的子画布已随之级联删除，同样不再作为目标（与双击钻入行为的判定一致）。
+      // 影子节点中只有出向影子（本体为画布数据节点）携带本体引用的子画布 id，是合法迁移目标；
+      // 入向影子的本体是数据节点，不指向任何画布，跳过并继续考察下层节点；
+      // 本体已被逻辑删除时其引用的子画布已随之级联删除，同样不再作为目标（与双击钻入行为的判定一致）。
       if (data.shadowOriginCanvasRefId && !data.shadowOriginDeleted) {
         return {
           type: 'shadow-node',

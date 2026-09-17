@@ -6,7 +6,7 @@
    路由携带 edgeId 时居中到目标边，携带 nodeId 时视角居中到目标节点。
    集成节点编辑、逻辑删除与回收站功能；影子节点的删除等价于删除产生它的边。
    支持自动布局（罗盘锚定分层）。
-    集成节点移动和迁移系统：按住 Alt 拖拽节点到画布节点、影子节点或面包屑祖先片段可跨画布迁移，
+    集成节点移动和迁移系统：按住 Alt 拖拽节点到画布数据节点、影子节点或面包屑祖先片段可跨画布迁移，
     并在落点处显示允许/禁止高亮；非法迁移尝试（落点有效但节点集不可迁移）弹出针对性错误提示；
     迁移成功后节点与内部边失焦淡出消失；Alt 按下时禁止画布边缘自动滚动以免误触迁移。
 -->
@@ -185,25 +185,25 @@ function onFlowInit(instance: VueFlowStore) {
 /**
  * 打开指定节点的编辑对话框。
  *
- * 普通节点以编辑模式打开；影子节点（data.shadowOriginId 非 null）以只读模式打开原始节点的对话框，
- * 字段数据通过传入的原始节点 id 从 userDatabaseNodeFieldGet 加载。只读模式不会
+ * 数据节点以编辑模式打开；影子节点（data.shadowOriginId 非 null）以只读模式打开本体节点的对话框，
+ * 字段数据通过传入的本体节点 id 从 userDatabaseNodeFieldGet 加载。只读模式不会
  * resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
- * @param id 节点 id（影子节点是画布中的虚拟节点 id，原始节点 id 通过 data.shadowOriginId 获取）
+ * @param id 节点 id（影子节点是画布中的虚拟节点 id，本体节点 id 通过 data.shadowOriginId 获取）
  * @returns 无返回值
  */
 async function onNodeEdit(id: string) {
   const node = nodes.value.find((n) => n.id === id);
   if (!node) return;
-  // 影子节点以只读形式打开原始节点的编辑对话框：传入原始节点 id，字段从原始节点加载；
+  // 影子节点以只读形式打开本体节点的编辑对话框：传入本体节点 id，字段从本体节点加载；
   // 只读模式不会 resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
   const shadowOriginId = node.data.shadowOriginId as string | null;
   const result = await editNodeDialogRef.value?.open(
-    { id: shadowOriginId ?? id, title: node.data.title, subTitle: node.data.subTitle },
+    { id: shadowOriginId ?? id, title: node.data.title, subtitle: node.data.subtitle },
     { readonly: !!shadowOriginId },
   );
   if (!result) return;
   node.data.title = result.title;
-  node.data.subTitle = result.subTitle;
+  node.data.subtitle = result.subtitle;
 }
 
 /**
@@ -236,7 +236,7 @@ async function deleteShadowNode(node: VFNode, producingEdgeId: string): Promise<
 }
 
 /**
- * 删除指定节点：影子节点走产生边删除（见 deleteShadowNode），普通节点与画布节点
+ * 删除指定节点：影子节点走产生边删除（见 deleteShadowNode），数据节点与画布数据节点
  * 走逻辑删除并飞入回收站。
  * @param id 节点 id
  * @returns 无返回值
@@ -244,7 +244,7 @@ async function deleteShadowNode(node: VFNode, producingEdgeId: string): Promise<
 async function onNodeDelete(id: string): Promise<void> {
   const node = nodes.value.find((n) => n.id === id);
   if (!node) return;
-  const producingEdgeId = node.data.shadowId as string | null;
+  const producingEdgeId = node.data.shadowProducingEdgeId as string | null;
   if (producingEdgeId !== null) {
     await deleteShadowNode(node, producingEdgeId);
     return;
@@ -305,7 +305,7 @@ function onNodeAttachment(id: string): void {
 }
 
 /**
- * 打开节点自定义颜色对话框，保存成功后更新节点颜色（持久化由对话框内部完成）。
+ * 打开数据节点自定义颜色对话框，保存成功后更新数据节点颜色（持久化由对话框内部完成）。
  * @param id 节点 id
  * @returns 无返回值
  */
@@ -314,7 +314,7 @@ async function onNodeColor(id: string): Promise<void> {
   if (!node) return;
   const dialog = nodeColorDialogRef.value;
   if (!dialog) return;
-  const result = await dialog.open(id, node.data.title, node.data.subTitle, node.data.color);
+  const result = await dialog.open(id, node.data.title, node.data.subtitle, node.data.color);
   if (result === null) return;
   node.data.color = result;
 }
@@ -376,7 +376,7 @@ async function onNodeRestore(node: Node, position?: { x: number; y: number }) {
 function onDragOver(event: DragEvent) {
   event.preventDefault();
   if (event.dataTransfer) {
-    if (event.dataTransfer.types.includes("application/x-inet-recycle-node")) {
+    if (event.dataTransfer.types.includes("application/x-i-net-recycle-node")) {
       event.dataTransfer.dropEffect = "move";
     } else {
       event.dataTransfer.dropEffect = "copy";
@@ -385,7 +385,7 @@ function onDragOver(event: DragEvent) {
 }
 
 function onDrop(event: DragEvent) {
-  const id = event.dataTransfer?.getData("application/x-inet-recycle-node");
+  const id = event.dataTransfer?.getData("application/x-i-net-recycle-node");
   if (id) {
     const node = recycleBin.deletedNodes.value.find((n) => n.id === id);
     if (node) {
@@ -398,12 +398,12 @@ function onDrop(event: DragEvent) {
   if (raw !== "") {
     const point = screenToFlowCoordinate({ x: event.clientX, y: event.clientY });
     const template_id = raw === "blank" ? null : raw;
-    const subTitle = event.dataTransfer?.getData("application/x-i-net-template-name") ?? "";
+    const subtitle = event.dataTransfer?.getData("application/x-i-net-template-name") ?? "";
     const createCanvas = event.dataTransfer?.getData("application/x-i-net-create-canvas") === "true";
     userDatabaseNodeCreate(
       canvasId,
       createCanvas ? t("database.canvas.new-canvas-name") : t("database.canvas.new-node-title"),
-      subTitle,
+      subtitle,
       point.x,
       point.y,
       template_id,
@@ -508,9 +508,9 @@ function onEdgeContextMenu(id: string, pos: { x: number; y: number }) {
 }
 
 /**
- * 连接合法性校验：不允许自环；画布节点不能直接作为源连接普通节点（后端 CanvasToPlainNodeEdge 兜底）；
- * 入向影子（普通节点的影子）只能作为源（后端 InvalidShadowEdge 兜底，目标为 inflow 时拒绝）；
- * 出向影子（画布节点的影子）只能作为目标（后端 InvalidShadowEdge 兜底，源为 outflow 时拒绝）；
+ * 连接合法性校验：不允许自环；画布数据节点不能直接作为源连接数据节点（后端 CanvasToDataNodeEdge 兜底）；
+ * 入向影子（数据节点的影子）只能作为源（后端 InvalidShadowEdge 兜底，目标为 inflow 时拒绝）；
+ * 出向影子（画布数据节点的影子）只能作为目标（后端 InvalidShadowEdge 兜底，源为 outflow 时拒绝）；
  * 入向影子→出向影子（两者本体都可在父画布中直接连接，后端 ShadowToShadowEdge 兜底拒绝）；
  * 不允许两端连接桩相同。
  * @param connection vue-flow 连接对象
@@ -521,19 +521,19 @@ function isValidConnection(connection: Connection): boolean {
   const source = nodes.value.find((n) => n.id === connection.source);
   const target = nodes.value.find((n) => n.id === connection.target);
   if (!source || !target) return false;
-  // 画布节点不能直接作为源连接普通节点（后端 CanvasToPlainNodeEdge 兜底）。
-  // 画布节点的判定需排除影子：影子不是画布节点，其 canvasRefId 不参与本判断。
-  // 普通节点的判定：canvasRefId === null 且 shadowOriginId === null。
+  // 画布数据节点不能直接作为源连接数据节点（后端 CanvasToDataNodeEdge 兜底）。
+  // 画布数据节点的判定需排除影子：影子不是画布数据节点，其 canvasRefId 不参与本判断。
+  // 数据节点的判定：canvasRefId === null 且 shadowOriginId === null。
   const sourceIsCanvas = source.data.canvasRefId !== null && source.data.shadowOriginId === null;
-  const targetIsPlain = target.data.canvasRefId === null && target.data.shadowOriginId === null;
-  if (sourceIsCanvas && targetIsPlain) return false;
-  // 入向影子（普通节点的影子）只能作为源：拒绝 target 为入向影子（后端 InvalidShadowEdge 兜底）。
+  const targetIsDataNode = target.data.canvasRefId === null && target.data.shadowOriginId === null;
+  if (sourceIsCanvas && targetIsDataNode) return false;
+  // 入向影子（数据节点的影子）只能作为源：拒绝 target 为入向影子（后端 InvalidShadowEdge 兜底）。
   if (target.data.shadowDirection === "inflow") return false;
-  // 出向影子（画布节点的影子）只能作为目标：拒绝 source 为出向影子（后端 InvalidShadowEdge 兜底）。
+  // 出向影子（画布数据节点的影子）只能作为目标：拒绝 source 为出向影子（后端 InvalidShadowEdge 兜底）。
   if (source.data.shadowDirection === "outflow") return false;
   // 入向影子→出向影子：两者本体都可在父画布中直接连接，拒绝此连接（后端 ShadowToShadowEdge 兜底）。
   if (source.data.shadowDirection === "inflow" && target.data.shadowDirection === "outflow") return false;
-  // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 port 即合法"）。
+  // 不允许两端连接桩相同（与 onConnect 的 ?? "" 兜底保持一致，避免 null 误判为"无 handle 即合法"）。
   if ((connection.sourceHandle ?? "") === (connection.targetHandle ?? "")) return false;
   return true;
 }
@@ -694,11 +694,11 @@ async function onNodeDragStopEffect(mode: Mode, draggedNodes: VFNode[], legality
         : "database.canvas.relocate-has-external"; // has-external
       snackbarText(t(key), "error");
     } else {
-      // 三类迁移目标均直接携带目标画布 id：canvas-node 为画布节点引用的子画布，
-      // shadow-node 为影子根本体（画布节点）引用的子画布，breadcrumb-segment 为面包屑片段对应的画布
+      // 三类迁移目标均直接携带目标画布 id：canvas-node 为画布数据节点引用的子画布，
+      // shadow-node 为影子本体（画布数据节点）引用的子画布，breadcrumb-segment 为面包屑片段对应的画布
       const targetCanvasId = target.type === "canvas-node" ? target.canvasRefId : target.canvasId;
       try {
-        // 视口的持久化语义为"视口中心"：中心画布坐标 = (-x / zoom, -y / zoom)；
+        // 由持久化视口值（屏幕坐标：画布原点相对视口中心的偏移）求视口中心画布坐标；
         // 目标画布无视口记录时 GET 返回默认值 (0, 0, 1)，代入即画布原点 (0, 0)
         const vp = await userDatabaseViewportGet(targetCanvasId);
         const center = { x: -vp.x / vp.zoom, y: -vp.y / vp.zoom };

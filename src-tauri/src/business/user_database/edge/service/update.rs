@@ -37,7 +37,7 @@ pub fn update(id: &str, title: String, description: String) -> Result<(), ErrorC
     })?;
     let old_title = edge.title.clone();
     let old_description = edge.description.clone();
-    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析根本体标题。
+    // 日志载荷的端点标题取展示标题：影子端点的标题落库为空串，须沿产生边链解析本体标题。
     let source_title = shadow::service::display_title(&connection, &source)?;
     let target_title = shadow::service::display_title(&connection, &target)?;
     dao::update_title_and_description(&connection, id, &title, &description)?;

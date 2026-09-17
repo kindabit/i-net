@@ -4,7 +4,7 @@ use crate::business::user_database::node::dao;
 use crate::business::user_database::{canvas, log, state};
 use crate::error_code::ErrorCode;
 
-/// 逻辑删除指定节点：置上逻辑删除标志。如果是画布节点，同时逻辑删除其引用的子画布。
+/// 逻辑删除指定节点：置上逻辑删除标志。如果是画布数据节点，同时逻辑删除其引用的子画布。
 ///
 /// 产生 NodeLogicalDelete 日志，载荷为节点的标题。
 ///
@@ -18,8 +18,8 @@ pub fn logical_delete(id: &str) -> Result<Node, ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if node.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if node.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
     node.deleted = true;

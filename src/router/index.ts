@@ -1,8 +1,8 @@
 /**
  * 前端路由定义。
  *
- * 提供首页（home）和数据库页（database）两个平级路由。
- * 数据库页内嵌画布宇宙等子路由。
+ * 提供首页（home）和用户数据库（database）两个平级路由。
+ * 用户数据库路由内嵌画布宇宙等子路由。
  */
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "@/views/Home.vue";

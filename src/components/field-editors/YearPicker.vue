@@ -3,7 +3,7 @@
 
   以类似日历的网格方式选择年份：每页 3 行乘 4 列共 12 个年份，头部左右箭头按页翻动（每页 12 年），
   头部标题显示当前页的年份范围；年份范围限定 0-9999，到达边界时对应箭头禁用。
-  空值态（hasValue 为假）下视图初始化到当前本地年份所在页且无选中高亮。
+  空值态（isEmpty 为真）下视图初始化到当前本地年份所在页且无选中高亮。
 -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
@@ -18,8 +18,8 @@ const MAX_YEAR = 9999;
 const props = defineProps<{
   /** 当前选中的年份。 */
   year: number;
-  /** 字段值是否非空（全 0 部件为"字段值为空"的项目约定）；空值态下不高亮选中项。 */
-  hasValue?: boolean;
+  /** 字段值是否为空值态（全 0 部件为"字段值为空"的项目约定）；空值态下不高亮选中项。 */
+  isEmpty: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,7 +38,7 @@ function pageStartOf(year: number): number {
 /** 视图当前页的起始年份：有合法值时取选中年份所在页，否则取当前本地年份所在页。 */
 const pageStart = ref(
   pageStartOf(
-    props.hasValue && props.year >= MIN_YEAR && props.year <= MAX_YEAR
+    !props.isEmpty && props.year >= MIN_YEAR && props.year <= MAX_YEAR
       ? props.year
       : new Date().getFullYear(),
   ),
@@ -78,7 +78,7 @@ function changePage(delta: number): void {
  * @returns 与选中年份相等且非空值态时返回 true
  */
 function isSelected(year: number): boolean {
-  return (props.hasValue ?? false) && year === props.year;
+  return !props.isEmpty && year === props.year;
 }
 
 /**

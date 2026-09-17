@@ -19,8 +19,8 @@ pub fn create(name: String) -> Result<Template, ErrorCode> {
         return Err(ErrorCode::TemplateNameAlreadyExists { name });
     }
     let id = uuid::Uuid::new_v4().to_string();
-    let order = dao::max_order(&connection)? + 1;
-    let template = Template { id: id.clone(), name: name.clone(), order };
+    let sort_order = dao::max_sort_order(&connection)? + 1;
+    let template = Template { id: id.clone(), name: name.clone(), sort_order };
     dao::insert(&connection, &template)?;
     log::service::create(Action::TemplateCreate { name })?;
     Ok(template)

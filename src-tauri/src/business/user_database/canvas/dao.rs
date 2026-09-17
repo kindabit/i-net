@@ -1,6 +1,6 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 
-use crate::business::user_database::canvas::response::CanvasColorEntry;
+use crate::business::user_database::canvas::response::CanvasNodeColorEntry;
 use crate::business::user_database::entity::Canvas;
 use crate::error_code::ErrorCode;
 use crate::util::sea_query_util::values_to_params;
@@ -389,8 +389,8 @@ pub fn batch_move(connection: &Connection, items: &[(String, f64, f64)]) -> Resu
 /// - `connection`: 数据库连接。
 ///
 /// # 返回值
-/// 返回符合条件的画布颜色条目列表；若发生错误则返回对应的 `ErrorCode`。
-pub fn select_colored(connection: &Connection) -> Result<Vec<CanvasColorEntry>, ErrorCode> {
+/// 返回符合条件的画布节点颜色条目列表；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_colored(connection: &Connection) -> Result<Vec<CanvasNodeColorEntry>, ErrorCode> {
     let query = Query::select()
         .columns([CanvasIden::Name, CanvasIden::ParentId, CanvasIden::Color])
         .from(CanvasIden::Table)
@@ -405,7 +405,7 @@ pub fn select_colored(connection: &Connection) -> Result<Vec<CanvasColorEntry>, 
         })?;
     let rows = statement
         .query_map(rusqlite::params_from_iter(values_to_params(values)), |row| {
-            Ok(CanvasColorEntry {
+            Ok(CanvasNodeColorEntry {
                 name: row.get(0)?,
                 parent_id: row.get(1)?,
                 color: row.get(2)?,

@@ -1,8 +1,10 @@
 /**
  * vue-flow 视口持久化组合式函数。
  *
- * 封装视口加载、坐标转换（中心语义 ↔ 屏幕偏移）、
+ * 封装视口加载、坐标转换（视口中心 ↔ 屏幕坐标）、
  * 防抖保存等逻辑，供每个使用 vue-flow 的页面复用。
+ *
+ * 持久化值为屏幕坐标：画布原点相对视口中心的偏移（屏幕像素）。
  */
 import { ref, type Ref } from "vue";
 import debounce from "lodash/debounce";

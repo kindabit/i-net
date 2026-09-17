@@ -11,7 +11,7 @@ use crate::error_code::ErrorCode;
 
 /// 收集一条边被物理删除时，因其产生的影子节点级联删除而失去连接的节点标题（去重）。
 ///
-/// 级联路径：边删除 → 其产生的影子经 node.shadow_id 外键级联删除 → 影子的相连边经
+/// 级联路径：边删除 → 其产生的影子经 node.shadow_producing_edge_id 外键级联删除 → 影子的相连边经
 /// edge.source_id/target_id 外键级联删除 → 这些边若也是产生边，其影子递归级联删除。
 /// 本函数在删除发生前沿同一路径预收集：找出边产生的影子，收集影子相连边另一端
 /// （邻居，必然是非影子节点）的标题，并对每条相连边递归同一过程。
@@ -76,8 +76,8 @@ fn collect_edge_into(
     collect_shadow_into(connection, &shadow, affected)
 }
 
-/// 判断按连接规则一条边是否应当产生影子：源端是画布节点、目标端是画布节点
-/// 或目标端是出向影子时应当产生，其余连接（普通→普通、入向影子→普通）不产生。
+/// 判断按连接规则一条边是否应当产生影子：源端是画布数据节点、目标端是画布数据节点
+/// 或目标端是出向影子时应当产生，其余连接（数据节点→数据节点、入向影子→数据节点）不产生。
 /// 目标端是影子时方向必然可推导，推导失败返回对应的 DataCorruption* 错误。
 ///
 /// # 参数
@@ -95,7 +95,7 @@ fn should_produce_shadow(
     if source.canvas_ref_id.is_some() || target.canvas_ref_id.is_some() {
         return Ok(true);
     }
-    if target.shadow_id.is_some() {
+    if target.shadow_producing_edge_id.is_some() {
         return Ok(shadow_direction(connection, target)? == ShadowDirection::Outflow);
     }
     Ok(false)
@@ -153,7 +153,7 @@ fn collect_shadow_into(
                 node_id: neighbor_id.to_string(),
             }
         })?;
-        if neighbor.shadow_id.is_some() {
+        if neighbor.shadow_producing_edge_id.is_some() {
             return Err(ErrorCode::DataCorruptionShadowNeighborIsShadow {
                 shadow_id: shadow.id.clone(),
                 neighbor_id: neighbor.id.clone(),
@@ -185,11 +185,11 @@ mod tests {
             x: 0.0,
             y: 0.0,
             title: String::new(),
-            sub_title: String::new(),
+            subtitle: String::new(),
             canvas_ref_id: None,
             deleted: false,
             color: String::new(),
-            shadow_id: None,
+            shadow_producing_edge_id: None,
         }
     }
 
@@ -220,28 +220,28 @@ mod tests {
             id: id.to_string(),
             canvas_id: canvas_id.to_string(),
             source_id: source_id.to_string(),
-            source_port: "right".to_string(),
+            source_handle: "right".to_string(),
             target_id: target_id.to_string(),
-            target_port: "left".to_string(),
+            target_handle: "left".to_string(),
             title: String::new(),
             description: String::new(),
         };
         edge_dao::insert(connection, &edge).unwrap();
     }
 
-    /// 入向影子有两条出边连接到普通节点 M1、M2 时，断连收集返回两者标题并去重。
+    /// 入向影子有两条出边连接到数据节点 M1、M2 时，断连收集返回两者标题并去重。
     #[test]
     fn test_collect_inflow_shadow_neighbors() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        let source = make_node("source-plain", &canvas_id);
+        let source = make_node("source-data", &canvas_id);
         node_dao::insert(&connection, &source).unwrap();
         let canvas_b = make_node("canvas-b", &canvas_id);
         node_dao::insert(&connection, &canvas_b).unwrap();
         insert_edge(&connection, &canvas_id, "edge-prod", &source.id, &canvas_b.id);
         let mut shadow = make_node("shadow-in", &canvas_id);
         shadow.title = "shadow-in".to_string();
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
 
         // 影子所在画布内建两条出边，邻居分别设置独立 title 用于断言去重。
@@ -261,14 +261,14 @@ mod tests {
         assert!(affected.contains(&"m2-title".to_string()));
     }
 
-    /// 出向影子有一条入边来自普通节点 M 时，断连收集返回 M 的 title。
-    /// 新规则下出向影子只能是画布节点的影子（产生边源端 = 画布节点），且任何"进入"出向影子的边
-    /// （普通→出向影子 / 画布→出向影子）都会再触发嵌套影子创建，所以这里同步创建嵌套影子。
+    /// 出向影子有一条入边来自数据节点 M 时，断连收集返回 M 的 title。
+    /// 新规则下出向影子只能是画布数据节点的影子（产生边源端 = 画布数据节点），且任何"进入"出向影子的边
+    /// （数据节点→出向影子 / 画布数据节点→出向影子）都会再触发嵌套影子创建，所以这里同步创建嵌套影子。
     #[test]
     fn test_collect_outflow_shadow_neighbors() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        // 画布节点 source（canvas_ref_id = sub-canvas-1）→ 画布节点 target（canvas_ref_id = sub-canvas-2）。
+        // 画布数据节点 source（canvas_ref_id = sub-canvas-1）→ 画布数据节点 target（canvas_ref_id = sub-canvas-2）。
         let mut canvas_source = make_node("canvas-source", &canvas_id);
         canvas_source.canvas_ref_id = Some("sub-canvas-1".to_string());
         node_dao::insert(&connection, &canvas_source).unwrap();
@@ -278,18 +278,18 @@ mod tests {
         // edge-prod：source → target，按规则在 source 的子画布 sub-canvas-1 内产生 target 的出向影子。
         insert_edge(&connection, &canvas_id, "edge-prod", &canvas_source.id, &canvas_target.id);
         let mut shadow = make_node("shadow-out", "sub-canvas-1");
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
 
-        // sub-canvas-1 内建一条入边：m → shadow。该边按规则 3（普通→出向影子）应再触发
-        // 嵌套影子创建于 target 根本体画布节点 canvas_target 引用的子画布 sub-canvas-2 内；
+        // sub-canvas-1 内建一条入边：m → shadow。该边按规则 3（数据节点→出向影子）应再触发
+        // 嵌套影子创建于 target 本体画布数据节点 canvas_target 引用的子画布 sub-canvas-2 内；
         // 测试中手动插入该嵌套影子以模拟真实流程。
         let mut m = make_node("m", "sub-canvas-1");
         m.title = "m-title".to_string();
         node_dao::insert(&connection, &m).unwrap();
         insert_edge(&connection, "sub-canvas-1", "edge-m-s", &m.id, &shadow.id);
         let mut nested_shadow = make_node("nested-shadow", "sub-canvas-2");
-        nested_shadow.shadow_id = Some("edge-m-s".to_string());
+        nested_shadow.shadow_producing_edge_id = Some("edge-m-s".to_string());
         node_dao::insert(&connection, &nested_shadow).unwrap();
 
         let prod_edge = edge_dao::select_by_id(&connection, "edge-prod").unwrap().unwrap();
@@ -297,25 +297,25 @@ mod tests {
         assert_eq!(affected, vec!["m-title".to_string()]);
     }
 
-    /// 递归路径：影子的相连边若也产生嵌套影子（影子 → 画布节点），嵌套影子的邻居也被收集。
-    /// 拓扑：edge-prod 产生入向影子 S1，S1 通过 edge-inner 连接画布节点 canvas_b2 →
+    /// 递归路径：影子的相连边若也产生嵌套影子（影子 → 画布数据节点），嵌套影子的邻居也被收集。
+    /// 拓扑：edge-prod 产生入向影子 S1，S1 通过 edge-inner 连接画布数据节点 canvas_b2 →
     /// 在 canvas_b2 嵌套产生影子 S2，S2 拥有邻居 m2；断连 edge-prod 时 m2 也应被收集。
     #[test]
     fn test_collect_recursive_through_nested_shadow() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        // 边 1：source plain → canvas_b（画布节点），在 canvas_b 产生入向影子 S1。
-        let source = make_node("source-plain", &canvas_id);
+        // 边 1：source data → canvas_b（画布数据节点），在 canvas_b 产生入向影子 S1。
+        let source = make_node("source-data", &canvas_id);
         node_dao::insert(&connection, &source).unwrap();
         let mut canvas_b = make_node("canvas-b", &canvas_id);
         canvas_b.canvas_ref_id = Some("sub-canvas-1".to_string());
         node_dao::insert(&connection, &canvas_b).unwrap();
         insert_edge(&connection, &canvas_id, "edge-prod", &source.id, &canvas_b.id);
         let mut shadow = make_node("shadow-in", &canvas_id);
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
 
-        // 边 2：S1 → canvas_b2（画布节点），按规则应在 canvas_b2.canvas_ref_id 内产生嵌套影子 S2。
+        // 边 2：S1 → canvas_b2（画布数据节点），按规则应在 canvas_b2.canvas_ref_id 内产生嵌套影子 S2。
         // 此处为简化测试构造，直接把 S2 手工落到 canvas_id（与 S1 同画布）以避开跨画布建表：
         // 递归只关心"边产生影子 → 影子的邻居进入 affected"，对落点画布无要求。
         let mut canvas_b2 = make_node("canvas-b2", &canvas_id);
@@ -324,7 +324,7 @@ mod tests {
         insert_edge(&connection, &canvas_id, "edge-inner", &shadow.id, &canvas_b2.id);
         let mut nested_shadow = make_node("nested-shadow", &canvas_id);
         nested_shadow.title = "nested-shadow-title".to_string();
-        nested_shadow.shadow_id = Some("edge-inner".to_string());
+        nested_shadow.shadow_producing_edge_id = Some("edge-inner".to_string());
         node_dao::insert(&connection, &nested_shadow).unwrap();
         // 邻居 m2 与 nested_shadow 相连。
         let mut m2 = make_node("m2", &canvas_id);
@@ -343,9 +343,9 @@ mod tests {
         assert!(affected.contains(&"m2-title".to_string()));
     }
 
-    /// 边不产生影子（普通→普通）时返回空列表。
+    /// 边不产生影子（数据节点→数据节点）时返回空列表。
     #[test]
-    fn test_collect_plain_to_plain_returns_empty() {
+    fn test_collect_data_to_data_returns_empty() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
         let a = make_node("a", &canvas_id);
@@ -360,7 +360,7 @@ mod tests {
     }
 
     /// 应产生影子却缺失时返回 DataCorruptionMissingShadow。
-    /// 构造：边 source 是画布节点 → target 是画布节点；FK OFF 跳过建影子。
+    /// 构造：边 source 是画布数据节点 → target 是画布数据节点；FK OFF 跳过建影子。
     #[test]
     fn test_collect_missing_shadow_returns_data_corruption_missing_shadow() {
         let connection = Connection::open_in_memory().unwrap();
@@ -387,14 +387,14 @@ mod tests {
     fn test_collect_inflow_with_in_edge_returns_direction_mismatch() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        let source = make_node("source-plain", &canvas_id);
+        let source = make_node("source-data", &canvas_id);
         node_dao::insert(&connection, &source).unwrap();
         let canvas_b = make_node("canvas-b", &canvas_id);
         node_dao::insert(&connection, &canvas_b).unwrap();
         insert_edge(&connection, &canvas_id, "edge-prod", &source.id, &canvas_b.id);
         let mut shadow = make_node("shadow-in", &canvas_id);
         shadow.title = "shadow-in".to_string();
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
 
         // 构造一条入向影子的入边：m → shadow（应报方向不匹配）。
@@ -418,18 +418,18 @@ mod tests {
     fn test_collect_neighbor_is_shadow_returns_neighbor_is_shadow() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        // 边 source=plain → target=canvas_b，产生入向影子 S。
-        let source = make_node("source-plain", &canvas_id);
+        // 边 source=data → target=canvas_b，产生入向影子 S。
+        let source = make_node("source-data", &canvas_id);
         node_dao::insert(&connection, &source).unwrap();
         let canvas_b = make_node("canvas-b", &canvas_id);
         node_dao::insert(&connection, &canvas_b).unwrap();
         insert_edge(&connection, &canvas_id, "edge-prod", &source.id, &canvas_b.id);
         let mut shadow = make_node("shadow-in", &canvas_id);
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
         // 邻居也是一个影子节点（脏数据构造；正常路径影子之间不允许相连）。
         let mut neighbor_shadow = make_node("neighbor-shadow", &canvas_id);
-        neighbor_shadow.shadow_id = Some("some-other-edge-id".to_string());
+        neighbor_shadow.shadow_producing_edge_id = Some("some-other-edge-id".to_string());
         node_dao::insert(&connection, &neighbor_shadow).unwrap();
         insert_edge(&connection, &canvas_id, "edge-s-n", &shadow.id, &neighbor_shadow.id);
 
@@ -449,13 +449,13 @@ mod tests {
     fn test_collect_shadow_edge_endpoint_missing() {
         let connection = Connection::open_in_memory().unwrap();
         let canvas_id = setup_canvas(&connection);
-        let source = make_node("source-plain", &canvas_id);
+        let source = make_node("source-data", &canvas_id);
         node_dao::insert(&connection, &source).unwrap();
         let canvas_b = make_node("canvas-b", &canvas_id);
         node_dao::insert(&connection, &canvas_b).unwrap();
         insert_edge(&connection, &canvas_id, "edge-prod", &source.id, &canvas_b.id);
         let mut shadow = make_node("shadow-in", &canvas_id);
-        shadow.shadow_id = Some("edge-prod".to_string());
+        shadow.shadow_producing_edge_id = Some("edge-prod".to_string());
         node_dao::insert(&connection, &shadow).unwrap();
         // 边 target 端指向不存在的节点 id。
         insert_edge(&connection, &canvas_id, "edge-bad", &shadow.id, "missing-target-id");

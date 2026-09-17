@@ -8,15 +8,15 @@
 import { ref, watch } from "vue";
 import { t } from "@/i18n";
 import {
-  deserializeNodeColor,
-  serializeNodeColor,
-  collectNodeColorList,
+  deserializeDataNodeColor,
+  serializeDataNodeColor,
+  collectDataNodeColorList,
   type DataNodeColorScheme,
   type DataNodeColorProperties,
   type DataNodeHistoryColor,
 } from "./index";
 import { DATA_NODE_COLOR_PRESETS } from "./color-presets";
-import { userDatabaseNodeSetColor } from "@/api";
+import { userDatabaseDataNodeSetColor } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import ColorPairSwatch from "./ColorPairSwatch.vue";
 import ColorFieldEditor from "./ColorFieldEditor.vue";
@@ -44,7 +44,7 @@ const currentNodeId = ref("");
 /** 预览用标题 */
 const currentTitle = ref("");
 /** 预览用副标题 */
-const currentSubTitle = ref("");
+const currentSubtitle = ref("");
 /** 草稿：可选属性对象（键缺失即默认值） */
 const draft = ref<DataNodeColorScheme>({ light: {}, dark: {} });
 /** 历史颜色组合列表 */
@@ -67,7 +67,7 @@ function settle(value: string | null): void {
 async function loadHistory(): Promise<void> {
   history.value = [];
   try {
-    history.value = await collectNodeColorList();
+    history.value = await collectDataNodeColorList();
   } catch (e) {
     snackbarErrorCode(e);
   }
@@ -80,7 +80,7 @@ async function loadHistory(): Promise<void> {
  */
 async function persist(color: string): Promise<void> {
   try {
-    await userDatabaseNodeSetColor(currentNodeId.value, color);
+    await userDatabaseDataNodeSetColor(currentNodeId.value, color);
     settle(color);
     dialog.value = false;
   } catch (e) {
@@ -93,16 +93,16 @@ async function persist(color: string): Promise<void> {
  * 先结算上一个未关闭的 Promise，再记录参数、反序列化当前颜色为草稿，打开对话框并异步加载历史。
  * @param nodeId 节点 id
  * @param title 预览用标题
- * @param subTitle 预览用副标题
+ * @param subtitle 预览用副标题
  * @param currentColor 实体 color 字段原值
  * @returns 保存成功 resolve 新序列化串；恢复默认成功 resolve ""；取消/关闭 resolve null
  */
-function open(nodeId: string, title: string, subTitle: string, currentColor: string): Promise<string | null> {
+function open(nodeId: string, title: string, subtitle: string, currentColor: string): Promise<string | null> {
   settle(null);
   currentNodeId.value = nodeId;
   currentTitle.value = title;
-  currentSubTitle.value = subTitle;
-  draft.value = deserializeNodeColor(currentColor);
+  currentSubtitle.value = subtitle;
+  draft.value = deserializeDataNodeColor(currentColor);
   dialog.value = true;
   void loadHistory();
   return new Promise((resolve) => {
@@ -122,7 +122,7 @@ function applyHistory(entry: DataNodeHistoryColor): void {
 
 /** 保存草稿 */
 function onSave(): void {
-  void persist(serializeNodeColor(draft.value));
+  void persist(serializeDataNodeColor(draft.value));
 }
 
 /** 全部恢复默认 */
@@ -148,7 +148,7 @@ defineExpose({ open });
   <VDialog v-model="dialog" max-width="48rem" scrollable>
     <VCard>
       <VCardTitle>
-        {{ t("database.color-dialog.title-node") }}：{{ currentTitle }}
+        {{ t("database.color-dialog.title-data-node") }}：{{ currentTitle }}
       </VCardTitle>
       <VCardText>
         <!-- 预设区 -->
@@ -223,7 +223,7 @@ defineExpose({ open });
           <DataNodeColorPreview
             :scheme="draft"
             :title="currentTitle"
-            :sub-title="currentSubTitle"
+            :subtitle="currentSubtitle"
           />
         </div>
       </VCardText>

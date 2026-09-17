@@ -5,7 +5,7 @@
 //! 2. 严格读取 shard 校验和表，容错读取 shard 区（尾部截断的 shard 按缺失处理），
 //!    逐块 SHA-256 校验并标记坏块。
 //! 3. 如有坏块，调用 [`reconstruct_shards`] 恢复；坏块超过 parity 报 `BackupTooManyShardsLost`。
-//! 4. 拼接数据 shard → 原始字节流 → 解压到系统 temp 目录下的 `inet-restore-<pid>-<ts>/`。
+//! 4. 拼接数据 shard → 原始字节流 → 解压到系统 temp 目录下的 `i-net-restore-<pid>-<ts>/`。
 //! 5. 清空数据目录（保留 `logs/`），把临时目录内容移动到数据目录。
 //!
 //! 临时目录**不在数据目录内**，避免被第 5 步误删；
@@ -166,7 +166,7 @@ fn temp_directory_name() -> String {
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let pid = std::process::id();
-    format!("inet-restore-{}-{}", pid, ts)
+    format!("i-net-restore-{}-{}", pid, ts)
 }
 
 /// 临时目录守卫：作用域结束（含错误路径）时尽力递归删除目录，避免还原失败残留。

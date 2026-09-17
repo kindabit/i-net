@@ -88,8 +88,8 @@ async function loadCanvases(): Promise<void> {
       id: `${c.parent_id}->${c.id}`,
       source: c.parent_id as string,
       target: c.id,
-      sourceHandle: "source-right",
-      targetHandle: "target-left",
+      sourceHandle: "right",
+      targetHandle: "left",
       markerEnd: { type: MarkerType.ArrowClosed },
       selectable: false,
       deletable: false,
@@ -134,7 +134,7 @@ const paths = computed<Record<string, string>>(() => {
 });
 
 /**
- * 打开画布自定义颜色对话框，保存成功后更新本地画布颜色并同步 vf node data（持久化由对话框内部完成）。
+ * 打开画布节点自定义颜色对话框，保存成功后更新本地画布节点颜色并同步 vf node data（持久化由对话框内部完成）。
  * @param id 画布 id
  * @returns 无返回值
  */
@@ -211,7 +211,7 @@ function onDragOver(event: DragEvent) {
 }
 
 function onDrop(event: DragEvent) {
-  const id = event.dataTransfer?.getData("application/x-inet-recycle-canvas");
+  const id = event.dataTransfer?.getData("application/x-i-net-recycle-canvas");
   if (!id) return;
   const canvas = recycleBin.deletedCanvases.value.find((c) => c.id === id);
   if (!canvas) return;

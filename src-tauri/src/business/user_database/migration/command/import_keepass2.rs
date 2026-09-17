@@ -4,13 +4,13 @@ use crate::error_code::ErrorCode;
 use crate::util::preprocess_util;
 
 /// 数据迁移聚合导入接口（KeePass 2.0）：接收前端已构造好的节点与边数据，
-/// 在根画布内创建一个画布节点，其引用的新画布内批量写入全部节点、字段与父子边，
+/// 在根画布内创建一个画布数据节点，其引用的新画布内批量写入全部节点、字段与父子边，
 /// 所有写库操作聚合为一条日志条目。
 ///
 /// # 参数
-/// - `canvas_name`: 新画布的名称（画布节点标题与其保持一致），重名时自动追加 " 2"、" 3"…。
-/// - `canvas_node_x`: 画布节点在根画布中的 x 坐标。
-/// - `canvas_node_y`: 画布节点在根画布中的 y 坐标。
+/// - `canvas_name`: 新画布的名称（画布数据节点标题与其保持一致），重名时自动追加 " 2"、" 3"…。
+/// - `canvas_node_x`: 画布数据节点在根画布中的 x 坐标。
+/// - `canvas_node_y`: 画布数据节点在根画布中的 y 坐标。
 /// - `nodes`: 前端构造好的导入节点列表（第一个节点表示数据库本身，为树的根）。
 /// - `edges`: 前端构造好的父子边列表（下标引用 `nodes`）。
 ///
@@ -34,8 +34,8 @@ pub fn user_database_migration_import_keepass2(
 ///
 /// # 参数
 /// - `canvas_name`: 新画布的名称。
-/// - `canvas_node_x`: 画布节点在根画布中的 x 坐标。
-/// - `canvas_node_y`: 画布节点在根画布中的 y 坐标。
+/// - `canvas_node_x`: 画布数据节点在根画布中的 x 坐标。
+/// - `canvas_node_y`: 画布数据节点在根画布中的 y 坐标。
 /// - `nodes`: 前端构造好的导入节点列表。
 /// - `edges`: 前端构造好的父子边列表（下标引用 `nodes`）。
 ///
@@ -86,7 +86,7 @@ mod tests {
         let nodes = vec![
             ImportedNodeVO {
                 title: "User Name".to_string(),
-                sub_title: "Sample Entry".to_string(),
+                subtitle: "Sample Entry".to_string(),
                 x: 0.0,
                 y: 0.0,
                 fields: vec![
@@ -97,7 +97,7 @@ mod tests {
             },
             ImportedNodeVO {
                 title: "General".to_string(),
-                sub_title: String::new(),
+                subtitle: String::new(),
                 x: 240.0,
                 y: 160.0,
                 fields: Vec::new(),

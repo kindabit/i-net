@@ -7,8 +7,8 @@ use crate::error_code::ErrorCode;
 /// 在指定画布内新建一个节点。
 ///
 /// 有两种模式：
-/// - `create_canvas == false`（普通节点）：宿主画布仅校验存在。可选地基于模板 id 复制模板字段结构。
-/// - `create_canvas == true`（画布节点）：宿主画布须存在且未逻辑删除；以 title 为基础名去重
+/// - `create_canvas == false`（数据节点）：宿主画布仅校验存在。可选地基于模板 id 复制模板字段结构。
+/// - `create_canvas == true`（画布数据节点）：宿主画布须存在且未逻辑删除；以 title 为基础名去重
 ///   （重复时追加 " 2"、" 3"…）；创建子画布后在宿主画布内创建引用它的节点
 ///   （`canvas_ref_id = Some(canvas.id)`）；insert 失败时补偿物理删除画布。
 ///   可选地同样基于模板 id 复制模板字段结构。
@@ -18,11 +18,11 @@ use crate::error_code::ErrorCode;
 /// # 参数
 /// - `canvas_id`: 画布 id。
 /// - `title`: 节点标题；`create_canvas == true` 时也作为画布名称的基础名。
-/// - `sub_title`: 节点副标题。
+/// - `subtitle`: 节点副标题。
 /// - `x`: 节点在画布中的 x 坐标。
 /// - `y`: 节点在画布中的 y 坐标。
 /// - `template_id`: 可选的模板 id，用于从模板复制字段结构。
-/// - `create_canvas`: 是否创建画布节点。
+/// - `create_canvas`: 是否创建画布数据节点。
 ///
 /// # 返回值
 /// 返回新建的节点；画布不存在时返回 `ErrorCode::NoCanvasWithSuchId`，
@@ -31,7 +31,7 @@ use crate::error_code::ErrorCode;
 pub fn create(
     canvas_id: &str,
     title: String,
-    sub_title: String,
+    subtitle: String,
     x: f64,
     y: f64,
     template_id: Option<String>,
@@ -67,11 +67,11 @@ pub fn create(
             x,
             y,
             title: final_name,
-            sub_title,
+            subtitle,
             canvas_ref_id: Some(canvas.id.clone()),
             deleted: false,
             color: String::new(),
-            shadow_id: None,
+            shadow_producing_edge_id: None,
         };
 
         if let Err(e) = dao::insert(&connection, &node) {
@@ -84,7 +84,7 @@ pub fn create(
 
         log::service::create(Action::NodeCreate {
             title: node.title.clone(),
-            sub_title: node.sub_title.clone(),
+            subtitle: node.subtitle.clone(),
         })?;
         return Ok(node);
     }
@@ -95,11 +95,11 @@ pub fn create(
         x,
         y,
         title,
-        sub_title,
+        subtitle,
         canvas_ref_id: None,
         deleted: false,
         color: String::new(),
-        shadow_id: None,
+        shadow_producing_edge_id: None,
     };
     dao::insert(&connection, &node)?;
     if let Some(ref tid) = template_id {
@@ -107,12 +107,12 @@ pub fn create(
     }
     log::service::create(Action::NodeCreate {
         title: node.title.clone(),
-        sub_title: node.sub_title.clone(),
+        subtitle: node.subtitle.clone(),
     })?;
     Ok(node)
 }
 
-/// 将指定模板的字段结构复制为指定节点的节点字段（field_value 为 None）。
+/// 将指定模板的字段结构复制为指定节点的节点字段（value 为 None）。
 fn copy_template_fields(
     connection: &rusqlite::Connection,
     node_id: &str,
@@ -125,8 +125,8 @@ fn copy_template_fields(
             node_id: node_id.to_string(),
             name: tpl_field.name,
             field_type: tpl_field.field_type,
-            field_value: None,
-            order: tpl_field.order,
+            value: None,
+            sort_order: tpl_field.sort_order,
             dictionary_id: tpl_field.dictionary_id,
         };
         node_field::dao::insert(connection, &node_field)?;

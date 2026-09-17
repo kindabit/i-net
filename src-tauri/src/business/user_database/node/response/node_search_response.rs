@@ -14,8 +14,8 @@ pub struct NodeSearchResponse {
     /// 节点标题
     pub title: String,
     /// 节点副标题
-    pub sub_title: String,
-    /// 节点引用的子画布 id，仅画布节点有值
+    pub subtitle: String,
+    /// 节点引用的子画布 id，仅画布数据节点有值
     pub canvas_ref_id: Option<String>,
     /// 节点所在画布的名称
     pub canvas_name: String,

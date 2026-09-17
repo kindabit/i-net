@@ -1,8 +1,8 @@
 <!--
-  数据库布局页。
+  用户数据库页面。
 
   打开用户数据库后显示的页面框架。
-    右下角提供数据迁移入口（扳手图标弹出菜单）、"日志"按钮（打开操作日志对话框）与"保存并退出"按钮（保存数据库 → 关闭数据库 → 回主页）。
+    右下角提供数据迁移入口（扳手图标弹出菜单）、"日志"按钮（打开操作日志对话框）与"保存并退出"按钮（保存数据库 → 关闭数据库 → 回首页）。
   窗口关闭（X 按钮）弹出确认对话框，确认后退出应用。
   监听 Ctrl/Cmd+S 快捷键，仅保存数据库，不退出当前页面。
   顶部居中悬浮 Topbar（全局搜索 + 画布层级面包屑）。
@@ -45,8 +45,8 @@ const keepass2ImportRef = useTemplateRef<InstanceType<typeof KeePass2Import>>("k
 
 let unlistenClose: (() => void) | undefined;
 
-// 子路由变化时记录当前场景（画布宇宙记为空值），供下次打开数据库时恢复
-// 监听派生场景标识而非 route.name：画布间跳转（面包屑、影子虚拟边等）name 恒为 "canvas"，
+// 子路由变化时记录最后场景（画布宇宙记为空值），供下次打开数据库时恢复
+// 监听派生具体场景标识而非 route.name：画布间跳转（面包屑、影子虚拟边等）name 恒为 "canvas"，
 // 只有 params.canvasId 变化，监听 name 会漏掉画布间切换
 watch(
   () => (route.name === "canvas" ? (route.params.canvasId as string) : ""),
@@ -120,7 +120,7 @@ async function handleSave() {
   }
 }
 
-/** 保存并退出：保存成功后关闭数据库回主页；保存失败不关闭，防止数据丢失 */
+/** 保存并退出：保存成功后关闭数据库回首页；保存失败不关闭，防止数据丢失 */
 async function handleSaveAndExit() {
   saving.value = true;
   try {

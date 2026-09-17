@@ -15,8 +15,8 @@ pub fn set_color(id: &str, color: String) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if node.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if node.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
     node.color = color;

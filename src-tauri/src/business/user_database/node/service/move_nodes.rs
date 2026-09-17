@@ -47,7 +47,7 @@ pub fn move_nodes(items: &[MoveNodeVO]) -> Result<(), ErrorCode> {
     // 按实际位移数量产生一条日志。
     if moved.len() == 1 {
         let (item, node) = moved[0];
-        // 日志载荷的标题取展示标题：影子节点的标题落库为空串，须沿产生边链解析根本体标题。
+        // 日志载荷的标题取展示标题：影子节点的标题落库为空串，须沿产生边链解析本体标题。
         // 移动不改写标题与影子引用，用更新前的实体解析即可。
         let title = display_title(&connection, node)?;
         log::service::create(Action::NodeMove {

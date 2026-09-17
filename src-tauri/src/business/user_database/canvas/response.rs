@@ -1,3 +1,3 @@
-mod canvas_color_entry;
+mod canvas_node_color_entry;
 
-pub use canvas_color_entry::CanvasColorEntry;
+pub use canvas_node_color_entry::CanvasNodeColorEntry;

@@ -3,7 +3,7 @@ use crate::business::user_database::node::vo::NodeVO;
 use crate::error_code::ErrorCode;
 use crate::util::preprocess_util;
 
-/// 返回指定画布内的正常节点或者已经逻辑删除的节点，影子节点的展示数据合并自原始节点。
+/// 返回指定画布内的正常节点或者已经逻辑删除的节点，影子节点的展示数据合并自本体节点。
 ///
 /// # 参数
 /// - `canvas_id`: 画布 id。

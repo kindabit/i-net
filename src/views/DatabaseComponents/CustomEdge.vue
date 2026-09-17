@@ -31,13 +31,13 @@ const emit = defineEmits<{ contextmenu: [payload: { id: string; x: number; y: nu
 /** 标题标签 DOM 引用 */
 const labelRef = ref<HTMLElement | null>(null);
 
-/** 标签实际宽度（flow 坐标单位，默认 60 避免首帧闪烁） */
+/** 标签实际宽度（画布坐标单位，默认 60 避免首帧闪烁） */
 const labelWidth = ref(60);
 
-/** 标签实际高度（flow 坐标单位，默认 20 避免首帧闪烁） */
+/** 标签实际高度（画布坐标单位，默认 20 避免首帧闪烁） */
 const labelHeight = ref(20);
 
-/** 画布视口：用于把 getBoundingClientRect 测得的屏幕像素换算为 flow 坐标单位 */
+/** 画布视口：用于把 getBoundingClientRect 测得的屏幕像素换算为画布坐标单位 */
 const { viewport } = useVueFlow();
 
 /**
@@ -165,7 +165,7 @@ const arrowPath = computed(() => {
 /**
  * 测量标题标签的实际尺寸。
  * getBoundingClientRect 测得的是缩放后的屏幕像素（label 容器位于画布的 scale(zoom) 变换内），
- * 除以当前 zoom 换算为 flow 坐标单位，使缺口计算在任意缩放级别下都准确；
+ * 除以当前 zoom 换算为画布坐标单位，使缺口计算在任意缩放级别下都准确；
  * 换算结果与 zoom 无关，因此 zoom 变化后无需重新测量。
  */
 function measureLabel(): void {

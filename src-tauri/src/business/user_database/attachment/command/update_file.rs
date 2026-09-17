@@ -6,17 +6,17 @@ use crate::util::preprocess_util;
 ///
 /// # 参数
 /// - `id`: 附件 id。
-/// - `content`: 新的附件内容（明文）。
+/// - `plaintext`: 新的附件明文内容。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn user_database_attachment_update_file(id: String, content: Vec<u8>) -> Result<(), ErrorCode> {
-    preprocess(id, content)
+pub fn user_database_attachment_update_file(id: String, plaintext: Vec<u8>) -> Result<(), ErrorCode> {
+    preprocess(id, plaintext)
 }
 
 /// `user_database_attachment_update_file` 的 preprocess 函数：校验 id 后接入 service 层的 update_file 函数。
-pub fn preprocess(id: String, content: Vec<u8>) -> Result<(), ErrorCode> {
+pub fn preprocess(id: String, plaintext: Vec<u8>) -> Result<(), ErrorCode> {
     let id = preprocess_util::preprocess_attachment_id(id)?;
-    service::update_file(&id, &content)
+    service::update_file(&id, &plaintext)
 }

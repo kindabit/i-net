@@ -5,7 +5,7 @@ use crate::error_code::ErrorCode;
 
 /// 修改指定画布的名称，先检测新名称是否与其它画布重复。
 ///
-/// 重命名后同步更新引用该画布的画布节点的标题（含已逻辑删除的节点），
+/// 重命名后同步更新引用该画布的画布数据节点的标题（含已逻辑删除的节点），
 /// 保持两侧标题一致；同步时产生 NodeModify 日志。
 ///
 /// 产生 CanvasRename 日志，载荷内记录画布的旧名称和新名称。
@@ -29,18 +29,18 @@ pub fn rename(id: &str, new_name: String) -> Result<(), ErrorCode> {
     }
     let old_name = std::mem::replace(&mut canvas.name, new_name);
     dao::update(&connection, &canvas)?;
-    // 同步引用该画布的画布节点的标题（含已逻辑删除的节点），保持两侧标题一致；
+    // 同步引用该画布的画布数据节点的标题（含已逻辑删除的节点），保持两侧标题一致；
     // 节点标题已等于新名称时不落库也不产生日志。
     if let Some(mut referencing) = node::dao::select_by_canvas_ref_id(&connection, id)? {
         if referencing.title != canvas.name {
             let node_old_title = std::mem::replace(&mut referencing.title, canvas.name.clone());
-            let node_old_sub_title = referencing.sub_title.clone();
+            let node_old_subtitle = referencing.subtitle.clone();
             node::dao::update(&connection, &referencing)?;
             log::service::create(Action::NodeModify {
                 old_title: node_old_title,
-                old_sub_title: node_old_sub_title,
+                old_subtitle: node_old_subtitle,
                 new_title: referencing.title.clone(),
-                new_sub_title: referencing.sub_title.clone(),
+                new_subtitle: referencing.subtitle.clone(),
             })?;
         }
     }

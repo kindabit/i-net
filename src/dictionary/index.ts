@@ -14,7 +14,7 @@ export interface DictionaryTreeNode {
 
 /**
  * 将字典条目列表构建为树形森林，按 parent_id 组织。
- * 同级节点按 entry.order 升序排列；parent_id 指向不存在条目的节点视为根节点。
+ * 同级节点按 entry.sort_order 升序排列；parent_id 指向不存在条目的节点视为根节点。
  * @param entries 字典条目列表
  * @returns 字典树根节点列表
  */
@@ -36,7 +36,7 @@ function buildTree(entries: Dictionary[]): DictionaryTreeNode[] {
   }
 
   const sortByOrder = (a: DictionaryTreeNode, b: DictionaryTreeNode) =>
-    a.entry.order - b.entry.order;
+    a.entry.sort_order - b.entry.sort_order;
 
   for (const node of map.values()) {
     node.children.sort(sortByOrder);
@@ -47,7 +47,7 @@ function buildTree(entries: Dictionary[]): DictionaryTreeNode[] {
 }
 
 /**
- * 将字典树拍平为条目列表（先序遍历，order 取同级下标）。
+ * 将字典树拍平为条目列表（先序遍历，sort_order 取同级下标）。
  * @param nodes 字典树节点列表
  * @param parentId 父节点 id，根节点为 null
  * @returns 拍平后的字典条目列表
@@ -62,7 +62,7 @@ function flattenTreeNodes(
       id: nodes[i].entry.id,
       parent_id: parentId,
       value: nodes[i].entry.value,
-      order: i,
+      sort_order: i,
     });
     result.push(...flattenTreeNodes(nodes[i].children, nodes[i].entry.id));
   }
@@ -127,12 +127,12 @@ export async function loadDictionary(): Promise<void> {
 /**
  * 保存字典树：拍平后全量写库，再重新拉取并重置全局状态。
  * 不自行 catch 错误，由调用方处理。
- * @param forest 校验通过的字典树
+ * @param tree 校验通过的字典树
  */
 export async function saveDictionaryTree(
-  forest: DictionaryTreeNode[],
+  tree: DictionaryTreeNode[],
 ): Promise<void> {
-  await userDatabaseDictionarySet(flattenTreeNodes(forest, null));
+  await userDatabaseDictionarySet(flattenTreeNodes(tree, null));
   await loadDictionary();
 }
 

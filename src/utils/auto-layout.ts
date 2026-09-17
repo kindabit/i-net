@@ -6,15 +6,15 @@
  *   layering        Pass 2 最长路径分层（Kahn 拓扑）
  *   components      Pass 3 连通分量划分（并查集）
  *   orientation     Pass 4 边方向规范化（汇聚星型反转，保证方向翻转对称）
- *   component-layout Pass 5 分量布局（根行 → 理想位 → 兄弟展开 → 端口约束）
+ *   component-layout Pass 5 分量布局（根行 → 理想位 → 兄弟展开 → 连接桩约束）
  *   collision       Pass 6 碰撞松弛（确定性）
  *   compose         Pass 7 全局合成（分量平铺 + 孤立网格 + 归一）
  *
  * 适用于有向无环图：节点按最长路径分层，父节点必然先于子节点放置。
  * 子节点理想位 = 各入边锚点的均值，锚点 = 父节点位置 + 锚向 × ringSpacing：
- * 锚向优先取 sourcePort 方向（父节点选择的出口侧是最强信号），
- * 其次取 targetPort 的反向；无端口时取父节点的流向方向；
- * 孤立根节点的无端口子代绕父节点均布（过密时自动扩大均布半径）。
+ * 锚向优先取 sourceHandle 方向（父节点选择的出口侧是最强信号），
+ * 其次取 targetHandle 的反向；无连接桩时取父节点的流向方向；
+ * 孤立根节点的无连接桩子代绕父节点均布（过密时自动扩大均布半径）。
  * 同父同锚向的兄弟节点沿锚向的垂直方向等距对称排开（列或行）；
  * 不同子树偶然相撞产生的残余重叠由固定轮次的确定性碰撞松弛消除。
  * 布局结果横平竖直、父子恒距、兄弟成列成行、多父取锚点重心。
@@ -25,9 +25,6 @@
  * 所有浮点求和均先排序以消除输入顺序带来的舍入差异）。
  * 输出为节点中心坐标，调用方需自行换算为节点左上角坐标及 snap 网格对齐。
  *
- * 【历史命名】模块名与导出名保留了初版"径向同心环"时期的 radial 字样，
- * 现算法与同心环无关；为保持调用方（use-auto-layout.ts）稳定未更名。
- *
  * 【维护指引（供后续接手者）】
  * - 两条不变量不可破坏：① 父节点先于子节点放置（最长路径分层保证，
  *   布局每一步都假设 positions 中能取到父节点坐标）；② 完全确定性
@@ -35,14 +32,14 @@
  *   修改任何遍历/求和逻辑前先检查是否触碰这两条，确定性有测试兜底。
  * - 边方向仅经 orientation pass 规范后使用：汇聚星型分量（多纯源、
  *   方位发散）整体反转，使视觉枢纽成为分层根；其余结构保持原方向。
- *   判据变更需同步补充翻转对称性测试（radial-layout.test.ts）。
+ *   判据变更需同步补充翻转对称性测试（auto-layout.test.ts）。
  * - 已知边界（如需进一步优化可从这些点入手）：
  *   ① 边跨节点仅在布局侧缓解，完全消除需改 CustomEdge.vue 为正交路由；
  *   ② 间距约束先于碰撞松弛执行，拥挤场景松弛可能轻微侵蚀间距，
  *      严格保证需约束-松弛交替求解；
- *   ③ 病态输入（同一节点左右/上下矛盾端口）按 left/top 覆盖
- *      right/bottom 取舍；④ 无端口边的方向推断（流向/均布）仅是兜底，
- *      真实数据（CanvasView/CanvasUniverseView）每条边都带端口。
+ *   ③ 病态输入（同一节点左右/上下矛盾连接桩）按 left/top 覆盖
+ *      right/bottom 取舍；④ 无连接桩边的方向推断（流向/均布）仅是兜底，
+ *      真实数据（CanvasView/CanvasUniverseView）每条边都带连接桩。
  */
 
 import { layoutComponent, type ComponentLayout } from "./layout/component-layout";
@@ -52,19 +49,19 @@ import { assignLayers } from "./layout/layering";
 import { normalizeOrientation } from "./layout/orientation";
 import { sanitizeGraph } from "./layout/sanitize";
 import type {
-  RadialLayoutConfig,
-  RadialLayoutEdge,
-  RadialLayoutNode,
-  RadialLayoutPoint,
+  AutoLayoutConfig,
+  AutoLayoutEdge,
+  AutoLayoutNode,
+  AutoLayoutPoint,
 } from "./layout/types";
 
 export {
-  DEFAULT_RADIAL_LAYOUT_CONFIG,
-  type RadialLayoutConfig,
-  type RadialLayoutEdge,
-  type RadialLayoutNode,
-  type RadialLayoutPoint,
-  type RadialPortDirection,
+  DEFAULT_AUTO_LAYOUT_CONFIG,
+  type AutoLayoutConfig,
+  type AutoLayoutEdge,
+  type AutoLayoutNode,
+  type AutoLayoutPoint,
+  type Handle,
 } from "./layout/types";
 
 /**
@@ -81,11 +78,11 @@ export {
  * @param config 布局参数。
  * @returns 节点 id → 节点中心坐标，覆盖全部输入节点；空输入返回空 Map。
  */
-export function computeRadialLayout(
-  nodes: RadialLayoutNode[],
-  edges: RadialLayoutEdge[],
-  config: RadialLayoutConfig,
-): Map<string, RadialLayoutPoint> {
+export function computeAutoLayout(
+  nodes: AutoLayoutNode[],
+  edges: AutoLayoutEdge[],
+  config: AutoLayoutConfig,
+): Map<string, AutoLayoutPoint> {
   if (nodes.length === 0) {
     return new Map();
   }

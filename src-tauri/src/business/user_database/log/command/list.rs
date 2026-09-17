@@ -119,7 +119,7 @@ mod tests {
         let key = crate::util::preprocess_util::preprocess_password("password".to_string()).unwrap();
         let value = serde_json::to_value(&entity::Action::NodeCreate {
             title: "Hello World".to_string(),
-            sub_title: String::new(),
+            subtitle: String::new(),
         })
         .unwrap();
         let variant = value.get("variant").and_then(|v| v.as_str()).unwrap().to_string();

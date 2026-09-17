@@ -17,7 +17,7 @@ import {
 } from "@/dictionary";
 
 const dialog = ref(false);
-const forest = ref<DictionaryTreeNode[]>([]);
+const dictionaryTree = ref<DictionaryTreeNode[]>([]);
 const saving = ref(false);
 const confirmingClose = ref(false);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
@@ -41,20 +41,20 @@ function nodeValue(node: unknown): string {
   return (node as DictionaryTreeNode).entry.id;
 }
 
-/** 比较当前 forest 与快照是否不同。 */
+/** 比较当前 dictionaryTree 与快照是否不同。 */
 function isDirty(): boolean {
-  return JSON.stringify(forest.value) !== snapshot;
+  return JSON.stringify(dictionaryTree.value) !== snapshot;
 }
 
 /**
  * DFS 查找指定 id 节点所在父数组及下标。
  * @param id 目标节点 entry.id
- * @param nodes 搜索的节点数组，默认从 forest 根开始
+ * @param nodes 搜索的节点数组，默认从 dictionaryTree 根开始
  * @returns 找到返回 { parentArr, index }，未找到返回 null
  */
 function findNodeInfo(
   id: string,
-  nodes: DictionaryTreeNode[] = forest.value,
+  nodes: DictionaryTreeNode[] = dictionaryTree.value,
 ): { parentArr: DictionaryTreeNode[]; index: number } | null {
   for (let i = 0; i < nodes.length; i++) {
     if (nodes[i].entry.id === id) return { parentArr: nodes, index: i };
@@ -66,8 +66,8 @@ function findNodeInfo(
 
 function open() {
   dialog.value = true;
-  forest.value = cloneDictionaryTree();
-  snapshot = JSON.stringify(forest.value);
+  dictionaryTree.value = cloneDictionaryTree();
+  snapshot = JSON.stringify(dictionaryTree.value);
 }
 
 function moveUp(id: string) {
@@ -98,19 +98,19 @@ function addChild(id: string) {
       id: crypto.randomUUID(),
       parent_id: null,
       value: "",
-      order: 0,
+      sort_order: 0,
     },
     children: [],
   });
 }
 
 function addRoot() {
-  forest.value.push({
+  dictionaryTree.value.push({
     entry: {
       id: crypto.randomUUID(),
       parent_id: null,
       value: "",
-      order: 0,
+      sort_order: 0,
     },
     children: [],
   });
@@ -136,7 +136,7 @@ async function deleteEntry(id: string) {
   info.parentArr.splice(info.index, 1);
 }
 
-/** DFS 遍历 forest 检查是否有空 value。 */
+/** DFS 遍历 dictionaryTree 检查是否有空 value。 */
 function hasEmptyValue(nodes: DictionaryTreeNode[]): boolean {
   for (const node of nodes) {
     if (node.entry.value.trim() === "") return true;
@@ -146,14 +146,14 @@ function hasEmptyValue(nodes: DictionaryTreeNode[]): boolean {
 }
 
 async function save() {
-  if (hasEmptyValue(forest.value)) {
+  if (hasEmptyValue(dictionaryTree.value)) {
     snackbarText(t("database.dictionary.value-required"), "warning");
     return;
   }
 
   saving.value = true;
   try {
-    await saveDictionaryTree(forest.value);
+    await saveDictionaryTree(dictionaryTree.value);
     snackbarText(t("database.dictionary.saved"), "success");
     dialog.value = false;
   } catch (e) {
@@ -198,8 +198,8 @@ defineExpose({ open });
       <VCardTitle>{{ t("database.dictionary.manager-title") }}</VCardTitle>
       <VCardText class="dict-card-text">
         <VTreeview
-          v-if="forest.length > 0"
-          :items="forest"
+          v-if="dictionaryTree.length > 0"
+          :items="dictionaryTree"
           :item-title="nodeTitle"
           :item-value="nodeValue"
           item-children="children"
@@ -263,7 +263,7 @@ defineExpose({ open });
           </template>
         </VTreeview>
         <div
-          v-if="forest.length === 0"
+          v-if="dictionaryTree.length === 0"
           class="dict-empty-hint"
         >
           {{ t("database.dictionary.empty-hint") }}

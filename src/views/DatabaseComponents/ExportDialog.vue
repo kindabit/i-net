@@ -6,20 +6,20 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { t } from "@/i18n";
-import type { DatabaseExportMode } from "@/api";
+import type { UserDatabaseExportMode } from "@/api";
 
 /** 对话框显示状态 */
 const dialog = ref(false);
 /** 当前选中的导出模式，默认打码值 */
-const mode = ref<DatabaseExportMode>("mask-values");
+const mode = ref<UserDatabaseExportMode>("mask-values");
 /** 等待用户选择的 Promise resolve（仅生效一次） */
-let resolveOpen: ((value: DatabaseExportMode | null) => void) | null = null;
+let resolveOpen: ((value: UserDatabaseExportMode | null) => void) | null = null;
 
 /**
  * 打开对话框并等待用户选择。
  * @returns 确定返回所选模式，取消或关闭返回 null
  */
-function open(): Promise<DatabaseExportMode | null> {
+function open(): Promise<UserDatabaseExportMode | null> {
   // 重复打开时先按取消结算上一次等待，避免 Promise 泄漏
   settle(null);
   mode.value = "mask-values";
@@ -33,7 +33,7 @@ function open(): Promise<DatabaseExportMode | null> {
  * 结算等待中的 Promise。
  * @param value 用户选择
  */
-function settle(value: DatabaseExportMode | null) {
+function settle(value: UserDatabaseExportMode | null) {
   resolveOpen?.(value);
   resolveOpen = null;
 }

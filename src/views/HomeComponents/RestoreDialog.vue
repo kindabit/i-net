@@ -14,7 +14,7 @@ import { t } from "@/i18n";
 import {
   backupRestore,
   backupRestoreProbe,
-  type RestoreProbeResult,
+  type BackupProbeResult,
 } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import { useBackupProgress } from "@/composables/use-backup-progress";
@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
 const dialog = ref(false);
 /** 探测结果：null 表示尚未探测。结果中的 `source_path` 供"确认还原"阶段使用。 */
-const probeResult = ref<RestoreProbeResult | null>(null);
+const probeResult = ref<BackupProbeResult | null>(null);
 /** 是否处于还原流程中（用于禁用按钮与显示进度）。 */
 const restoring = ref(false);
 

@@ -18,9 +18,9 @@ pub(crate) enum EdgeIden {
     Id,
     CanvasId,
     SourceId,
-    SourcePort,
+    SourceHandle,
     TargetId,
-    TargetPort,
+    TargetHandle,
     Title,
     Description,
 }
@@ -31,9 +31,9 @@ fn map_row(row: &Row) -> rusqlite::Result<Edge> {
         id: row.get(0)?,
         canvas_id: row.get(1)?,
         source_id: row.get(2)?,
-        source_port: row.get(3)?,
+        source_handle: row.get(3)?,
         target_id: row.get(4)?,
-        target_port: row.get(5)?,
+        target_handle: row.get(5)?,
         title: row.get(6)?,
         description: row.get(7)?,
     })
@@ -76,9 +76,9 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
         )
         .col(ColumnDef::new_with_type(EdgeIden::CanvasId, ColumnType::custom("TEXT")).not_null())
         .col(ColumnDef::new_with_type(EdgeIden::SourceId, ColumnType::custom("TEXT")).not_null())
-        .col(ColumnDef::new_with_type(EdgeIden::SourcePort, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::SourceHandle, ColumnType::custom("TEXT")).not_null())
         .col(ColumnDef::new_with_type(EdgeIden::TargetId, ColumnType::custom("TEXT")).not_null())
-        .col(ColumnDef::new_with_type(EdgeIden::TargetPort, ColumnType::custom("TEXT")).not_null())
+        .col(ColumnDef::new_with_type(EdgeIden::TargetHandle, ColumnType::custom("TEXT")).not_null())
         .col(
             ColumnDef::new_with_type(EdgeIden::Title, ColumnType::custom("TEXT"))
                 .not_null()
@@ -119,9 +119,9 @@ pub fn insert(connection: &Connection, edge: &Edge) -> Result<(), ErrorCode> {
             EdgeIden::Id,
             EdgeIden::CanvasId,
             EdgeIden::SourceId,
-            EdgeIden::SourcePort,
+            EdgeIden::SourceHandle,
             EdgeIden::TargetId,
-            EdgeIden::TargetPort,
+            EdgeIden::TargetHandle,
             EdgeIden::Title,
             EdgeIden::Description,
         ])
@@ -129,9 +129,9 @@ pub fn insert(connection: &Connection, edge: &Edge) -> Result<(), ErrorCode> {
             (&edge.id).into(),
             (&edge.canvas_id).into(),
             (&edge.source_id).into(),
-            (&edge.source_port).into(),
+            (&edge.source_handle).into(),
             (&edge.target_id).into(),
-            (&edge.target_port).into(),
+            (&edge.target_handle).into(),
             (&edge.title).into(),
             (&edge.description).into(),
         ])
@@ -159,9 +159,9 @@ pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Edge>, E
             EdgeIden::Id,
             EdgeIden::CanvasId,
             EdgeIden::SourceId,
-            EdgeIden::SourcePort,
+            EdgeIden::SourceHandle,
             EdgeIden::TargetId,
-            EdgeIden::TargetPort,
+            EdgeIden::TargetHandle,
             EdgeIden::Title,
             EdgeIden::Description,
         ])
@@ -219,22 +219,22 @@ pub fn update_title_and_description(
 /// # 参数
 /// - `connection`: 数据库连接。
 /// - `id`: 边 id。
-/// - `source_port`: 新源节点连接桩。
-/// - `target_port`: 新目标节点连接桩。
+/// - `source_handle`: 新源节点连接桩。
+/// - `target_handle`: 新目标节点连接桩。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
-pub fn update_ports(
+pub fn update_handles(
     connection: &Connection,
     id: &str,
-    source_port: &str,
-    target_port: &str,
+    source_handle: &str,
+    target_handle: &str,
 ) -> Result<(), ErrorCode> {
     let query = Query::update()
         .table(EdgeIden::Table)
         .values([
-            (EdgeIden::SourcePort, source_port.into()),
-            (EdgeIden::TargetPort, target_port.into()),
+            (EdgeIden::SourceHandle, source_handle.into()),
+            (EdgeIden::TargetHandle, target_handle.into()),
         ])
         .and_where(Expr::col(EdgeIden::Id).eq(id))
         .take();
@@ -264,9 +264,9 @@ pub fn select_by_canvas_id(
             EdgeIden::Id,
             EdgeIden::CanvasId,
             EdgeIden::SourceId,
-            EdgeIden::SourcePort,
+            EdgeIden::SourceHandle,
             EdgeIden::TargetId,
-            EdgeIden::TargetPort,
+            EdgeIden::TargetHandle,
             EdgeIden::Title,
             EdgeIden::Description,
         ])
@@ -401,9 +401,9 @@ pub fn select_between(
             EdgeIden::Id,
             EdgeIden::CanvasId,
             EdgeIden::SourceId,
-            EdgeIden::SourcePort,
+            EdgeIden::SourceHandle,
             EdgeIden::TargetId,
-            EdgeIden::TargetPort,
+            EdgeIden::TargetHandle,
             EdgeIden::Title,
             EdgeIden::Description,
         ])
@@ -434,9 +434,9 @@ mod tests {
             id: id.to_string(),
             canvas_id: canvas_id.to_string(),
             source_id: source_id.to_string(),
-            source_port: "right".to_string(),
+            source_handle: "right".to_string(),
             target_id: target_id.to_string(),
-            target_port: "left".to_string(),
+            target_handle: "left".to_string(),
             title: String::new(),
             description: String::new(),
         }
@@ -471,7 +471,7 @@ mod tests {
         let selected = select_by_id(&connection, "id-1").unwrap().unwrap();
         assert_eq!(selected.source_id, "node-1");
         assert_eq!(selected.target_id, "node-2");
-        assert_eq!(selected.source_port, "right");
+        assert_eq!(selected.source_handle, "right");
 
         // select_by_id 成功路径：不存在时返回 None。
         assert!(select_by_id(&connection, "id-x").unwrap().is_none());
@@ -498,9 +498,9 @@ mod tests {
         assert_eq!(selected_between.id, "id-1");
         assert_eq!(selected_between.canvas_id, "canvas-1");
         assert_eq!(selected_between.source_id, "node-1");
-        assert_eq!(selected_between.source_port, "right");
+        assert_eq!(selected_between.source_handle, "right");
         assert_eq!(selected_between.target_id, "node-2");
-        assert_eq!(selected_between.target_port, "left");
+        assert_eq!(selected_between.target_handle, "left");
 
         // select_between 成功路径：方向相反时返回 None（精确匹配，不做反向查找）。
         assert!(select_between(&connection, "node-2", "node-1").unwrap().is_none());
@@ -534,35 +534,35 @@ mod tests {
         assert_eq!(updated_between.title, "new title");
         assert_eq!(updated_between.description, "new desc");
 
-        // ===== update_ports 成功路径 =====
+        // ===== update_handles 成功路径 =====
         // 更新连接桩后 select_by_id 往返一致，其它字段（canvas_id / source_id / target_id /
         // title / description）保持不变。
-        update_ports(&connection, "id-1", "top", "bottom").unwrap();
-        let ports_updated = select_by_id(&connection, "id-1").unwrap().unwrap();
-        assert_eq!(ports_updated.source_port, "top");
-        assert_eq!(ports_updated.target_port, "bottom");
-        assert_eq!(ports_updated.canvas_id, "canvas-1");
-        assert_eq!(ports_updated.source_id, "node-1");
-        assert_eq!(ports_updated.target_id, "node-2");
-        assert_eq!(ports_updated.title, "new title");
-        assert_eq!(ports_updated.description, "new desc");
+        update_handles(&connection, "id-1", "top", "bottom").unwrap();
+        let handles_updated = select_by_id(&connection, "id-1").unwrap().unwrap();
+        assert_eq!(handles_updated.source_handle, "top");
+        assert_eq!(handles_updated.target_handle, "bottom");
+        assert_eq!(handles_updated.canvas_id, "canvas-1");
+        assert_eq!(handles_updated.source_id, "node-1");
+        assert_eq!(handles_updated.target_id, "node-2");
+        assert_eq!(handles_updated.title, "new title");
+        assert_eq!(handles_updated.description, "new desc");
 
-        // update_ports 幂等：连接桩完全相同的重复更新也成功，字段值不变。
-        update_ports(&connection, "id-1", "top", "bottom").unwrap();
-        let ports_idempotent = select_by_id(&connection, "id-1").unwrap().unwrap();
-        assert_eq!(ports_idempotent.source_port, "top");
-        assert_eq!(ports_idempotent.target_port, "bottom");
+        // update_handles 幂等：连接桩完全相同的重复更新也成功，字段值不变。
+        update_handles(&connection, "id-1", "top", "bottom").unwrap();
+        let handles_idempotent = select_by_id(&connection, "id-1").unwrap().unwrap();
+        assert_eq!(handles_idempotent.source_handle, "top");
+        assert_eq!(handles_idempotent.target_handle, "bottom");
 
-        // update_ports 成功路径：不存在的 id 不会报错（SQLite UPDATE 不命中即 0 行），存在性校验是 service 层职责。
-        update_ports(&connection, "no-such-id", "top", "bottom").unwrap();
+        // update_handles 成功路径：不存在的 id 不会报错（SQLite UPDATE 不命中即 0 行），存在性校验是 service 层职责。
+        update_handles(&connection, "no-such-id", "top", "bottom").unwrap();
 
-        // update_ports 失败路径：表不存在时报 DatabaseError。
+        // update_handles 失败路径：表不存在时报 DatabaseError。
         let connection3 = Connection::open_in_memory().unwrap();
         connection3
             .execute_batch("PRAGMA foreign_keys = OFF;")
             .unwrap();
         assert!(matches!(
-            update_ports(&connection3, "any-id", "top", "bottom"),
+            update_handles(&connection3, "any-id", "top", "bottom"),
             Err(ErrorCode::DatabaseError { .. })
         ));
 
@@ -607,7 +607,7 @@ mod tests {
         create_table(&connection).unwrap();
         assert!(matches!(
             connection.execute(
-                "INSERT INTO edge (id, canvas_id, source_id, source_port, target_id, target_port, title, description)
+                "INSERT INTO edge (id, canvas_id, source_id, source_handle, target_id, target_handle, title, description)
                 VALUES ('strict-violation', 'canvas-1', 'node-1', 'right', 'node-2', 'left', x'0102', '')",
                 [],
             ),

@@ -55,7 +55,7 @@ export function useRecycleBin(canvasId: string) {
    * （返回 NodeDeleteDisconnectsNodes），将该错误原样上抛，调用方据此弹出断连确认
    * 对话框并在用户确认后以 confirmed=true 重试；其它错误走 snackbar。
    * @param node 待物理删除的节点
-   * @param confirmed 是否已确认级联断开节点连接
+   * @param confirmed 是否已确认级联断连影响
    * @returns 删除成功返回 true；NodeDeleteDisconnectsNodes 时直接上抛；其它失败返回 false
    */
   async function physicalDelete(node: Node, confirmed: boolean): Promise<boolean> {

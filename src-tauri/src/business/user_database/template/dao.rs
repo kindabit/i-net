@@ -16,7 +16,7 @@ enum TemplateIden {
     Table,
     Id,
     Name,
-    Order,
+    SortOrder,
 }
 
 /// template_field 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
@@ -27,7 +27,7 @@ enum TemplateFieldIden {
     TemplateId,
     Name,
     FieldType,
-    Order,
+    SortOrder,
     DictionaryId,
 }
 
@@ -36,7 +36,7 @@ fn map_template_row(row: &Row) -> rusqlite::Result<Template> {
     Ok(Template {
         id: row.get(0)?,
         name: row.get(1)?,
-        order: row.get(2)?,
+        sort_order: row.get(2)?,
     })
 }
 
@@ -46,7 +46,7 @@ fn map_field_row(row: &Row) -> rusqlite::Result<TemplateField> {
         template_id: row.get(0)?,
         name: row.get(1)?,
         field_type: row.get(2)?,
-        order: row.get(3)?,
+        sort_order: row.get(3)?,
         dictionary_id: row.get(4)?,
     })
 }
@@ -72,7 +72,7 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 .not_null(),
         )
         .col(
-            ColumnDef::new_with_type(TemplateIden::Order, ColumnType::custom("INTEGER")).not_null(),
+            ColumnDef::new_with_type(TemplateIden::SortOrder, ColumnType::custom("INTEGER")).not_null(),
         )
         .extra("STRICT")
         .take();
@@ -104,7 +104,7 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
                 .not_null(),
         )
         .col(
-            ColumnDef::new_with_type(TemplateFieldIden::Order, ColumnType::custom("INTEGER"))
+            ColumnDef::new_with_type(TemplateFieldIden::SortOrder, ColumnType::custom("INTEGER"))
                 .not_null(),
         )
         .col(ColumnDef::new_with_type(TemplateFieldIden::DictionaryId, ColumnType::custom("TEXT")))
@@ -132,11 +132,11 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 pub fn insert(connection: &Connection, template: &Template) -> Result<(), ErrorCode> {
     let query = Query::insert()
         .into_table(TemplateIden::Table)
-        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::SortOrder])
         .values_panic([
             (&template.id).into(),
             (&template.name).into(),
-            template.order.into(),
+            template.sort_order.into(),
         ])
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
@@ -148,7 +148,7 @@ pub fn insert(connection: &Connection, template: &Template) -> Result<(), ErrorC
     Ok(())
 }
 
-/// 查询全部模板，按 "order" 升序。
+/// 查询全部模板，按 "sort_order" 升序。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -157,9 +157,9 @@ pub fn insert(connection: &Connection, template: &Template) -> Result<(), ErrorC
 /// 返回查询到的模板列表；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_all(connection: &Connection) -> Result<Vec<Template>, ErrorCode> {
     let query = Query::select()
-        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::SortOrder])
         .from(TemplateIden::Table)
-        .order_by(TemplateIden::Order, Order::Asc)
+        .order_by(TemplateIden::SortOrder, Order::Asc)
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
@@ -188,7 +188,7 @@ pub fn select_all(connection: &Connection) -> Result<Vec<Template>, ErrorCode> {
 /// 返回查询到的模板，不存在时返回 `None`；若发生错误则返回对应的 `ErrorCode`。
 pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Template>, ErrorCode> {
     let query = Query::select()
-        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::SortOrder])
         .from(TemplateIden::Table)
         .and_where(Expr::col(TemplateIden::Id).eq(id))
         .take();
@@ -218,7 +218,7 @@ pub fn select_by_name(
     name: &str,
 ) -> Result<Option<Template>, ErrorCode> {
     let query = Query::select()
-        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::Order])
+        .columns([TemplateIden::Id, TemplateIden::Name, TemplateIden::SortOrder])
         .from(TemplateIden::Table)
         .and_where(Expr::col(TemplateIden::Name).eq(name))
         .take();
@@ -325,16 +325,16 @@ pub fn delete_all_fields(connection: &Connection) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-/// 查询 template 表中 "order" 的最大值，空表返回 -1。
+/// 查询 template 表中 "sort_order" 的最大值，空表返回 -1。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
 ///
 /// # 返回值
-/// 返回最大 "order" 值（-1 表示表为空）；若发生错误则返回对应的 `ErrorCode`。
-pub fn max_order(connection: &Connection) -> Result<i64, ErrorCode> {
+/// 返回最大 "sort_order" 值（-1 表示表为空）；若发生错误则返回对应的 `ErrorCode`。
+pub fn max_sort_order(connection: &Connection) -> Result<i64, ErrorCode> {
     let query = Query::select()
-        .expr(Func::coalesce([Expr::col(TemplateIden::Order).max(), Expr::val(-1)]))
+        .expr(Func::coalesce([Expr::col(TemplateIden::SortOrder).max(), Expr::val(-1)]))
         .from(TemplateIden::Table)
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
@@ -365,14 +365,14 @@ pub fn insert_field(connection: &Connection, field: &TemplateField) -> Result<()
             TemplateFieldIden::TemplateId,
             TemplateFieldIden::Name,
             TemplateFieldIden::FieldType,
-            TemplateFieldIden::Order,
+            TemplateFieldIden::SortOrder,
             TemplateFieldIden::DictionaryId,
         ])
         .values_panic([
             (&field.template_id).into(),
             (&field.name).into(),
             (&field.field_type).into(),
-            field.order.into(),
+            field.sort_order.into(),
             field.dictionary_id.clone().into(),
         ])
         .take();
@@ -385,7 +385,7 @@ pub fn insert_field(connection: &Connection, field: &TemplateField) -> Result<()
     Ok(())
 }
 
-/// 按模板 id 查询其全部字段定义，按 "order" 升序。
+/// 按模板 id 查询其全部字段定义，按 "sort_order" 升序。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -402,12 +402,12 @@ pub fn select_fields_by_template_id(
             TemplateFieldIden::TemplateId,
             TemplateFieldIden::Name,
             TemplateFieldIden::FieldType,
-            TemplateFieldIden::Order,
+            TemplateFieldIden::SortOrder,
             TemplateFieldIden::DictionaryId,
         ])
         .from(TemplateFieldIden::Table)
         .and_where(Expr::col(TemplateFieldIden::TemplateId).eq(template_id))
-        .order_by(TemplateFieldIden::Order, Order::Asc)
+        .order_by(TemplateFieldIden::SortOrder, Order::Asc)
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
@@ -460,7 +460,7 @@ pub fn delete_fields_by_template_id(
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
-pub fn clear_dangling_field_dictionary_ids(connection: &Connection) -> Result<(), ErrorCode> {
+pub fn clear_dangling_dictionary_ids(connection: &Connection) -> Result<(), ErrorCode> {
     let mut sub = Query::select();
     sub.column(DictionaryIden::Id).from(DictionaryIden::Table);
     let query = Query::update()
@@ -483,21 +483,21 @@ mod tests {
     use super::*;
 
     /// 构造测试用 Template。
-    fn tmpl(id: &str, name: &str, order: i64) -> Template {
+    fn tmpl(id: &str, name: &str, sort_order: i64) -> Template {
         Template {
             id: id.to_string(),
             name: name.to_string(),
-            order,
+            sort_order,
         }
     }
 
     /// 构造测试用 TemplateField。
-    fn tf(template_id: &str, name: &str, order: i64) -> TemplateField {
+    fn tf(template_id: &str, name: &str, sort_order: i64) -> TemplateField {
         TemplateField {
             template_id: template_id.to_string(),
             name: name.to_string(),
             field_type: "string:single-line".to_string(),
-            order,
+            sort_order,
             dictionary_id: None,
         }
     }
@@ -546,11 +546,11 @@ mod tests {
 
         // == template 表测试 ==
 
-        // select_all/max_order 空表：select_all 为空，max_order 返回 -1。
+        // select_all/max_sort_order 空表：select_all 为空，max_sort_order 返回 -1。
         assert!(select_all(&connection).unwrap().is_empty());
-        assert_eq!(max_order(&connection).unwrap(), -1);
+        assert_eq!(max_sort_order(&connection).unwrap(), -1);
 
-        // insert 成功路径：插入后 select_all 按 order 升序取回。
+        // insert 成功路径：插入后 select_all 按 sort_order 升序取回。
         insert(&connection, &tmpl("t3", "tpl-3", 30)).unwrap();
         insert(&connection, &tmpl("t1", "tpl-1", 10)).unwrap();
         insert(&connection, &tmpl("t2", "tpl-2", 20)).unwrap();
@@ -559,7 +559,7 @@ mod tests {
         assert_eq!(all[0].id, "t1");
         assert_eq!(all[1].id, "t2");
         assert_eq!(all[2].id, "t3");
-        assert_eq!(max_order(&connection).unwrap(), 30);
+        assert_eq!(max_sort_order(&connection).unwrap(), 30);
 
         // select_by_id 成功路径：存在返回 Some，不存在返回 None。
         let found = select_by_id(&connection, "t1").unwrap().unwrap();
@@ -595,7 +595,7 @@ mod tests {
 
         // == template_field 表测试 ==
 
-        // insert_field 成功路径：insert 后 select_fields 按 order 升序取回。
+        // insert_field 成功路径：insert 后 select_fields 按 sort_order 升序取回。
         insert_field(&connection, &tf("t2", "f3", 3)).unwrap();
         insert_field(&connection, &tf("t2", "f1", 1)).unwrap();
         insert_field(&connection, &tf("t2", "f2", 2)).unwrap();
@@ -637,14 +637,14 @@ mod tests {
         delete_all_fields(&connection).unwrap();
         assert!(select_fields_by_template_id(&connection, "t99").unwrap().is_empty());
 
-        // clear_dangling_field_dictionary_ids 成功路径。
+        // clear_dangling_dictionary_ids 成功路径。
         // 先建字典表并插入 dict-1。
         crate::business::user_database::dictionary::dao::create_table(&connection).unwrap();
         let dict_entry = crate::business::user_database::entity::Dictionary {
             id: "dict-1".to_string(),
             parent_id: None,
             value: "val-dict-1".to_string(),
-            order: 1,
+            sort_order: 1,
         };
         crate::business::user_database::dictionary::dao::batch_insert(&connection, &[dict_entry])
             .unwrap();
@@ -662,7 +662,7 @@ mod tests {
         insert_field(&connection, &tf("t-clear", "f-none", 3)).unwrap();
 
         // 执行清理。
-        clear_dangling_field_dictionary_ids(&connection).unwrap();
+        clear_dangling_dictionary_ids(&connection).unwrap();
 
         let after = select_fields_by_template_id(&connection, "t-clear").unwrap();
         let exist_field = after.iter().find(|f| f.name == "f-exist").unwrap();
@@ -683,7 +683,7 @@ mod tests {
         create_table(&connection).unwrap();
         assert!(matches!(
             connection.execute(
-                "INSERT INTO template (id, name, \"order\") VALUES ('strict-violation', x'0102', 1)",
+                "INSERT INTO template (id, name, \"sort_order\") VALUES ('strict-violation', x'0102', 1)",
                 [],
             ),
             Err(_)
@@ -700,7 +700,7 @@ mod tests {
         create_table(&connection).unwrap();
         assert!(matches!(
             connection.execute(
-                "INSERT INTO template_field (template_id, name, field_type, \"order\", dictionary_id)
+                "INSERT INTO template_field (template_id, name, field_type, \"sort_order\", dictionary_id)
                 VALUES ('template-1', 'strict-violation', x'0102', 1, NULL)",
                 [],
             ),

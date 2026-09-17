@@ -28,11 +28,11 @@ pub fn create_from_node(node_id: &str, name: String) -> Result<Template, ErrorCo
     }
     let node_fields = node_field_dao::select_by_node_id(&connection, node_id)?;
     let template_id = uuid::Uuid::new_v4().to_string();
-    let order = dao::max_order(&connection)? + 1;
+    let sort_order = dao::max_sort_order(&connection)? + 1;
     let template = Template {
         id: template_id.clone(),
         name: name.clone(),
-        order,
+        sort_order,
     };
     dao::insert(&connection, &template)?;
     for (i, nf) in node_fields.iter().enumerate() {
@@ -40,7 +40,7 @@ pub fn create_from_node(node_id: &str, name: String) -> Result<Template, ErrorCo
             template_id: template_id.clone(),
             name: nf.name.clone(),
             field_type: nf.field_type.clone(),
-            order: i as i64,
+            sort_order: i as i64,
             dictionary_id: nf.dictionary_id.clone(),
         };
         dao::insert_field(&connection, &field)?;

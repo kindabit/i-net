@@ -31,8 +31,8 @@ pub fn import(node_id: &str, source_path: &str) -> Result<AttachmentVO, ErrorCod
             id: node_id.to_string(),
         }
     })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if node.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if node.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
     let file_name = Path::new(source_path)

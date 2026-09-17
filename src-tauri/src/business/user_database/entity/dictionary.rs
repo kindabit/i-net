@@ -10,5 +10,5 @@ pub struct Dictionary {
     /// 条目的文本值。
     pub value: String,
     /// 条目在同级中的排序序号。
-    pub order: i64,
+    pub sort_order: i64,
 }

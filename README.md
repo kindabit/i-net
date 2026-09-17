@@ -72,10 +72,10 @@
 │   └── views/                       # 页面与页面级组件
 │       ├── Home.vue                 # 首页（注册 / 打开数据库）
 │       ├── HomeComponents/          # 首页专用组件（归档管理、备份与还原对话框、删除数据库对话框）
-│       ├── DatabaseView.vue         # 数据库页面基座
+│       ├── DatabaseView.vue         # 用户数据库页面基座
 │       ├── CanvasUniverseView.vue   # 画布宇宙页面
 │       ├── CanvasView.vue           # 画布页面
-│       └── DatabaseComponents/      # 数据库页面组件库（节点、边、附件、模板、字典等）
+│       └── DatabaseComponents/      # 用户数据库页面组件库（节点、边、附件、模板、字典等）
 ├── schemas/                         # 字段类型 JSON Schema
 ├── src-tauri/                       # Tauri / Rust 后端
 │   ├── src/
@@ -118,9 +118,9 @@
 ├── preference.sqlite                      # 用户偏好（语言、主题、剪贴板等）
 ├── metadata.sqlite                        # 用户数据库元数据（注册信息、归档状态等）
 ├── logs/                                  # 按日滚动的日志文件
-└── user_database_set/<user_uuid>/
+└── user_database_set/<user_database_id>/
     ├── user_database.sqlite               # 加密的用户数据库
-    └── attachment/<attachment_uuid>.bin   # 加密的附件文件
+    └── attachment/<attachment_id>.bin     # 加密的附件文件
 ```
 
 整个数据目录（除 `logs/` 外）可被打包为一个 `.ibackup` 文件用于备份与还原，详见下节。
@@ -153,7 +153,7 @@
 ### 还原流程
 
 1. **校验探测（probe）**：仅校验 Header 与 shard SHA-256，返回是否可还原、损坏 shard 数等结构化结论，不修改任何数据；尾部截断的备份按缺失 shard 计入损坏数，缺失不超过冗余容量时仍判定为可还原。
-2. **确认还原（restore）**：执行完整还原 —— 读 Header → 校验 shard（shard 区容错读取，尾部截断的 shard 按缺失处理，交给 RS 重建）→ 必要时 RS 重建 → 解压到系统 temp 目录下的 `inet-restore-<pid>-<ts>/` → 清空数据目录（保留 `logs/`）→ 移动临时目录到数据目录（跨设备时 fallback 到 copy+remove）。临时目录由 RAII 守卫清理，任何错误路径（含解压失败、panic）都不残留。
+2. **确认还原（restore）**：执行完整还原 —— 读 Header → 校验 shard（shard 区容错读取，尾部截断的 shard 按缺失处理，交给 RS 重建）→ 必要时 RS 重建 → 解压到系统 temp 目录下的 `i-net-restore-<pid>-<ts>/` → 清空数据目录（保留 `logs/`）→ 移动临时目录到数据目录（跨设备时 fallback 到 copy+remove）。临时目录由 RAII 守卫清理，任何错误路径（含解压失败、panic）都不残留。
 3. **内存连接刷新（reclaim）**：触发 `reclaim_preference` / `reclaim_metadata` / `reclaim_user_database` 让各业务模块重新持有磁盘文件所有权，避免关闭应用时旧内存覆盖还原结果。
 4. 还原完成后用户在首页对话框中点击「完成」按钮即可刷新页面。
 

@@ -6,9 +6,9 @@ use crate::error_code::ErrorCode;
 
 /// 在指定位置创建指定节点的副本。
 ///
-/// 副本继承源节点的标题、副标题、颜色和字段结构（field_value 为 None），
-/// 不复制附件和边；副本始终是普通节点（canvas_ref_id 与 shadow_id 均为 None）。
-/// 影子节点与画布节点不允许复制。
+/// 副本继承源节点的标题、副标题、颜色和字段结构（value 为 None），
+/// 不复制附件和边；副本始终是数据节点（canvas_ref_id 与 shadow_producing_edge_id 均为 None）。
+/// 影子节点与画布数据节点不允许复制。
 ///
 /// 产生 NodeCreate 日志，载荷为副本节点的标题和副标题。
 ///
@@ -20,20 +20,20 @@ use crate::error_code::ErrorCode;
 /// # 返回值
 /// 返回新建的副本节点；源节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
 /// 源节点是影子节点时返回 `ErrorCode::NodeIsShadow`，
-/// 源节点是画布节点时返回 `ErrorCode::NodeIsCanvasNode`，
+/// 源节点是画布数据节点时返回 `ErrorCode::NodeIsCanvasDataNode`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
     let connection = state::lock_connection();
 
     let source = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if source.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if source.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
-    // 画布节点不允许复制（复制子画布引用的语义不明确，避免产生空子画布）。
+    // 画布数据节点不允许复制（复制子画布引用的语义不明确，避免产生空子画布）。
     if source.canvas_ref_id.is_some() {
-        return Err(ErrorCode::NodeIsCanvasNode);
+        return Err(ErrorCode::NodeIsCanvasDataNode);
     }
 
     let node = Node {
@@ -42,11 +42,11 @@ pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
         x,
         y,
         title: source.title.clone(),
-        sub_title: source.sub_title.clone(),
+        subtitle: source.subtitle.clone(),
         canvas_ref_id: None,
         deleted: false,
         color: source.color.clone(),
-        shadow_id: None,
+        shadow_producing_edge_id: None,
     };
     dao::insert(&connection, &node)?;
 
@@ -56,8 +56,8 @@ pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
             node_id: node.id.clone(),
             name: source_field.name,
             field_type: source_field.field_type,
-            field_value: None,
-            order: source_field.order,
+            value: None,
+            sort_order: source_field.sort_order,
             dictionary_id: source_field.dictionary_id,
         };
         node_field::dao::insert(&connection, &node_field)?;
@@ -65,7 +65,7 @@ pub fn copy(id: &str, x: f64, y: f64) -> Result<Node, ErrorCode> {
 
     log::service::create(Action::NodeCreate {
         title: node.title.clone(),
-        sub_title: node.sub_title.clone(),
+        subtitle: node.subtitle.clone(),
     })?;
     Ok(node)
 }

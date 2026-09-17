@@ -6,10 +6,10 @@ use crate::error_code::ErrorCode;
 
 /// 逻辑删除指定画布以及它的全部子孙画布：
 /// 对子树内每个尚未逻辑删除的画布置上逻辑删除标志；
-/// 同时逻辑删除所有引用这些画布的画布节点。
+/// 同时逻辑删除所有引用这些画布的画布数据节点。
 ///
 /// 每个被逻辑删除的画布产生一条 CanvasLogicalDelete 日志，载荷内记录画布名称。
-/// 每个被逻辑删除的画布节点产生一条 NodeLogicalDelete 日志。
+/// 每个被逻辑删除的画布数据节点产生一条 NodeLogicalDelete 日志。
 ///
 /// # 参数
 /// - `id`: 画布 id。
@@ -40,7 +40,7 @@ pub fn logical_delete(id: &str) -> Result<(), ErrorCode> {
         canvas.deleted = true;
         dao::update(&connection, &canvas)?;
         deleted.push(canvas.name);
-        // 逻辑删除引用该画布的画布节点（若存在且未删除）
+        // 逻辑删除引用该画布的画布数据节点（若存在且未删除）
         if let Some(mut ref_node) =
             node::dao::select_by_canvas_ref_id(&connection, &canvas.id)?
         {

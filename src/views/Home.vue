@@ -1,11 +1,11 @@
 <!--
-  首页 / 数据目录页。
+  首页。
 
   提供数据库名称输入（带历史下拉）与密码输入两步流程，输入完成后打开
-  数据库（名称未注册时先注册）并跳转至画布页；右下角垃圾箱按钮打开归档管理对话框。
+  数据库（名称未注册时先注册）并跳转至画布页面；右下角垃圾箱按钮打开归档管理对话框。
 -->
 <script lang="ts">
-/** registry 中"上次场景"的键名；值为画布 id，空值代表画布宇宙 */
+/** registry 中"最后场景"的键名；值为画布 id，空值代表画布宇宙 */
 export const LAST_SCENE_KEY = "lastScene";
 </script>
 
@@ -82,7 +82,7 @@ const restoreSuccessDialogRef = useTemplateRef<
 
 onMounted(async () => {
   void refreshMetadatas();
-  // 空闲时预加载数据库布局页组件，加快进入数据库的速度
+  // 空闲时预加载用户数据库页面组件，加快进入数据库的速度
   const preloadDatabaseView = () => void import("@/views/DatabaseView.vue");
   if ("requestIdleCallback" in window) {
     requestIdleCallback(preloadDatabaseView);
@@ -163,7 +163,7 @@ function onPanelAfterEnter() {
 }
 
 /**
- * 校验密码并打开数据库（名称未注册时先注册再打开），成功后跳转画布页。
+ * 校验密码并打开数据库（名称未注册时先注册再打开），成功后跳转画布页面。
  * @returns 无返回值
  */
 async function submitPassword() {

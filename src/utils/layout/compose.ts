@@ -8,9 +8,9 @@
 
 import type { ComponentLayout } from "./component-layout";
 import type {
-  RadialLayoutConfig,
-  RadialLayoutNode,
-  RadialLayoutPoint,
+  AutoLayoutConfig,
+  AutoLayoutNode,
+  AutoLayoutPoint,
 } from "./types";
 import { compareId } from "./utils";
 
@@ -26,10 +26,10 @@ import { compareId } from "./utils";
 export function composeLayout(
   components: ComponentLayout[],
   isolatedIds: string[],
-  nodeById: Map<string, RadialLayoutNode>,
-  config: RadialLayoutConfig,
-): Map<string, RadialLayoutPoint> {
-  const result = new Map<string, RadialLayoutPoint>();
+  nodeById: Map<string, AutoLayoutNode>,
+  config: AutoLayoutConfig,
+): Map<string, AutoLayoutPoint> {
+  const result = new Map<string, AutoLayoutPoint>();
 
   // 分量平铺：按节点数降序（平局按最小 id），贪心装入近似正方形的多行。
   components.sort(
@@ -40,7 +40,7 @@ export function composeLayout(
         b.nodeIds.reduce((min, id) => (id < min ? id : min)),
       ),
   );
-  const componentOrigins = new Map<ComponentLayout, RadialLayoutPoint>();
+  const componentOrigins = new Map<ComponentLayout, AutoLayoutPoint>();
   let componentsMaxX = 0;
   if (components.length > 0) {
     const totalArea = components.reduce((sum, component) => {

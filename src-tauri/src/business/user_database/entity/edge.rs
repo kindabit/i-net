@@ -11,11 +11,11 @@ pub struct Edge {
     /// 源节点 id（uuid）。
     pub source_id: String,
     /// 源节点连接桩（"top" / "right" / "bottom" / "left"）。
-    pub source_port: String,
+    pub source_handle: String,
     /// 目标节点 id（uuid）。
     pub target_id: String,
     /// 目标节点连接桩（"top" / "right" / "bottom" / "left"）。
-    pub target_port: String,
+    pub target_handle: String,
     /// 边的标题，始终显示在边上。
     pub title: String,
     /// 边的详情，鼠标悬浮时显示。

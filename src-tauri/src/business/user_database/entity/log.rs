@@ -61,7 +61,7 @@ pub enum Action {
     /// 重命名画布，包含旧名称和新名称。
     CanvasRename { old_name: String, new_name: String },
     /// 创建节点，包含节点标题和副标题。
-    NodeCreate { title: String, sub_title: String },
+    NodeCreate { title: String, subtitle: String },
     /// 移动节点且实际位移数量为 1，包含节点标题、旧坐标和新坐标。
     NodeMove {
         title: String,
@@ -73,9 +73,9 @@ pub enum Action {
     /// 修改节点的标题和副标题，包含旧标题、旧副标题、新标题和新副标题。
     NodeModify {
         old_title: String,
-        old_sub_title: String,
+        old_subtitle: String,
         new_title: String,
-        new_sub_title: String,
+        new_subtitle: String,
     },
     /// 逻辑删除节点，包含节点标题。
     NodeLogicalDelete { title: String },

@@ -43,10 +43,10 @@ mod tests {
         assert_eq!(first.create_time, first.last_open_time);
         assert!(!file_system_util::try_exists(&path.user_database_directory(&first.id)).unwrap());
 
-        // register 失败路径：数据库名称重复时报 DatabaseNameAlreadyExists。
+        // register 失败路径：数据库名称重复时报 UserDatabaseNameAlreadyExists。
         assert!(matches!(
             register("db-1".to_string()),
-            Err(ErrorCode::DatabaseNameAlreadyExists { .. })
+            Err(ErrorCode::UserDatabaseNameAlreadyExists { .. })
         ));
 
         // list 成功路径：未归档列表包含全部未归档数据库。
@@ -55,10 +55,10 @@ mod tests {
         assert_eq!(unarchived.len(), 2);
         assert!(list(true).unwrap().is_empty());
 
-        // archive 失败路径：id 不存在时报 NoDatabaseWithSuchId。
+        // archive 失败路径：id 不存在时报 NoUserDatabaseWithSuchId。
         assert!(matches!(
             archive("no-such-id", true),
-            Err(ErrorCode::NoDatabaseWithSuchId { .. })
+            Err(ErrorCode::NoUserDatabaseWithSuchId { .. })
         ));
 
         // archive 成功路径：归档后数据库从未归档列表移动到归档列表。
@@ -71,16 +71,16 @@ mod tests {
         assert_eq!(archived[0].id, first.id);
         assert!(archived[0].archived);
 
-        // physical_delete 失败路径：数据库未归档时报 DatabaseMustBeArchivedBeforeDelete。
+        // physical_delete 失败路径：数据库未归档时报 UserDatabaseMustBeArchivedBeforeDelete。
         assert!(matches!(
             physical_delete(&second.id, test::test_key()),
-            Err(ErrorCode::DatabaseMustBeArchivedBeforeDelete)
+            Err(ErrorCode::UserDatabaseMustBeArchivedBeforeDelete)
         ));
 
-        // physical_delete 失败路径：id 不存在时报 NoDatabaseWithSuchId。
+        // physical_delete 失败路径：id 不存在时报 NoUserDatabaseWithSuchId。
         assert!(matches!(
             physical_delete("no-such-id", test::test_key()),
-            Err(ErrorCode::NoDatabaseWithSuchId { .. })
+            Err(ErrorCode::NoUserDatabaseWithSuchId { .. })
         ));
 
         // physical_delete 失败路径：密钥无法正确解密该数据库时报 FailToDecrypt。

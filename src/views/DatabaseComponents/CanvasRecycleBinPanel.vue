@@ -41,7 +41,7 @@ function toggle() {
 }
 
 function onDragStart(event: DragEvent, canvas: Canvas) {
-  event.dataTransfer?.setData("application/x-inet-recycle-canvas", canvas.id);
+  event.dataTransfer?.setData("application/x-i-net-recycle-canvas", canvas.id);
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   draggingId.value = canvas.id;
 }

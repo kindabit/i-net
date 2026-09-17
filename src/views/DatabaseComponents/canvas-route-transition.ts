@@ -49,7 +49,7 @@ export function resolveRouteTransition(
   if (fromName === "canvas" && toName === "canvas") {
     return intent ?? "drill-swap";
   }
-  // 首次挂载：从主页进入画布或画布宇宙均播放钻入动画
+  // 首次挂载：从首页进入画布或画布宇宙均播放钻入动画
   if (fromName === null && (toName === "canvas" || toName === "canvas-universe")) {
     return "drill-in";
   }

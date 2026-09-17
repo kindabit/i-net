@@ -5,14 +5,14 @@
   根画布名称固定显示为本地化"根画布"文案，其余画布显示数据库中的名称。
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格），所有画布均显示颜色按钮；
   非根画布额外显示重命名与逻辑删除按钮。
-  支持画布自定义颜色：背景、边框、标题、图标、工具按钮五项。
+  支持画布节点自定义颜色：背景、边框、标题、图标、工具按钮五项。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { Handle, Position, useNode } from "@vue-flow/core";
 import { useRouter } from "vue-router";
 import { t } from "@/i18n";
-import { deserializeCanvasColor } from "@/node-colors";
+import { deserializeCanvasNodeColor } from "@/node-colors";
 import { currentThemeIsDark } from "@/themes";
 // #if [DEBUG]
 import NodeDebugOverlay from "./NodeDebugOverlay.vue";
@@ -40,7 +40,7 @@ const displayName = computed(() =>
 
 /** 解析当前主题下的自定义颜色属性（键缺失即默认值，外观交还组件 CSS 兜底） */
 const colors = computed(() => {
-  const scheme = deserializeCanvasColor(props.data.color);
+  const scheme = deserializeCanvasNodeColor(props.data.color);
   return currentThemeIsDark.value ? scheme.dark : scheme.light;
 });
 
@@ -107,8 +107,8 @@ function onDblClick() {
         />
       </div>
     </Transition>
-    <Handle type="target" :position="Position.Left" id="target-left" :connectable="false" style="opacity: 0" />
-    <Handle type="source" :position="Position.Right" id="source-right" :connectable="false" style="opacity: 0" />
+    <Handle type="target" :position="Position.Left" id="left" :connectable="false" style="opacity: 0" />
+    <Handle type="source" :position="Position.Right" id="right" :connectable="false" style="opacity: 0" />
     <!-- #if [DEBUG] -->
     <NodeDebugOverlay v-if="actionsVisible" :x="node.position.x" :y="node.position.y" />
     <!-- #endif -->

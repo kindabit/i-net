@@ -5,7 +5,7 @@
  * 规范化前后复用同一划分结果。
  */
 
-import type { RadialLayoutEdge, RadialLayoutNode } from "./types";
+import type { AutoLayoutEdge, AutoLayoutNode } from "./types";
 import { UnionFind } from "./utils";
 
 /**
@@ -16,8 +16,8 @@ import { UnionFind } from "./utils";
  * @returns 分量根 id → 分量内节点 id 列表（含单节点"分量"，即孤立节点）。
  */
 export function groupComponents(
-  nodes: RadialLayoutNode[],
-  edges: RadialLayoutEdge[],
+  nodes: AutoLayoutNode[],
+  edges: AutoLayoutEdge[],
 ): Map<string, string[]> {
   const unionFind = new UnionFind();
   for (const edge of edges) {

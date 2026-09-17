@@ -10,10 +10,10 @@ use crate::error_code::ErrorCode;
 ///
 /// 校验规则（全部通过后才写库）：
 /// - 目标画布存在且未逻辑删除；
-/// - 每个节点都存在、不是影子节点、不是画布节点；
+/// - 每个节点都存在、不是影子节点、不是画布数据节点；
 /// - 所有节点属于同一个源画布（源画布 == 目标画布时视为无操作，直接返回 Ok，不写库不产日志）；
 /// - 源画布内不存在"恰有一个端点在集合内"的边（外部边）。此校验连带保证影子一致性：
-///   节点成为影子 origin 的充要条件是它与本画布的画布节点有边，这类边必触发上述拒绝，
+///   节点成为影子 origin 的充要条件是它与本画布的画布数据节点有边，这类边必触发上述拒绝，
 ///   故合法迁移集永远不会有影子引用残留。
 ///
 /// 写库：更新节点 canvas_id/x/y，两端都在集合内的内部边随迁至目标画布。
@@ -26,7 +26,7 @@ use crate::error_code::ErrorCode;
 /// # 返回值
 /// 成功时返回 `Ok(())`；目标画布不存在或已删除时返回 `ErrorCode::NoCanvasWithSuchId`，
 /// 任一节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，
-/// 含影子节点时返回 `ErrorCode::NodeIsShadow`，含画布节点时返回 `ErrorCode::NodeIsCanvasNode`，
+/// 含影子节点时返回 `ErrorCode::NodeIsShadow`，含画布数据节点时返回 `ErrorCode::NodeIsCanvasDataNode`，
 /// 节点分属不同画布时返回 `ErrorCode::NodeNotInSameCanvas`，
 /// 存在外部边时返回 `ErrorCode::NodeSetHasExternalEdges`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
@@ -48,11 +48,11 @@ pub fn relocate_nodes(items: &[MoveNodeVO], target_canvas_id: &str) -> Result<()
             .ok_or_else(|| ErrorCode::NoNodeWithSuchId {
                 id: item.id.clone(),
             })?;
-        if node.shadow_id.is_some() {
+        if node.shadow_producing_edge_id.is_some() {
             return Err(ErrorCode::NodeIsShadow);
         }
         if node.canvas_ref_id.is_some() {
-            return Err(ErrorCode::NodeIsCanvasNode);
+            return Err(ErrorCode::NodeIsCanvasDataNode);
         }
         nodes.push(node);
     }

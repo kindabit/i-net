@@ -4,7 +4,7 @@ use crate::business::user_database::{canvas, log, state};
 use crate::error_code::ErrorCode;
 
 /// 恢复被逻辑删除的节点：清空该节点的逻辑删除状态，并将节点移动至新坐标。
-/// 如果是画布节点，使用该节点引用的画布在库内的坐标恢复该画布。
+/// 如果是画布数据节点，使用该节点引用的画布在库内的坐标恢复该画布。
 ///
 /// 产生 NodeRestore 日志，载荷为节点的标题、旧坐标和新坐标。
 ///
@@ -20,8 +20,8 @@ pub fn restore(id: &str, x: f64, y: f64) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if node.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if node.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
     let old_x = node.x;

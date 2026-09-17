@@ -2,7 +2,7 @@ use crate::business::user_database::attachment::service;
 use crate::error_code::ErrorCode;
 use crate::util::preprocess_util;
 
-/// 删除孤儿附件文件：物理删除附件目录中无元数据的附件文件，不可恢复。
+/// 删除孤儿文件：物理删除附件目录中无元数据的附件文件，不可恢复。
 ///
 /// # 参数
 /// - `id`: 孤儿文件 id。

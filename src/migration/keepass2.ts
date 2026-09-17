@@ -13,7 +13,7 @@
  */
 import * as kdbxweb from "kdbxweb";
 import { argon2dAsync, argon2iAsync, argon2idAsync } from "@noble/hashes/argon2.js";
-import type { ImportedEdge, ImportedNode, NodeFieldVO } from "@/api-types";
+import type { ImportedEdgeVO, ImportedNodeVO, NodeFieldVO } from "@/api-types";
 
 /** 字段名文案集合：三项分别为 KeePass 的 Password（密码）、URL（访问链接）、
  * Notes（备注）字段的字段名文案。 */
@@ -36,9 +36,9 @@ export type Keepass2ParseError = "incorrect-password" | "invalid-file";
  */
 export interface ImportedTree {
   /** 待导入的节点列表（含表示数据库本身的根节点） */
-  nodes: ImportedNode[];
+  nodes: ImportedNodeVO[];
   /** 父子边列表（下标引用 nodes） */
-  edges: ImportedEdge[];
+  edges: ImportedEdgeVO[];
 }
 
 /** installArgon2 是否已注入过 argon2 实现（幂等标记） */
@@ -83,7 +83,7 @@ export function installArgon2(): void {
  * 再按原序遍历子 group；KeePass 回收站 group 的整个子树跳过（回收站无值时全部导入）。
  * 每产出一个节点同时产出一条其父节点指向它的边。
  * entry 转换规则：UserName 非空（undefined/"" 均视为空）时 title=UserName、
- * sub_title=Title；UserName 为空时 title=Title、sub_title=""。
+ * subtitle=Title；UserName 为空时 title=Title、subtitle=""。
  * 字段构造顺序固定：密码 → 访问链接 → 备注，为空的（undefined/""）跳过。
  * @param bytes 数据库文件字节
  * @param masterPassword 数据库的 Master Password（不做 trim，KeePass 密码可含首尾空格）
@@ -119,7 +119,7 @@ export async function parseKeepass2Database(
   const tree: ImportedTree = { nodes: [], edges: [] };
   const rootGroup = db.getDefaultGroup();
   // 根 group 产出表示数据库本身的根节点（title 可能为空串，由调用方以文件名兜底）。
-  tree.nodes.push({ title: rootGroup.name ?? "", sub_title: "", x: 0, y: 0, fields: [] });
+  tree.nodes.push({ title: rootGroup.name ?? "", subtitle: "", x: 0, y: 0, fields: [] });
   collectGroup(rootGroup, 0, db.meta.recycleBinUuid, text, tree);
   return tree;
 }
@@ -167,7 +167,7 @@ export function layoutImportedTree(tree: ImportedTree): void {
 /**
  * 遍历单个 group 并产出其后代节点：先按原序产出其 entry 节点，
  * 再按原序遍历子 group：回收站 group 的整个子树被跳过，
- * 其余子 group 产出节点（title=group 名、sub_title=""、无字段）后递归遍历。
+ * 其余子 group 产出节点（title=group 名、subtitle=""、无字段）后递归遍历。
  * 每产出一个节点同时记录一条 parentIndex 指向它的边。
  * @param group 当前待遍历的 group
  * @param parentIndex 该 group 对应节点在 nodes 中的下标
@@ -191,25 +191,25 @@ function collectGroup(
     if (recycleBinUuid?.equals(subgroup.uuid)) continue;
     const subgroupIndex = tree.nodes.length;
     tree.edges.push({ source_index: parentIndex, target_index: subgroupIndex });
-    tree.nodes.push({ title: subgroup.name ?? "", sub_title: "", x: 0, y: 0, fields: [] });
+    tree.nodes.push({ title: subgroup.name ?? "", subtitle: "", x: 0, y: 0, fields: [] });
     collectGroup(subgroup, subgroupIndex, recycleBinUuid, text, tree);
   }
 }
 
 /**
  * 将一个 KeePass entry 转换为待导入的节点：UserName 非空时
- * title = UserName、sub_title = Title；UserName 为空（undefined 或空串）时
- * title = Title、sub_title = 空串。字段按固定顺序（密码 → 访问链接 → 备注）收集，
+ * title = UserName、subtitle = Title；UserName 为空（undefined 或空串）时
+ * title = Title、subtitle = 空串。字段按固定顺序（密码 → 访问链接 → 备注）收集，
  * 三者中为空的（undefined 或空串）跳过，字段 dictionary_id 恒为 null。
  * @param entry 待转换的 KeePass entry
  * @param text 字段名文案集合
  * @returns 该 entry 的节点数据（坐标为占位 0）
  */
-function planEntry(entry: kdbxweb.KdbxEntry, text: Keepass2FieldText): ImportedNode {
+function planEntry(entry: kdbxweb.KdbxEntry, text: Keepass2FieldText): ImportedNodeVO {
   const entryTitle = fieldText(entry, "Title");
   const username = fieldText(entry, "UserName");
   const title = username === "" ? entryTitle : username;
-  const subTitle = username === "" ? "" : entryTitle;
+  const subtitle = username === "" ? "" : entryTitle;
 
   const fields: NodeFieldVO[] = [];
   const password = fieldText(entry, "Password");
@@ -240,7 +240,7 @@ function planEntry(entry: kdbxweb.KdbxEntry, text: Keepass2FieldText): ImportedN
     });
   }
 
-  return { title, sub_title: subTitle, x: 0, y: 0, fields };
+  return { title, subtitle, x: 0, y: 0, fields };
 }
 
 /**

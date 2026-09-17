@@ -24,10 +24,10 @@ pub fn list(node_id: &str, deleted: bool) -> Result<Vec<AttachmentVO>, ErrorCode
     })?;
     let attachments = dao::select_by_node_id(&connection, node_id, deleted)?;
     let path = crate::state::path();
-    let user_uuid = state::metadata().id;
+    let user_database_id = state::metadata().id;
     let mut vos = Vec::with_capacity(attachments.len());
     for attachment in attachments {
-        let file = path.user_attachment_file(&user_uuid, &attachment.id);
+        let file = path.user_attachment_file(&user_database_id, &attachment.id);
         vos.push(AttachmentVO {
             id: attachment.id,
             file_name: attachment.file_name,

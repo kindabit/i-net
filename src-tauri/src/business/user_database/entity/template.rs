@@ -8,5 +8,5 @@ pub struct Template {
     /// 模板名称，唯一。
     pub name: String,
     /// 模板在列表中的排序序号。
-    pub order: i64,
+    pub sort_order: i64,
 }

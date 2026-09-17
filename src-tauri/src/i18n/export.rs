@@ -25,7 +25,7 @@ pub struct ExportTexts {
     /// 节点分区标题的标签（含冒号及尾随空格）。
     pub node: &'static str,
     /// 副标题行的标签（含冒号及尾随空格；与节点标题共同构成节点标题行）。
-    pub sub_title: &'static str,
+    pub subtitle: &'static str,
     /// 关系小节的标题。
     pub relationships: &'static str,
     /// 字段表格「字段名」的列表头。
@@ -46,7 +46,7 @@ pub(crate) const CHINESE: ExportTexts = ExportTexts {
     mode_include_values: "包含字段（字段值为明文）",
     canvas: "画布：",
     node: "节点：",
-    sub_title: "副标题：",
+    subtitle: "副标题：",
     relationships: "关系",
     field_name: "字段名",
     field_value: "值",
@@ -63,7 +63,7 @@ pub(crate) const ENGLISH: ExportTexts = ExportTexts {
     mode_include_values: "Include fields (plaintext values)",
     canvas: "Canvas: ",
     node: "Node: ",
-    sub_title: "Subtitle: ",
+    subtitle: "Subtitle: ",
     relationships: "Relationships",
     field_name: "Name",
     field_value: "Value",

@@ -10,7 +10,7 @@ pub struct ImportedNodeVO {
     /// 节点标题。
     pub title: String,
     /// 节点副标题。
-    pub sub_title: String,
+    pub subtitle: String,
     /// 节点在画布中的 x 坐标（布局坐标由前端计算）。
     pub x: f64,
     /// 节点在画布中的 y 坐标（布局坐标由前端计算）。

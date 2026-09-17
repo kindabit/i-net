@@ -6,7 +6,7 @@
  * 轮次上限固定，保证完全确定性（布局管线的不变量②）。
  */
 
-import type { RadialLayoutNode, RadialLayoutPoint } from "./types";
+import type { AutoLayoutNode, AutoLayoutPoint } from "./types";
 import { compareId } from "./utils";
 
 /** 碰撞松弛迭代轮次上限（固定上限保证完全确定性；通常远未用满即收敛）。 */
@@ -22,8 +22,8 @@ const COLLISION_ITERATION_LIMIT = 50;
  */
 export function resolveCollisions(
   nodeIds: string[],
-  positions: Map<string, RadialLayoutPoint>,
-  nodeById: Map<string, RadialLayoutNode>,
+  positions: Map<string, AutoLayoutPoint>,
+  nodeById: Map<string, AutoLayoutNode>,
   margin: number,
 ): void {
   const sorted = [...nodeIds].sort(compareId);

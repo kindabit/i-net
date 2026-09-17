@@ -29,10 +29,10 @@ fn test_user_database_service_all_functions() {
     let id = registered.id.clone();
     assert!(!file_system_util::try_exists(&path.user_database_directory(&id)).unwrap());
 
-    // lifecycle::initialize 失败路径：id 不存在时报 NoDatabaseWithSuchId。
+    // lifecycle::initialize 失败路径：id 不存在时报 NoUserDatabaseWithSuchId。
     assert!(matches!(
         lifecycle::service::initialize("no-such-id", test::test_key()),
-        Err(ErrorCode::NoDatabaseWithSuchId { .. })
+        Err(ErrorCode::NoUserDatabaseWithSuchId { .. })
     ));
 
     // lifecycle::initialize 成功路径（新建）：数据库目录、附件目录和加密的数据库文件被创建，
@@ -43,7 +43,7 @@ fn test_user_database_service_all_functions() {
     assert!(file_system_util::try_exists(&path.user_attachment_directory(&id)).unwrap());
     assert!(file_system_util::try_exists(&path.user_database_file(&id)).unwrap());
     assert!(state::is_open());
-    // state 中保存的是更新过最后打开时间的元信息。
+    // state 中保存的是更新过最后打开时间的元数据。
     assert_eq!(state::metadata().last_open_time, opened.last_open_time);
     let canvases = canvas::service::list(false).unwrap();
     assert_eq!(canvases.len(), 1);
@@ -328,9 +328,9 @@ fn test_user_database_service_all_functions() {
     .unwrap();
     assert_eq!(node_2_name.title, "canvas-node 2");
 
-    // ===== 画布节点标题与画布名称双向同步 =====
+    // ===== 画布数据节点标题与画布名称双向同步 =====
 
-    // node::modify 同步成功路径：修改画布节点标题，引用画布的名称随之更新，
+    // node::modify 同步成功路径：修改画布数据节点标题，引用画布的名称随之更新，
     // 产生 NodeModify + CanvasRename 两条日志。
     let log_total_before_sync = log::service::list(0, 1, LogFilter::default()).unwrap().total;
     node::service::modify(
@@ -345,7 +345,7 @@ fn test_user_database_service_all_functions() {
             .unwrap()
             .unwrap();
         assert_eq!(synced_node.title, "canvas-node-renamed");
-        assert_eq!(synced_node.sub_title, "canvas-node-sub");
+        assert_eq!(synced_node.subtitle, "canvas-node-sub");
         let synced_canvas = canvas::dao::select_by_id(
             &conn,
             canvas_node.canvas_ref_id.as_ref().unwrap(),
@@ -376,7 +376,7 @@ fn test_user_database_service_all_functions() {
             .unwrap()
             .unwrap();
         assert_eq!(unchanged_node.title, "canvas-node-renamed");
-        assert_eq!(unchanged_node.sub_title, "canvas-node-sub");
+        assert_eq!(unchanged_node.subtitle, "canvas-node-sub");
         let unchanged_canvas = canvas::dao::select_by_id(
             &conn,
             canvas_node.canvas_ref_id.as_ref().unwrap(),
@@ -414,7 +414,7 @@ fn test_user_database_service_all_functions() {
             .unwrap()
             .unwrap();
         assert_eq!(synced_node.title, "canvas-node-back");
-        assert_eq!(synced_node.sub_title, "canvas-node-sub-2");
+        assert_eq!(synced_node.subtitle, "canvas-node-sub-2");
     }
     assert_eq!(
         log::service::list(0, 1, LogFilter::default()).unwrap().total,
@@ -435,7 +435,7 @@ fn test_user_database_service_all_functions() {
     // 恢复节点（级联恢复引用画布），避免影响后续测试。
     node::service::restore(&canvas_node.id, 50.0, 60.0).unwrap();
 
-    // node::modify 数据损坏路径：画布节点引用的画布不存在（理论不可能）时
+    // node::modify 数据损坏路径：画布数据节点引用的画布不存在（理论不可能）时
     // 报 DataCorruptionCanvasRefMissing 触发受控崩溃，载荷为节点 id 与缺失的画布 id。
     // 临时关闭外键以注入不一致数据（直接删除画布而保留引用节点），断言后清理现场并恢复外键。
     let corrupt_node = node::service::create(
@@ -490,7 +490,7 @@ fn test_user_database_service_all_functions() {
     canvas::service::restore(&temp_canvas.id, temp_canvas.x, temp_canvas.y).unwrap();
     canvas::service::physical_delete(&temp_canvas.id).unwrap();
 
-    // 构造用于后续双向级联测试的画布节点（基于 root 画布）。
+    // 构造用于后续双向级联测试的画布数据节点（基于 root 画布）。
     let cascade_node = node::service::create(
         &root.id,
         "cascade-canvas".to_string(),
@@ -513,7 +513,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!(deleted_cascade.id, cascade_node.id);
     assert!(deleted_cascade.deleted);
     assert_eq!(deleted_cascade.title, cascade_node.title);
-    assert_eq!(deleted_cascade.sub_title, cascade_node.sub_title);
+    assert_eq!(deleted_cascade.subtitle, cascade_node.subtitle);
     assert_eq!(deleted_cascade.x, cascade_node.x);
     assert_eq!(deleted_cascade.y, cascade_node.y);
     assert_eq!(deleted_cascade.canvas_id, cascade_node.canvas_id);
@@ -563,9 +563,9 @@ fn test_user_database_service_all_functions() {
         .all(|n| n.id != cascade_node.id));
 
     // 双向级联：canvas 物理删除 → 引用节点及其边物理删除。
-    // 新建画布节点及其一条边，然后物理删除画布，验证节点和边一并消失。
-    // 新建边规则下画布节点→普通节点被禁止（CanvasToPlainNodeEdge），故此处改用普通节点 → 画布节点：
-    // 该边在画布节点引用的子画布内产生入向影子（建边规则 2）。
+    // 新建画布数据节点及其一条边，然后物理删除画布，验证节点和边一并消失。
+    // 新建边规则下画布数据节点→数据节点被禁止（CanvasToDataNodeEdge），故此处改用数据节点 → 画布数据节点：
+    // 该边在画布数据节点引用的子画布内产生入向影子（建边规则 2）。
     let c2_node = node::service::create(
         &root.id,
         "c2-canvas".to_string(),
@@ -677,13 +677,13 @@ fn test_user_database_service_all_functions() {
     )
     .unwrap();
     assert_eq!(edge_1.id, edge_1_id);
-    assert_eq!(edge_1.source_port, "top");
-    assert_eq!(edge_1.target_port, "bottom");
+    assert_eq!(edge_1.source_handle, "top");
+    assert_eq!(edge_1.target_handle, "bottom");
     assert_eq!(edge_1.title, "new title");
     assert_eq!(edge_1.description, "new description");
     assert_eq!(log::service::list(0, 1, LogFilter::default()).unwrap().total, log_total_before);
 
-    // edge::create 失败路径：两端连接桩相同时报 EdgeSameNodePort（早于查重与成环检查）。
+    // edge::create 失败路径：两端连接桩相同时报 EdgeSameHandle（早于查重与成环检查）。
     assert!(matches!(
         edge::service::create(
             &child.id,
@@ -693,9 +693,9 @@ fn test_user_database_service_all_functions() {
             "top".to_string(),
             false
         ),
-        Err(ErrorCode::EdgeSameNodePort)
+        Err(ErrorCode::EdgeSameHandle)
     ));
-    // 自环 + 同连接桩同样报 EdgeSameNodePort，覆盖同 port 检查先于 would_form_cycle 的语义。
+    // 自环 + 同连接桩同样报 EdgeSameHandle，覆盖同 handle 检查先于 would_form_cycle 的语义。
     assert!(matches!(
         edge::service::create(
             &child.id,
@@ -705,7 +705,7 @@ fn test_user_database_service_all_functions() {
             "right".to_string(),
             false
         ),
-        Err(ErrorCode::EdgeSameNodePort)
+        Err(ErrorCode::EdgeSameHandle)
     ));
 
     // edge::create 替换路径：反向建边（换向）在排除旧边后不成环时，删除旧边并建立反向新边。
@@ -781,7 +781,7 @@ fn test_user_database_service_all_functions() {
         .find(|node| node.id == node_1.id)
         .unwrap();
     assert_eq!(modified.title, "title-1-new");
-    assert_eq!(modified.sub_title, "sub-1-new");
+    assert_eq!(modified.subtitle, "sub-1-new");
     assert_eq!((modified.x, modified.y), (30.0, 40.0));
     // node::move_nodes 成功路径（原地移动）：新坐标与旧坐标相同时成功返回，
     // 且不产生新日志（日志总数不变）。
@@ -806,7 +806,7 @@ fn test_user_database_service_all_functions() {
     assert_eq!(deleted_node_1.id, node_1.id);
     assert!(deleted_node_1.deleted);
     assert_eq!(deleted_node_1.title, "title-1-new");
-    assert_eq!(deleted_node_1.sub_title, "sub-1-new");
+    assert_eq!(deleted_node_1.subtitle, "sub-1-new");
     assert_eq!(deleted_node_1.x, 30.0);
     assert_eq!(deleted_node_1.y, 40.0);
     assert_eq!(deleted_node_1.canvas_id, child.id);
@@ -1043,13 +1043,13 @@ fn test_user_database_service_all_functions() {
         id: uuid::Uuid::new_v4().to_string(),
         parent_id: None,
         value: "条目A".to_string(),
-        order: 1,
+        sort_order: 1,
     };
     let dict_b = Dictionary {
         id: uuid::Uuid::new_v4().to_string(),
         parent_id: None,
         value: "条目B".to_string(),
-        order: 2,
+        sort_order: 2,
     };
     dictionary::service::set(&[dict_a.clone(), dict_b.clone()]).unwrap();
 
@@ -1073,7 +1073,7 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::DuplicateNodeFieldName { .. })
     ));
 
-    // == node_field::set 失败路径：dictionary_id 不存在 → NoDictionaryEntryWithSuchId ==
+    // == node_field::set 失败路径：dictionary_id 不存在 → NoDictionaryWithSuchId ==
     assert!(matches!(
         node_field::service::set(
             &node.id,
@@ -1084,7 +1084,7 @@ fn test_user_database_service_all_functions() {
                 dictionary_id: Some(uuid::Uuid::new_v4().to_string()),
             }]
         ),
-        Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
+        Err(ErrorCode::NoDictionaryWithSuchId { .. })
     ));
 
     // == node_field::set 成功路径：覆盖多种字段类型的字段值字符串与带 dictionary_id 的字段。
@@ -1166,13 +1166,13 @@ fn test_user_database_service_all_functions() {
             id: uuid::Uuid::new_v4().to_string(),
             parent_id: None,
             value: "val".to_string(),
-            order: 1,
+            sort_order: 1,
         },
         Dictionary {
             id: uuid::Uuid::new_v4().to_string(),
             parent_id: None,
             value: "val".to_string(),
-            order: 2,
+            sort_order: 2,
         },
     ];
     let dup_id = dup_dict[0].id.clone();
@@ -1182,7 +1182,7 @@ fn test_user_database_service_all_functions() {
             id: dup_id.clone(),
             parent_id: None,
             value: "dup".to_string(),
-            order: 3,
+            sort_order: 3,
         },
     ];
     match dictionary::service::set(&dup_entries) {
@@ -1190,16 +1190,16 @@ fn test_user_database_service_all_functions() {
         other => panic!("expected DuplicateDictionaryId, got {other:?}"),
     }
 
-    // == dictionary::set 失败路径：parent 不在集合内 → NoDictionaryEntryWithSuchId ==
+    // == dictionary::set 失败路径：parent 不在集合内 → NoDictionaryWithSuchId ==
     let orphan = Dictionary {
         id: uuid::Uuid::new_v4().to_string(),
         parent_id: Some("no-such-parent-id".to_string()),
         value: "orphan".to_string(),
-        order: 1,
+        sort_order: 1,
     };
     assert!(matches!(
         dictionary::service::set(&[orphan]),
-        Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
+        Err(ErrorCode::NoDictionaryWithSuchId { .. })
     ));
 
     // == dictionary 端到端：node_field 引用条目 A → set 移除 A → node_field::get 返回 dictionary_id 已置空 ==
@@ -1401,7 +1401,7 @@ fn test_user_database_service_all_functions() {
     // == template::create 成功路径 ==
     let tpl_a = template::service::create("模板A".to_string()).unwrap();
     assert_eq!(tpl_a.name, "模板A");
-    assert_eq!(tpl_a.order, 0);
+    assert_eq!(tpl_a.sort_order, 0);
 
     // == template::create 失败路径：重名 → TemplateNameAlreadyExists ==
     assert!(matches!(
@@ -1409,11 +1409,11 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::TemplateNameAlreadyExists { .. })
     ));
 
-    // == template::create 成功路径：order 递增 ==
+    // == template::create 成功路径：sort_order 递增 ==
     let tpl_b = template::service::create("模板B".to_string()).unwrap();
-    assert_eq!(tpl_b.order, 1);
+    assert_eq!(tpl_b.sort_order, 1);
 
-    // == template::list 返回按 order 升序 ==
+    // == template::list 返回按 sort_order 升序 ==
     let all = template::service::list().unwrap();
     assert_eq!(all.len(), 2);
     assert_eq!(all[0].id, tpl_a.id);
@@ -1450,7 +1450,7 @@ fn test_user_database_service_all_functions() {
         id: uuid::Uuid::new_v4().to_string(),
         parent_id: None,
         value: "字典D".to_string(),
-        order: 1,
+        sort_order: 1,
     };
     dictionary::service::set(&[dict_d.clone()]).unwrap();
     let node_fields = vec![
@@ -1548,7 +1548,7 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::DuplicateNodeFieldName { .. })
     ));
 
-    // == set_fields 失败路径：字典引用不存在 → NoDictionaryEntryWithSuchId ==
+    // == set_fields 失败路径：字典引用不存在 → NoDictionaryWithSuchId ==
     assert!(matches!(
         template::service::set_fields(
             &tpl_a.id,
@@ -1558,7 +1558,7 @@ fn test_user_database_service_all_functions() {
                 dictionary_id: Some(uuid::Uuid::new_v4().to_string()),
             }]
         ),
-        Err(ErrorCode::NoDictionaryEntryWithSuchId { .. })
+        Err(ErrorCode::NoDictionaryWithSuchId { .. })
     ));
 
     // == set_fields / get_fields 成功往返（后端不校验字段类型，原样存取） ==
@@ -1621,10 +1621,10 @@ fn test_user_database_service_all_functions() {
     assert_eq!(tpl_node_fields[2].name, "模板字段3");
     assert_eq!(tpl_node_fields[2].dictionary_id.as_deref(), Some(dict_d.id.as_str()));
 
-    // == node::service::create 画布节点带模板：sub_title 原样保留，模板字段结构同样复制 ==
+    // == node::service::create 画布数据节点带模板：subtitle 原样保留，模板字段结构同样复制 ==
     let tpl_canvas_node = node::service::create(
         root_id,
-        "模板画布节点".to_string(),
+        "模板画布数据节点".to_string(),
         "自定义副标题".to_string(),
         0.0,
         0.0,
@@ -1632,7 +1632,7 @@ fn test_user_database_service_all_functions() {
         true,
     ).unwrap();
     assert!(tpl_canvas_node.canvas_ref_id.is_some());
-    assert_eq!(tpl_canvas_node.sub_title, "自定义副标题");
+    assert_eq!(tpl_canvas_node.subtitle, "自定义副标题");
     let tpl_canvas_node_fields = node_field::service::get(&tpl_canvas_node.id).unwrap();
     assert_eq!(tpl_canvas_node_fields.len(), 3);
 
@@ -1686,7 +1686,7 @@ fn test_user_database_service_all_functions() {
         id: uuid::Uuid::new_v4().to_string(),
         parent_id: None,
         value: "字典E".to_string(),
-        order: 1,
+        sort_order: 1,
     };
     dictionary::service::set(&[dict_e.clone()]).unwrap();
     template::service::set_fields(
@@ -2279,11 +2279,11 @@ fn test_user_database_service_all_functions() {
     let node_after = node::service::list(root_id, false).unwrap().into_iter().find(|n| n.id == node.id).unwrap();
     assert_eq!(node_after.color, "{\"fill\":\"#aabbcc\"}");
 
-    // == node::color_list 成功路径：设置若干节点颜色（含空色、已删除节点）后返回结果符合预期 ==
+    // == node::color_list 成功路径：设置若干数据节点颜色（含空色、已删除节点）后返回结果符合预期 ==
     // 再创建一个无色节点和一个已删除的带色节点。
-    let plain_node = node::service::create(
+    let data_node = node::service::create(
         root_id,
-        "plain-node".to_string(),
+        "data-node".to_string(),
         String::new(),
         0.0,
         0.0,
@@ -2302,7 +2302,7 @@ fn test_user_database_service_all_functions() {
     node::service::set_color(&deleted_colored.id, "{\"fill\":\"#0000ff\"}".to_string()).unwrap();
     node::service::logical_delete(&deleted_colored.id).unwrap();
     // 无色节点 color 保持空串，不应出现在结果中。
-    let _ = plain_node;
+    let _ = data_node;
 
     let entries = node::service::color_list().unwrap();
     // 只有 color-node 符合条件（未删除且 color 非空）
@@ -2316,7 +2316,7 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::NoNodeWithSuchId { .. })
     ));
 
-    // == node::copy 失败路径：源节点是画布节点 → NodeIsCanvasNode ==
+    // == node::copy 失败路径：源节点是画布数据节点 → NodeIsCanvasDataNode ==
     let copy_canvas_node = node::service::create(
         root_id,
         "copy-canvas-node".to_string(),
@@ -2328,11 +2328,11 @@ fn test_user_database_service_all_functions() {
     ).unwrap();
     assert!(matches!(
         node::service::copy(&copy_canvas_node.id, 0.0, 0.0),
-        Err(ErrorCode::NodeIsCanvasNode)
+        Err(ErrorCode::NodeIsCanvasDataNode)
     ));
 
     // == node::copy 成功路径：副本继承标题、副标题、颜色和字段结构（值为 None），
-    //    id 全新、坐标取入参、非删除态、canvas_ref_id 与 shadow_id 均为 None ==
+    //    id 全新、坐标取入参、非删除态、canvas_ref_id 与 shadow_producing_edge_id 均为 None ==
     let copy_source = node::service::create(
         root_id,
         "copy-source".to_string(),
@@ -2369,11 +2369,11 @@ fn test_user_database_service_all_functions() {
     assert_eq!(copied.canvas_id, *root_id);
     assert_eq!((copied.x, copied.y), (300.0, 400.0));
     assert_eq!(copied.title, "copy-source");
-    assert_eq!(copied.sub_title, "copy-sub");
+    assert_eq!(copied.subtitle, "copy-sub");
     assert_eq!(copied.color, "{\"fill\":\"#aabbcc\"}");
     assert!(!copied.deleted);
     assert!(copied.canvas_ref_id.is_none());
-    assert!(copied.shadow_id.is_none());
+    assert!(copied.shadow_producing_edge_id.is_none());
 
     // 字段结构随副本复制且顺序保持，但字段值一律为 None。
     let copied_fields = node_field::service::get(&copied.id).unwrap();
@@ -2786,8 +2786,8 @@ fn test_user_database_service_all_functions() {
     let same_canvas = canvas::service::create(&root_id, "relocate-same".to_string()).unwrap();
     let deleted_target_canvas = canvas::service::create(&root_id, "relocate-deleted-target".to_string()).unwrap();
     canvas::service::logical_delete(&deleted_target_canvas.id).unwrap();
-    // 源画布内准备夹具：画布节点（引用子画布 C）+ 一个普通节点 + 普通节点→画布节点的边。
-    // 该边在子画布 C 内自动生成影子节点（指向普通节点）。
+    // 源画布内准备夹具：画布数据节点（引用子画布 C）+ 一个数据节点 + 数据节点→画布数据节点的边。
+    // 该边在子画布 C 内自动生成影子节点（指向数据节点）。
     let canvas_node_in_source = node::service::create(
         &source_canvas.id,
         "relocate-canvas-node".to_string(),
@@ -2819,8 +2819,8 @@ fn test_user_database_service_all_functions() {
     )
     .unwrap();
     // 在子画布 C 内查到的影子节点（指向 normal_node）。
-    // 新机制下影子 shadow_id 指向产生边，不再指向原始节点；此处改用 shadow_origin_id
-    // （沿影子链解析到的根本体 id）匹配原始节点 id。
+    // 新机制下影子指向产生它的边（而非本体节点）；此处改用 shadow_origin_id
+    // （沿影子链解析到的本体 id）匹配本体节点 id。
     let shadow_node = node::service::list(&child_canvas, false)
         .unwrap()
         .into_iter()
@@ -2866,7 +2866,7 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::NoNodeWithSuchId { .. })
     ));
 
-    // relocate_nodes 失败路径：items 含画布节点时报 NodeIsCanvasNode。
+    // relocate_nodes 失败路径：items 含画布数据节点时报 NodeIsCanvasDataNode。
     assert!(matches!(
         node::service::relocate_nodes(
             &[node::vo::MoveNodeVO {
@@ -2876,7 +2876,7 @@ fn test_user_database_service_all_functions() {
             }],
             &target_canvas.id,
         ),
-        Err(ErrorCode::NodeIsCanvasNode)
+        Err(ErrorCode::NodeIsCanvasDataNode)
     ));
 
     // relocate_nodes 失败路径：items 含影子节点（在子画布内查到的）时报 NodeIsShadow。
@@ -2892,7 +2892,7 @@ fn test_user_database_service_all_functions() {
         Err(ErrorCode::NodeIsShadow)
     ));
 
-    // relocate_nodes 失败路径：items 只含该普通节点（它与画布节点之间有边即外部边）时报 NodeSetHasExternalEdges。
+    // relocate_nodes 失败路径：items 只含该数据节点（它与画布数据节点之间有边即外部边）时报 NodeSetHasExternalEdges。
     assert!(matches!(
         node::service::relocate_nodes(
             &[node::vo::MoveNodeVO {
@@ -2936,7 +2936,7 @@ fn test_user_database_service_all_functions() {
     ));
 
     // relocate_nodes 成功路径：源画布 == 目标画布，无操作且不产日志。
-    // 在 same_canvas 内新建一个普通节点（不带任何外部边）。
+    // 在 same_canvas 内新建一个数据节点（不带任何外部边）。
     let same_canvas_node = node::service::create(
         &same_canvas.id,
         "relocate-same-canvas-node".to_string(),
@@ -2978,8 +2978,8 @@ fn test_user_database_service_all_functions() {
         log_total_before_empty
     );
 
-    // relocate_nodes 成功路径：源画布中两个普通节点 + 它们之间一条边，迁移到目标画布。
-    // 先在源画布内新建一对普通节点并建边。
+    // relocate_nodes 成功路径：源画布中两个数据节点 + 它们之间一条边，迁移到目标画布。
+    // 先在源画布内新建一对数据节点并建边。
     let reloc_a = node::service::create(
         &source_canvas.id,
         "reloc-a".to_string(),

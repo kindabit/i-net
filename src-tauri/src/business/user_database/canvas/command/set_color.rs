@@ -11,11 +11,11 @@ use crate::util::preprocess_util;
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn user_database_canvas_set_color(id: String, color: String) -> Result<(), ErrorCode> {
+pub fn user_database_canvas_node_set_color(id: String, color: String) -> Result<(), ErrorCode> {
     preprocess(id, color)
 }
 
-/// `user_database_canvas_set_color` 的 preprocess 函数：校验参数后接入 service 层的 set_color 函数。
+/// `user_database_canvas_node_set_color` 的 preprocess 函数：校验参数后接入 service 层的 set_color 函数。
 ///
 /// 颜色仅裁剪首尾空白字符，不做格式校验。
 pub fn preprocess(id: String, color: String) -> Result<(), ErrorCode> {

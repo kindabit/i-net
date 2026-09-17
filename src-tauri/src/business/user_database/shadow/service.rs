@@ -1,12 +1,12 @@
 mod create;
 mod display_title;
-mod resolve_root;
+mod resolve_origin;
 mod shadow_direction;
 mod shadow_disconnected;
 
 pub use create::create_shadow_for_edge;
 pub use display_title::display_title;
-pub use resolve_root::resolve_root;
+pub use resolve_origin::resolve_origin;
 pub use shadow_direction::shadow_direction;
 pub use shadow_disconnected::collect_edge_disconnected;
 
@@ -29,7 +29,7 @@ mod tests {
     use crate::test;
     use crate::util::file_system_util;
 
-    /// 影子节点 service 行为：list 合并展示数据与方向推导、原始节点逻辑删除状态透传、
+    /// 影子节点 service 行为：list 合并展示数据与方向推导、本体节点逻辑删除状态透传、
     /// 各 service 的影子守卫（失败路径）、影子可移动与参与边（成功路径）、导出过滤影子节点。
     #[test]
     fn test_shadow_node_service() {
@@ -44,39 +44,39 @@ mod tests {
         let canvases = canvas::service::list(false).unwrap();
         let root = canvases[0].clone();
 
-        // 准备父画布（根画布）内的节点：普通节点 X、画布节点 B（引用画布 b）、画布节点 Z（引用画布 z）。
-        // 新建边规则下画布节点→普通节点被禁止（CanvasToPlainNodeEdge），产生出向影子须经画布→画布路径。
+        // 准备父画布（根画布）内的节点：数据节点 X、画布数据节点 B（引用画布 b）、画布数据节点 Z（引用画布 z）。
+        // 新建边规则下画布数据节点→数据节点被禁止（CanvasToDataNodeEdge），产生出向影子须经画布→画布路径。
         let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
         let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
         let node_z = node::service::create(&root.id, "canvas-z".to_string(), String::new(), 400.0, 0.0, None, true).unwrap();
         let canvas_b = node_b.canvas_ref_id.clone().unwrap();
 
         // 通过 service 层建边：由 service 层自动按规则联动创建影子节点。
-        // X→B（X 普通节点）：B.canvas_ref_id 画布 b 内产生 X 的入向影子。
-        // B→Z（B 画布节点 → Z 画布节点）：B.canvas_ref_id 画布 b 内产生 Z 的出向影子。
+        // X→B（X 数据节点）：B.canvas_ref_id 画布 b 内产生 X 的入向影子。
+        // B→Z（B 画布数据节点 → Z 画布数据节点）：B.canvas_ref_id 画布 b 内产生 Z 的出向影子。
         let edge_xb = edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_b.id, "left".to_string(), false).unwrap();
         let edge_bz = edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string(), false).unwrap();
 
-        // 通过 select_by_producing_edge_id 取出两个影子节点本体（shadow_id 指向产生边）。
+        // 通过 select_by_producing_edge_id 按产生边 id 取出两个影子节点自身。
         let connection = state::lock_connection();
         let shadow_x = shadow::dao::select_by_producing_edge_id(&connection, &edge_xb.id).unwrap().unwrap();
         let shadow_z = shadow::dao::select_by_producing_edge_id(&connection, &edge_bz.id).unwrap().unwrap();
         drop(connection);
 
-        // list 合并成功路径：影子的 title 合并自原始节点，shadow_id 指向产生边；
-        // shadow_direction 由产生边源端节点类型决定：X 普通节点 → Inflow，B 画布节点 → Outflow。
+        // list 合并成功路径：影子的 title 合并自本体节点，其产生边即断言所用的边；
+        // shadow_direction 由产生边源端节点类型决定：X 数据节点 → Inflow，B 画布数据节点 → Outflow。
         let nodes_b = node::service::list(&canvas_b, false).unwrap();
         let vo_x = nodes_b.iter().find(|n| n.id == shadow_x.id).unwrap();
         let vo_z = nodes_b.iter().find(|n| n.id == shadow_z.id).unwrap();
         assert_eq!(vo_x.title, "origin-x");
-        assert_eq!(vo_x.shadow_id.as_deref(), Some(edge_xb.id.as_str()));
+        assert_eq!(vo_x.shadow_producing_edge_id.as_deref(), Some(edge_xb.id.as_str()));
         assert_eq!(vo_x.shadow_direction, Some(shadow::vo::ShadowDirection::Inflow));
         assert!(vo_x.canvas_ref_id.is_none());
         assert_eq!(vo_z.title, "canvas-z");
-        assert_eq!(vo_z.shadow_id.as_deref(), Some(edge_bz.id.as_str()));
+        assert_eq!(vo_z.shadow_producing_edge_id.as_deref(), Some(edge_bz.id.as_str()));
         assert_eq!(vo_z.shadow_direction, Some(shadow::vo::ShadowDirection::Outflow));
 
-        // 原始节点逻辑删除状态透传：逻辑删除 X 后影子保留且 shadow_origin_deleted 变为 true，恢复后回到 false。
+        // 本体节点逻辑删除状态透传：逻辑删除 X 后影子保留且 shadow_origin_deleted 变为 true，恢复后回到 false。
         node::service::logical_delete(&node_x.id).unwrap();
         let merged_x = node::service::list(&canvas_b, false)
             .unwrap()
@@ -140,14 +140,14 @@ mod tests {
             .find(|n| n.id == shadow_x.id)
             .unwrap();
         assert_eq!((moved.x, moved.y), (10.0, 20.0));
-        // 日志载荷成功路径：影子的移动日志标题沿产生边链解析为根本体标题（影子本体标题落库为空串）。
+        // 日志载荷成功路径：影子的移动日志标题沿产生边链解析为本体标题（影子自身标题落库为空串）。
         let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
         assert!(logs.items.iter().any(|entry| matches!(
             &entry.action,
             entity::Action::NodeMove { title, .. } if title == "origin-x"
         )));
 
-        // 导出过滤准备：在画布 b 内创建普通节点 N，并建边 shadow_x→N（入向影子有出边）。
+        // 导出过滤准备：在画布 b 内创建数据节点 N，并建边 shadow_x→N（入向影子有出边）。
         let node_n = node::service::create(&canvas_b, "internal-n".to_string(), String::new(), 500.0, 0.0, None, false).unwrap();
         edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_n.id, "left".to_string(), false).unwrap();
 
@@ -178,7 +178,7 @@ mod tests {
     }
 
     /// 边创建的影子节点联动：双向创建影子、影子初始位置车道算法、影子连线的方向守卫、
-    /// 影子与画布节点连线（嵌套影子）、画布节点之间允许互相连接（产生出向影子）以及普通建边行为不回归。
+    /// 影子与画布数据节点连线（嵌套影子）、画布数据节点之间允许互相连接（产生出向影子）以及普通建边行为不回归。
     #[test]
     fn test_shadow_node_edge_create() {
         let _guard = test::acquire_test_lock();
@@ -192,13 +192,13 @@ mod tests {
         let canvases = canvas::service::list(false).unwrap();
         let root = canvases[0].clone();
 
-        // 影子行查询辅助：按产生边 id 从 connection 上取影子节点本体。
+        // 影子行查询辅助：按产生边 id 从 connection 上取影子节点自身。
         let shadow_by_edge = |edge_id: &str| {
             let connection = state::lock_connection();
             shadow::dao::select_by_producing_edge_id(&connection, edge_id).unwrap()
         };
 
-        // 准备父画布（根画布）内的普通节点 X 与画布节点 B（引用画布 b）。
+        // 准备父画布（根画布）内的数据节点 X 与画布数据节点 B（引用画布 b）。
         let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
         let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
         let canvas_b = node_b.canvas_ref_id.clone().unwrap();
@@ -207,16 +207,16 @@ mod tests {
         // 画布 b 内还没有非影子节点，入向车道取默认 x=0，首个影子 y=0。
         let edge_xb = edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_b.id, "left".to_string(), false).unwrap();
         let shadow_x = shadow_by_edge(&edge_xb.id).unwrap();
-        // 影子行本体只有位置与 shadow_id 有意义：title/sub_title/color 为空串，deleted 为 false。
+        // 影子行自身只有位置与 shadow_producing_edge_id 有意义：title/subtitle/color 为空串，deleted 为 false。
         assert_eq!(shadow_x.canvas_id, canvas_b);
-        assert_eq!(shadow_x.shadow_id.as_deref(), Some(edge_xb.id.as_str()));
-        assert!(shadow_x.title.is_empty() && shadow_x.sub_title.is_empty() && shadow_x.color.is_empty());
+        assert_eq!(shadow_x.shadow_producing_edge_id.as_deref(), Some(edge_xb.id.as_str()));
+        assert!(shadow_x.title.is_empty() && shadow_x.subtitle.is_empty() && shadow_x.color.is_empty());
         assert!(!shadow_x.deleted);
         assert!(shadow_x.canvas_ref_id.is_none());
         assert_eq!((shadow_x.x, shadow_x.y), (0.0, 0.0));
 
         // 出向影子创建成功路径：建边 B→Z 后在画布 b 内创建 Z 的出向影子。
-        // 新规则下出向影子只能是画布节点的影子，因此 Z 必须是画布节点（B→Z 为画布→画布）。
+        // 新规则下出向影子只能是画布数据节点的影子，因此 Z 必须是画布数据节点（B→Z 为画布→画布）。
         // 无非影子节点时出向车道取默认 x=400，首个出向影子 y=0。
         let node_z = node::service::create(&root.id, "canvas-z".to_string(), String::new(), 400.0, 0.0, None, true).unwrap();
         let edge_bz = edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string(), false).unwrap();
@@ -229,7 +229,7 @@ mod tests {
         let shadow_x2 = shadow_by_edge(&edge_x2b.id).unwrap();
         assert_eq!((shadow_x2.x, shadow_x2.y), (0.0, 120.0));
 
-        // 车道参考非影子内容：画布 b 内新建普通节点 N(1000, 500) 后，
+        // 车道参考非影子内容：画布 b 内新建数据节点 N(1000, 500) 后，
         // 入向影子（X3→B）车道 x = 1000-400 = 600，堆叠 y = 240；出向影子（B→Z2）车道 x = 1000+400 = 1400，堆叠 y = 120。
         let node_n = node::service::create(&canvas_b, "internal-n".to_string(), String::new(), 1000.0, 500.0, None, false).unwrap();
         let node_x3 = node::service::create(&root.id, "origin-x3".to_string(), String::new(), 0.0, 400.0, None, false).unwrap();
@@ -241,7 +241,7 @@ mod tests {
         let shadow_z2 = shadow_by_edge(&edge_bz2.id).unwrap();
         assert_eq!((shadow_z2.x, shadow_z2.y), (1400.0, 120.0));
 
-        // 画布节点→画布节点成功路径（建边规则 4，已放开）：Y 与 B 都是画布节点，建边 Y→B
+        // 画布数据节点→画布数据节点成功路径（建边规则 4，已放开）：Y 与 B 都是画布数据节点，建边 Y→B
         // 在 Y.canvas_ref_id 画布内产生 B 的出向影子。注意旧版此情形报 CanvasToCanvasEdge，
         // 新版允许并联动创建影子。
         let node_y = node::service::create(&root.id, "canvas-y".to_string(), String::new(), 600.0, 0.0, None, true).unwrap();
@@ -249,13 +249,13 @@ mod tests {
         let edge_yb = edge::service::create(&root.id, &node_y.id, "right".to_string(), &node_b.id, "left".to_string(), false).unwrap();
         let shadow_b_in_y = shadow_by_edge(&edge_yb.id).unwrap();
         assert_eq!(shadow_b_in_y.canvas_id, canvas_y);
-        // B 本身是画布节点，所以这是 Outflow 影子。
+        // B 本身是画布数据节点，所以这是 Outflow 影子。
         assert_eq!(
             node::service::list(&canvas_y, false).unwrap().iter().find(|n| n.id == shadow_b_in_y.id).unwrap().shadow_direction,
             Some(shadow::vo::ShadowDirection::Outflow)
         );
 
-        // list 视图断言：影子展示数据合并自根本体节点且方向正确。
+        // list 视图断言：影子展示数据合并自本体节点且方向正确。
         let nodes_b = node::service::list(&canvas_b, false).unwrap();
         let vo_z = nodes_b.iter().find(|n| n.id == shadow_z.id).unwrap();
         assert_eq!(vo_z.shadow_direction, Some(shadow::vo::ShadowDirection::Outflow));
@@ -270,27 +270,27 @@ mod tests {
             edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &shadow_x.id, "left".to_string(), false),
             Err(ErrorCode::InvalidShadowEdge)
         ));
-        // 影子与画布节点连线成功路径（建边规则 7）：入向影子 shadow_x 作为源连接画布节点 C2，
-        // 在画布 c2 内创建 shadow_x 的入向影子（嵌套影子，shadow_id 指向直接来源 shadow_x 的产生边）；
-        // 画布节点 C2 作为源连接出向影子 shadow_z，在画布 c2 内创建 shadow_z 的出向影子。
+        // 影子与画布数据节点连线成功路径（建边规则 7）：入向影子 shadow_x 作为源连接画布数据节点 C2，
+        // 在画布 c2 内创建 shadow_x 的入向影子（嵌套影子，shadow_producing_edge_id 指向直接来源 shadow_x 的产生边）；
+        // 画布数据节点 C2 作为源连接出向影子 shadow_z，在画布 c2 内创建 shadow_z 的出向影子。
         let node_c2 = node::service::create(&canvas_b, "canvas-c2".to_string(), String::new(), 1200.0, 600.0, None, true).unwrap();
         let canvas_c2 = node_c2.canvas_ref_id.clone().unwrap();
         let edge_sxc2 = edge::service::create(&canvas_b, &shadow_x.id, "top".to_string(), &node_c2.id, "bottom".to_string(), false).unwrap();
         let nested_shadow_x = shadow_by_edge(&edge_sxc2.id).unwrap();
         assert_eq!(nested_shadow_x.canvas_id, canvas_c2);
-        assert_eq!(nested_shadow_x.shadow_id.as_deref(), Some(edge_sxc2.id.as_str()));
+        assert_eq!(nested_shadow_x.shadow_producing_edge_id.as_deref(), Some(edge_sxc2.id.as_str()));
         let edge_c2sz = edge::service::create(&canvas_b, &node_c2.id, "top".to_string(), &shadow_z.id, "bottom".to_string(), false).unwrap();
         let nested_shadow_z = shadow_by_edge(&edge_c2sz.id).unwrap();
         assert_eq!(nested_shadow_z.canvas_id, canvas_c2);
-        assert_eq!(nested_shadow_z.shadow_id.as_deref(), Some(edge_c2sz.id.as_str()));
+        assert_eq!(nested_shadow_z.shadow_producing_edge_id.as_deref(), Some(edge_c2sz.id.as_str()));
 
-        // 嵌套影子 list 视图级联合并：c2 内 shadow_x 的影子展示数据沿影子链级联到根原始节点 X
-        // （title/sub_title/color 合并自 X；影子的 canvas_ref_id 恒为 None）；
+        // 嵌套影子 list 视图级联合并：c2 内 shadow_x 的影子展示数据沿影子链级联到本体节点 X
+        // （title/subtitle/color 合并自 X；影子的 canvas_ref_id 恒为 None）；
         // shadow_direction 按直接来源推导（产生边源端是入向影子 shadow_x 本身）。
         let nodes_c2 = node::service::list(&canvas_c2, false).unwrap();
         let vo_nested_x = nodes_c2.iter().find(|n| n.id == nested_shadow_x.id).unwrap();
         assert_eq!(vo_nested_x.title, "origin-x");
-        assert!(vo_nested_x.sub_title.is_empty());
+        assert!(vo_nested_x.subtitle.is_empty());
         assert!(vo_nested_x.canvas_ref_id.is_none());
         assert_eq!(vo_nested_x.shadow_direction, Some(shadow::vo::ShadowDirection::Inflow));
         assert_eq!(vo_nested_x.shadow_origin_deleted, Some(false));
@@ -298,11 +298,11 @@ mod tests {
         assert_eq!(vo_nested_z.title, "canvas-z");
         assert_eq!(vo_nested_z.shadow_direction, Some(shadow::vo::ShadowDirection::Outflow));
 
-        // 影子参与连线成功路径：入向影子作为源连接普通节点、普通节点连接出向影子。
+        // 影子参与连线成功路径：入向影子作为源连接数据节点、数据节点连接出向影子。
         let edge_sx_n = edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_n.id, "left".to_string(), false).unwrap();
         let edge_n_sz = edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &shadow_z.id, "left".to_string(), false).unwrap();
-        // 日志载荷成功路径：影子端点的标题落库为空串，日志沿产生边链解析为根本体标题
-        // （嵌套影子链同样解析到根本体）。
+        // 日志载荷成功路径：影子端点的标题落库为空串，日志沿产生边链解析为本体标题
+        // （嵌套影子链同样解析到本体）。
         let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
         let has_edge_create = |expect_source: &str, expect_target: &str| {
             logs.items
@@ -320,20 +320,20 @@ mod tests {
             edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &shadow_z.id, "left".to_string(), false),
             Err(ErrorCode::ShadowToShadowEdge)
         ));
-        // 普通节点连接画布节点成功路径：N→C2 在画布 c2 内创建 N 的入向影子。
+        // 数据节点连接画布数据节点成功路径：N→C2 在画布 c2 内创建 N 的入向影子。
         // c2 内已有的内容都是影子（影子车道参考只看非影子内容），所以入向车道取默认 x=0，
         // 堆叠在已有入向嵌套影子（nested_shadow_x，y=0）下方 y=120。
         let edge_n_c2 = edge::service::create(&canvas_b, &node_n.id, "right".to_string(), &node_c2.id, "left".to_string(), false).unwrap();
         let shadow_n = shadow_by_edge(&edge_n_c2.id).unwrap();
         assert_eq!((shadow_n.x, shadow_n.y), (0.0, 120.0));
 
-        // 既有行为不回归：根画布内普通节点之间建边成功，且不产生任何影子（各画布影子数不变）。
+        // 既有行为不回归：根画布内数据节点之间建边成功，且不产生任何影子（各画布影子数不变）。
         edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_x2.id, "left".to_string(), false).unwrap();
         let count_shadows = |canvas_id: &str| {
             node::service::list(canvas_id, false)
                 .unwrap()
                 .into_iter()
-                .filter(|n| n.shadow_id.is_some())
+                .filter(|n| n.shadow_producing_edge_id.is_some())
                 .count()
         };
         // canvas_b：X 的入向、X2 的入向、X3 的入向、Z 的出向、Z2 的出向，共 5 个影子。
@@ -343,10 +343,10 @@ mod tests {
         // canvas_c2：nested_shadow_x（入向）、nested_shadow_z（出向）、shadow_n（入向），共 3 个影子。
         assert_eq!(count_shadows(&canvas_c2), 3);
         // 既有校验不回归：替换语义下重复边走"删旧建新"路径，不再报 EdgeAlreadyExists；
-        // 端到端验证同向同连接桩仍被 EdgeSameNodePort 拦截。
+        // 端到端验证同向同连接桩仍被 EdgeSameHandle 拦截。
         assert!(matches!(
             edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_x2.id, "right".to_string(), false),
-            Err(ErrorCode::EdgeSameNodePort)
+            Err(ErrorCode::EdgeSameHandle)
         ));
         // 自环无旧边时仍报 EdgeWouldFormCycle，覆盖 cycle 检查先于 replace 的语义。
         let node_x4 = node::service::create(&root.id, "origin-x4".to_string(), String::new(), 0.0, 600.0, None, false).unwrap();
@@ -355,7 +355,7 @@ mod tests {
             Err(ErrorCode::EdgeWouldFormCycle)
         ));
 
-        // 日志载荷成功路径：影子端点边的更新与删除日志同样沿产生边链解析根本体标题。
+        // 日志载荷成功路径：影子端点边的更新与删除日志同样沿产生边链解析本体标题。
         edge::service::update(&edge_sx_n.id, "edge-title".to_string(), String::new()).unwrap();
         edge::service::delete(&edge_n_sz.id, false).unwrap();
         let logs = log::service::list(0, 1000, LogFilter::default()).unwrap();
@@ -377,7 +377,7 @@ mod tests {
     }
 
     /// 边删除的影子节点联动：有连接未确认时拒绝删除并给出受影响节点标题、确认后影子随边物理删除、
-    /// 无连接时直接删除、出向影子的入边同样触发确认、原始节点物理删除时影子随外键级联删除。
+    /// 无连接时直接删除、出向影子的入边同样触发确认、本体节点物理删除时影子随外键级联删除。
     #[test]
     fn test_shadow_node_edge_delete() {
         let _guard = test::acquire_test_lock();
@@ -391,20 +391,20 @@ mod tests {
         let canvases = canvas::service::list(false).unwrap();
         let root = canvases[0].clone();
 
-        // 影子行查询辅助：按产生边 id 从 connection 上取影子节点本体。
+        // 影子行查询辅助：按产生边 id 从 connection 上取影子节点自身。
         let shadow_by_edge = |edge_id: &str| {
             let connection = state::lock_connection();
             shadow::dao::select_by_producing_edge_id(&connection, edge_id).unwrap()
         };
 
-        // 准备：根画布内普通节点 X 与画布节点 B（引用画布 b），建边 X→B 自动创建入向影子。
+        // 准备：根画布内数据节点 X 与画布数据节点 B（引用画布 b），建边 X→B 自动创建入向影子。
         let node_x = node::service::create(&root.id, "origin-x".to_string(), String::new(), 0.0, 0.0, None, false).unwrap();
         let node_b = node::service::create(&root.id, "canvas-b".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
         let canvas_b = node_b.canvas_ref_id.clone().unwrap();
         let edge_xb = edge::service::create(&root.id, &node_x.id, "right".to_string(), &node_b.id, "left".to_string(), false).unwrap();
         let shadow_x = shadow_by_edge(&edge_xb.id).unwrap();
 
-        // 画布 b 内建普通节点 M1、M2，并建边 shadow_x→M1、shadow_x→M2（入向影子有出边）。
+        // 画布 b 内建数据节点 M1、M2，并建边 shadow_x→M1、shadow_x→M2（入向影子有出边）。
         let node_m1 = node::service::create(&canvas_b, "internal-m1".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
         let node_m2 = node::service::create(&canvas_b, "internal-m2".to_string(), String::new(), 400.0, 200.0, None, false).unwrap();
         edge::service::create(&canvas_b, &shadow_x.id, "right".to_string(), &node_m1.id, "left".to_string(), false).unwrap();
@@ -423,9 +423,9 @@ mod tests {
         assert!(edge::service::list(&root.id).unwrap().iter().any(|e| e.id == edge_xb.id));
         assert!(shadow_by_edge(&edge_xb.id).is_some());
 
-        // 成功路径（确认后）：边被删除，影子节点随边物理删除（经 shadow_id 外键级联），
+        // 成功路径（确认后）：边被删除，影子节点随边物理删除（经 shadow_producing_edge_id 外键级联），
         // 影子在子画布内的出边由 edge.source_id/target_id 外键级联删除，
-        // 子画布内的普通节点 M1/M2 本身保留。
+        // 子画布内的数据节点 M1/M2 本身保留。
         edge::service::delete(&edge_xb.id, true).unwrap();
         assert!(!edge::service::list(&root.id).unwrap().iter().any(|e| e.id == edge_xb.id));
         assert!(shadow_by_edge(&edge_xb.id).is_none());
@@ -434,7 +434,7 @@ mod tests {
         assert!(node::service::list(&canvas_b, false).unwrap().iter().any(|n| n.id == node_m2.id));
 
         // 无连接快速路径：出向影子（B→Z）在子画布内没有任何关联边时，未确认也直接删除成功。
-        // 新规则下产生出向影子须用画布节点 Z（建边 B→Z：画布→画布）。
+        // 新规则下产生出向影子须用画布数据节点 Z（建边 B→Z：画布→画布）。
         let node_z = node::service::create(&root.id, "canvas-z".to_string(), String::new(), 400.0, 0.0, None, true).unwrap();
         let edge_bz = edge::service::create(&root.id, &node_b.id, "right".to_string(), &node_z.id, "left".to_string(), false).unwrap();
         assert!(shadow_by_edge(&edge_bz.id).is_some());
@@ -456,7 +456,7 @@ mod tests {
         assert!(shadow_by_edge(&edge_bz2.id).is_none());
         assert!(edge::service::list(&canvas_b).unwrap().is_empty());
 
-        // 物理删除联动（端到端）：物理删除原始节点 X2 时，其入向影子与父画布内的边随外键级联一并消失。
+        // 物理删除联动（端到端）：物理删除本体节点 X2 时，其入向影子与父画布内的边随外键级联一并消失。
         let node_x2 = node::service::create(&root.id, "origin-x2".to_string(), String::new(), 0.0, 200.0, None, false).unwrap();
         let edge_x2b = edge::service::create(&root.id, &node_x2.id, "right".to_string(), &node_b.id, "left".to_string(), false).unwrap();
         assert!(shadow_by_edge(&edge_x2b.id).is_some());
@@ -486,19 +486,19 @@ mod tests {
         let root = canvases[0].clone();
 
         // 按画布 id 列出所有影子（包含嵌套）的辅助函数：新机制下影子由产生边唯一标识，
-        // 通过 list 取得影子节点本体后用 shadow_origin_id 沿链向上找到根本体 X。
+        // 通过 list 取得影子节点自身后用 shadow_origin_id 沿产生边链向上找到本体 X。
         let list_shadows = |canvas_id: &str| -> Vec<node::vo::NodeVO> {
             node::service::list(canvas_id, false)
                 .unwrap()
                 .into_iter()
-                .filter(|n| n.shadow_id.is_some())
+                .filter(|n| n.shadow_producing_edge_id.is_some())
                 .collect()
         };
 
         // ===== 第 1 阶段：构造嵌套影子 X → X_b → X_bc =====
-        // 根画布：普通节点 X（X 是普通节点，canvas_ref_id 为 None）。
+        // 根画布：数据节点 X（X 是数据节点，canvas_ref_id 为 None）。
         let node_x = node::service::create(&root.id, "X 的标题".to_string(), "X 的副标题".to_string(), 0.0, 0.0, None, false).unwrap();
-        // 画布节点 B 引用画布 b。
+        // 画布数据节点 B 引用画布 b。
         let node_b = node::service::create(&root.id, "B 的标题".to_string(), String::new(), 200.0, 0.0, None, true).unwrap();
         let canvas_b = node_b.canvas_ref_id.clone().unwrap();
 
@@ -507,39 +507,39 @@ mod tests {
         let shadows_b = list_shadows(&canvas_b);
         assert_eq!(shadows_b.len(), 1);
         let shadow_x_b = shadows_b.into_iter().next().unwrap();
-        // 影子 shadow_id 指向产生边 edge_xb.id，根本体 id 通过 shadow_origin_id 给出。
-        assert_eq!(shadow_x_b.shadow_id.as_deref(), Some(edge_xb.id.as_str()));
+        // 影子的产生边为 edge_xb.id，本体 id 通过 shadow_origin_id 给出。
+        assert_eq!(shadow_x_b.shadow_producing_edge_id.as_deref(), Some(edge_xb.id.as_str()));
         assert_eq!(shadow_x_b.shadow_origin_id.as_deref(), Some(node_x.id.as_str()));
 
-        // 画布 b 内：画布节点 C 引用画布 c、普通节点 M。
+        // 画布 b 内：画布数据节点 C 引用画布 c、数据节点 M。
         let node_c = node::service::create(&canvas_b, "C 的标题".to_string(), String::new(), 600.0, 0.0, None, true).unwrap();
         let canvas_c = node_c.canvas_ref_id.clone().unwrap();
         let node_m = node::service::create(&canvas_b, "M 的标题".to_string(), String::new(), 400.0, 0.0, None, false).unwrap();
 
-        // 入向影子作源连接普通节点成功路径：X_b→M（入向影子有出边）。
+        // 入向影子作源连接数据节点成功路径：X_b→M（入向影子有出边）。
         edge::service::create(&canvas_b, &shadow_x_b.id, "right".to_string(), &node_m.id, "left".to_string(), false).unwrap();
 
-        // 入向影子作源连接画布节点成功路径：X_b→C → 画布 c 内产生 X_b 的入向影子 X_bc（嵌套影子，
-        // 其 shadow_id 直接指向产生边 edge_xbc，根本体通过 shadow_origin_id 仍是 X）。
+        // 入向影子作源连接画布数据节点成功路径：X_b→C → 画布 c 内产生 X_b 的入向影子 X_bc（嵌套影子，
+        // 其 shadow_producing_edge_id 直接指向产生边 edge_xbc，本体通过 shadow_origin_id 仍是 X）。
         let edge_xbc = edge::service::create(&canvas_b, &shadow_x_b.id, "top".to_string(), &node_c.id, "bottom".to_string(), false).unwrap();
         let shadows_c = list_shadows(&canvas_c);
         assert_eq!(shadows_c.len(), 1);
         let shadow_x_bc = shadows_c.into_iter().next().unwrap();
-        assert_eq!(shadow_x_bc.shadow_id.as_deref(), Some(edge_xbc.id.as_str()));
+        assert_eq!(shadow_x_bc.shadow_producing_edge_id.as_deref(), Some(edge_xbc.id.as_str()));
         assert_eq!(shadow_x_bc.shadow_origin_id.as_deref(), Some(node_x.id.as_str()));
 
-        // 画布 c 内：普通节点 P；嵌套入向影子作源连接普通节点成功路径：X_bc→P。
+        // 画布 c 内：数据节点 P；嵌套入向影子作源连接数据节点成功路径：X_bc→P。
         let node_p = node::service::create(&canvas_c, "P 的标题".to_string(), String::new(), 200.0, 0.0, None, false).unwrap();
         edge::service::create(&canvas_c, &shadow_x_bc.id, "right".to_string(), &node_p.id, "left".to_string(), false).unwrap();
 
         // ===== 第 2 阶段：list 视图级联合并断言 =====
-        // X_bc 展示数据沿影子链向上级联到根原始节点 X（而非停留在 shadow_x_b 这一层）：
-        // title / sub_title / color 合并为 X 的值；canvas_ref_id 恒为 None（X 是普通节点）；
+        // X_bc 展示数据沿影子链向上级联到本体节点 X（而非停留在 shadow_x_b 这一层）：
+        // title / subtitle / color 合并为 X 的值；canvas_ref_id 恒为 None（X 是数据节点）；
         // shadow_direction 按直接来源推导为 Inflow。
         let nodes_c_list = node::service::list(&canvas_c, false).unwrap();
         let vo_x_bc = nodes_c_list.iter().find(|n| n.id == shadow_x_bc.id).unwrap();
         assert_eq!(vo_x_bc.title, "X 的标题");
-        assert_eq!(vo_x_bc.sub_title, "X 的副标题");
+        assert_eq!(vo_x_bc.subtitle, "X 的副标题");
         assert!(vo_x_bc.canvas_ref_id.is_none());
         assert_eq!(vo_x_bc.shadow_origin_id.as_deref(), Some(node_x.id.as_str()));
         assert_eq!(vo_x_bc.shadow_origin_deleted, Some(false));

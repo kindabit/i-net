@@ -15,7 +15,7 @@ use crate::business::metadata::entity::Metadata;
 static CONNECTION: LazyLock<ReentrantMutex<RefCell<Option<Connection>>>> =
     LazyLock::new(|| ReentrantMutex::new(RefCell::new(None)));
 
-/// 全局静态变量，存储已打开的用户数据库的元信息。
+/// 全局静态变量，存储已打开的用户数据库的元数据。
 ///
 /// 用户数据库打开（initialize）时由 service 层写入，关闭（close）时清空。
 static METADATA: LazyLock<Mutex<Option<Metadata>>> = LazyLock::new(|| Mutex::new(None));
@@ -80,10 +80,10 @@ pub fn lock_connection() -> ConnectionGuard {
     }
 }
 
-/// 将已打开的用户数据库的元信息写入全局状态。
+/// 将已打开的用户数据库的元数据写入全局状态。
 ///
 /// # 参数
-/// - `metadata`: 用户数据库元信息。
+/// - `metadata`: 用户数据库元数据。
 ///
 /// # 返回值
 /// 无。
@@ -93,10 +93,10 @@ pub fn set_metadata(metadata: Metadata) {
         .expect("user database metadata lock is poisoned") = Some(metadata);
 }
 
-/// 获取已打开的用户数据库的元信息的克隆。
+/// 获取已打开的用户数据库的元数据的克隆。
 ///
 /// # 返回值
-/// 返回用户数据库元信息；若尚未初始化则 panic。
+/// 返回用户数据库元数据；若尚未初始化则 panic。
 pub fn metadata() -> Metadata {
     METADATA
         .lock()
@@ -126,7 +126,7 @@ pub fn key() -> [u8; 32] {
         .expect("user database key is not initialized")
 }
 
-/// 清空全局状态中的连接、元信息和密钥。
+/// 清空全局状态中的连接、元数据和密钥。
 ///
 /// 用户数据库关闭（close）时由 service 层调用。
 ///

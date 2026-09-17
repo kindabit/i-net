@@ -6,18 +6,18 @@ use crate::util::preprocess_util;
 ///
 /// # 参数
 /// - `id`: 附件 id。
-/// - `file_name`: 新文件名。
+/// - `new_file_name`: 新文件名。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn user_database_attachment_rename(id: String, file_name: String) -> Result<(), ErrorCode> {
-    preprocess(id, file_name)
+pub fn user_database_attachment_rename(id: String, new_file_name: String) -> Result<(), ErrorCode> {
+    preprocess(id, new_file_name)
 }
 
 /// `user_database_attachment_rename` 的 preprocess 函数：校验参数后接入 service 层的 rename 函数。
-pub fn preprocess(id: String, file_name: String) -> Result<(), ErrorCode> {
+pub fn preprocess(id: String, new_file_name: String) -> Result<(), ErrorCode> {
     let id = preprocess_util::preprocess_attachment_id(id)?;
-    let file_name = preprocess_util::preprocess_file_name(file_name)?;
-    service::rename(&id, file_name)
+    let new_file_name = preprocess_util::preprocess_file_name(new_file_name)?;
+    service::rename(&id, new_file_name)
 }

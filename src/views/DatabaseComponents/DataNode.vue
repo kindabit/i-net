@@ -1,24 +1,24 @@
 <!--
-  数据节点 / 画布节点组件。
+  数据节点 / 画布数据节点组件。
 
-  在画布中将一个敏感数据节点或子画布节点渲染为 vue-flow 节点。
-  显示节点标题和副标题，canvasRefId 非 null 时显示画布图标；双击普通节点打开编辑对话框，双击画布节点进入子画布。
+  在画布中将一个敏感数据节点或子画布数据节点渲染为 vue-flow 节点。
+  显示节点标题和副标题，canvasRefId 非 null 时显示画布图标；双击数据节点打开编辑对话框，双击画布数据节点进入子画布。
   四个方向均为出口（source）。
   节点为固定宽高（尺寸常量见 node-size.ts，为吸附网格 20px 的整数倍），标题/副标题过长时显示省略号。
-  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；普通节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
-  影子节点只显示编辑与删除按钮（删除等价于删除产生它的边），画布节点不显示复制按钮。
-  支持节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
+  hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；数据节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
+  影子节点只显示编辑与删除按钮（删除等价于删除产生它的边），画布数据节点不显示复制按钮。
+  支持数据节点自定义颜色：背景、边框、标题、副标题、图标、handle、悬浮按钮均可单独配色。
   在跨画布迁移（按住 Alt 拖拽）时根据节点集合法性显示"允许/禁止"落点光环。
 
   影子节点（data.shadowOriginId 非 null）的渲染差异：
-  - 边框使用虚线，整体略降透明度，提示其为对画布外原始节点的引用。
+  - 边框使用虚线，整体略降透明度，提示其为对画布外本体节点的引用。
   - 当 data.shadowDirection 非 null 时，在节点对应外侧渲染一条带行进动画的虚拟边，
     表示节点的某一度数指向画布之外（inflow：入度来自画布之外；outflow：出度指向画布之外）；
     点击该虚拟边跳转至产生该影子节点的边所在画布，并把视角定位到该边。
-  - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示原始节点已在回收站中。
-  - data.canvasRefId 对影子节点恒为 null（后端不合并根本体的 canvas_ref_id）。
-  - 双击行为按影子方向分流：入向影子打开根本体的只读编辑对话框；出向影子（画布节点的影子）
-    钻入根本体画布节点引用的子画布（shadowOriginCanvasRefId），根本体已逻辑删除时静默不跳转。
+  - 当 data.shadowOriginDeleted 为 true 时，卡片灰化并显示删除图标提示本体节点已在回收站中。
+  - data.canvasRefId 对影子节点恒为 null（后端不合并本体的 canvas_ref_id）。
+  - 双击行为按影子方向分流：入向影子打开本体的只读编辑对话框；出向影子（画布数据节点的影子）
+    钻入本体画布数据节点引用的子画布（shadowOriginCanvasRefId），本体已逻辑删除时静默不跳转。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
@@ -33,7 +33,7 @@ import { highlightedNodeIds } from "@/composables/use-neighbor-highlight";
 import type { DataNodeData } from "@/vf-convert";
 import nodeMoveAndRelocate from "@/composables/use-node-move-and-relocate";
 import { setCanvasNavIntent } from "./canvas-route-transition";
-import { deserializeNodeColor } from "@/node-colors";
+import { deserializeDataNodeColor } from "@/node-colors";
 import { DATA_NODE_WIDTH_REM, DATA_NODE_HEIGHT_REM } from "@/node-size";
 import { currentThemeIsDark } from "@/themes";
 // #if [DEBUG]
@@ -59,7 +59,7 @@ const actionsVisible = ref(false);
 
 /** 解析当前主题下的自定义颜色属性（键缺失即默认值，外观交还组件 CSS 兜底） */
 const colors = computed(() => {
-  const scheme = deserializeNodeColor(props.data.color);
+  const scheme = deserializeDataNodeColor(props.data.color);
   return currentThemeIsDark.value ? scheme.dark : scheme.light;
 });
 
@@ -69,7 +69,7 @@ const handleStyle = computed(() => {
   return handle ? { background: handle, borderColor: handle } : undefined;
 });
 
-/** 迁移落点高亮状态：仅当本节点成为迁移目标（状态机只会以画布节点/出向影子节点为目标）且处于 relocate 模式时非 null */
+/** 迁移落点高亮状态：仅当本节点成为迁移目标（状态机只会以画布数据节点/出向影子节点为目标）且处于 relocate 模式时非 null */
 const dropState = computed(() => {
   if (nodeMoveAndRelocate.mode.value !== "relocate") return null;
   const target = nodeMoveAndRelocate.relocatingTarget.value;
@@ -87,9 +87,9 @@ const deleteTitle = computed(() =>
 const isNeighborHighlighted = computed(() => highlightedNodeIds.value.has(props.id));
 
 /**
- * 双击节点卡片：出向影子（画布节点的影子）钻入根本体画布节点引用的子画布，
- * 根本体已被逻辑删除时（卡片灰化）静默不跳转；普通节点与入向影子打开编辑对话框
- * （入向影子在 CanvasView 侧以只读模式打开根本体）；画布节点进入子画布。
+ * 双击节点卡片：出向影子（画布数据节点的影子）钻入本体画布数据节点引用的子画布，
+ * 本体已被逻辑删除时（卡片灰化）静默不跳转；数据节点与入向影子打开编辑对话框
+ * （入向影子在 CanvasView 侧以只读模式打开本体）；画布数据节点进入子画布。
  * 输入：无。
  * 返回：无返回值。
  */
@@ -135,12 +135,12 @@ async function markNavIntent(fromCanvasId: string, toCanvasId: string): Promise<
  * 返回：无返回值。
  */
 async function onShadowVirtualEdgeClick() {
-  const edgeId = props.data.shadowId;
-  if (!edgeId) return;
+  const producingEdgeId = props.data.shadowProducingEdgeId;
+  if (!producingEdgeId) return;
   const currentCanvasId = route.params.canvasId;
   let producingEdge: Edge;
   try {
-    producingEdge = await userDatabaseEdgeGet(edgeId);
+    producingEdge = await userDatabaseEdgeGet(producingEdgeId);
   } catch (e) {
     snackbarErrorCode(e);
     return;
@@ -151,7 +151,7 @@ async function onShadowVirtualEdgeClick() {
   await router.push({
     name: "canvas",
     params: { canvasId: producingEdge.canvas_id },
-    query: { edgeId },
+    query: { edgeId: producingEdgeId },
   });
 }
 </script>
@@ -281,7 +281,7 @@ async function onShadowVirtualEdgeClick() {
       <div class="data-node-title">{{ data.title }}</div>
     </div>
     <div v-else class="data-node-title">{{ data.title }}</div>
-    <div v-if="data.subTitle" class="data-node-subtitle" :style="{ color: colors.subtitle }">{{ data.subTitle }}</div>
+    <div v-if="data.subtitle" class="data-node-subtitle" :style="{ color: colors.subtitle }">{{ data.subtitle }}</div>
   </div>
 </template>
 
@@ -336,7 +336,7 @@ async function onShadowVirtualEdgeClick() {
     opacity: 0.8;
   }
 
-  // 影子节点的原始节点已被逻辑删除：灰化 + 进一步降透明度
+  // 影子节点的本体节点已被逻辑删除：灰化 + 进一步降透明度
   &--origin-deleted {
     filter: grayscale(1);
     opacity: 0.55;
@@ -468,7 +468,7 @@ async function onShadowVirtualEdgeClick() {
   }
 }
 
-/** 影子节点原始节点已删除的角标：右上角绝对定位，不参与交互 */
+/** 影子节点本体节点已删除的角标：右上角绝对定位，不参与交互 */
 .shadow-origin-deleted-badge {
   position: absolute;
   top: 0.125rem;

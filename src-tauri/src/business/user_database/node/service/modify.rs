@@ -5,7 +5,7 @@ use crate::error_code::ErrorCode;
 
 /// 修改指定节点的标题和副标题。
 ///
-/// 若节点是画布节点且标题实际发生变化，同步重命名其引用的画布以保持两侧标题一致：
+/// 若节点是画布数据节点且标题实际发生变化，同步重命名其引用的画布以保持两侧标题一致：
 /// 先检测新标题是否与其它画布重名，重名则整个修改失败（节点与画布均不落库）；
 /// 同步重命名时产生 CanvasRename 日志。引用画布必然随节点存在（canvas_ref_id 外键
 /// ON DELETE CASCADE），查不到即为数据损坏，返回 DataCorruptionCanvasRefMissing 触发受控崩溃。
@@ -15,22 +15,22 @@ use crate::error_code::ErrorCode;
 /// # 参数
 /// - `id`: 节点 id。
 /// - `title`: 新标题。
-/// - `sub_title`: 新副标题。
+/// - `subtitle`: 新副标题。
 ///
 /// # 返回值
 /// 成功时返回 `Ok(())`；节点不存在时返回 `ErrorCode::NoNodeWithSuchId`，影子节点时返回 `ErrorCode::NodeIsShadow`，
-/// 画布节点的新标题与其它画布重复时返回 `ErrorCode::CanvasNameAlreadyExists`，
-/// 画布节点引用的画布不存在时返回 `ErrorCode::DataCorruptionCanvasRefMissing`，
+/// 画布数据节点的新标题与其它画布重复时返回 `ErrorCode::CanvasNameAlreadyExists`，
+/// 画布数据节点引用的画布不存在时返回 `ErrorCode::DataCorruptionCanvasRefMissing`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
-pub fn modify(id: &str, title: String, sub_title: String) -> Result<(), ErrorCode> {
+pub fn modify(id: &str, title: String, subtitle: String) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let mut node = dao::select_by_id(&connection, id)?
         .ok_or_else(|| ErrorCode::NoNodeWithSuchId { id: id.to_string() })?;
-    // 影子节点不允许此操作（展示数据从原始节点拉取，生命周期由边管理）。
-    if node.shadow_id.is_some() {
+    // 影子节点不允许此操作（展示数据从本体节点拉取，生命周期由边管理）。
+    if node.shadow_producing_edge_id.is_some() {
         return Err(ErrorCode::NodeIsShadow);
     }
-    // 画布节点的标题与引用画布的名称保持一致：标题变化时先检测新标题是否与其它画布重名，
+    // 画布数据节点的标题与引用画布的名称保持一致：标题变化时先检测新标题是否与其它画布重名，
     // 重名则整个修改失败（先于任何写操作，节点与画布均不落库）。
     let sync_canvas = match node.canvas_ref_id {
         Some(ref ref_id) if node.title != title => {
@@ -44,7 +44,7 @@ pub fn modify(id: &str, title: String, sub_title: String) -> Result<(), ErrorCod
         _ => false,
     };
     let old_title = std::mem::replace(&mut node.title, title);
-    let old_sub_title = std::mem::replace(&mut node.sub_title, sub_title);
+    let old_subtitle = std::mem::replace(&mut node.subtitle, subtitle);
     dao::update(&connection, &node)?;
     // 同步重命名引用画布。画布必然随节点存在（canvas_ref_id 外键 ON DELETE CASCADE），
     // 查不到即为数据损坏，返回 DataCorruptionCanvasRefMissing 触发受控崩溃；
@@ -69,9 +69,9 @@ pub fn modify(id: &str, title: String, sub_title: String) -> Result<(), ErrorCod
     }
     log::service::create(Action::NodeModify {
         old_title,
-        old_sub_title,
+        old_subtitle,
         new_title: node.title,
-        new_sub_title: node.sub_title,
+        new_subtitle: node.subtitle,
     })?;
     Ok(())
 }

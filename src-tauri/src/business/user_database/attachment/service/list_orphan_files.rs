@@ -5,7 +5,7 @@ use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
 use crate::util::file_system_util;
 
-/// 列出孤儿附件文件：附件目录中存在、但 attachment 表中没有对应元数据的文件。
+/// 列出孤儿文件：附件目录中存在、但 attachment 表中没有对应元数据的文件。
 /// 只上报不清理；文件名主干无法解析为 uuid 的文件也纳入，原样返回文件名，
 /// 便于发现异常文件。附件目录不存在时返回空列表。不产生日志。
 ///

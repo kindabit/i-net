@@ -188,7 +188,7 @@ mod tests {
             "log-1",
             &entity::Action::NodeCreate {
                 title: "Alpha Project".to_string(),
-                sub_title: "sub".to_string(),
+                subtitle: "sub".to_string(),
             },
             100,
         );
@@ -308,7 +308,7 @@ mod tests {
                 &format!("needle-{index}"),
                 &entity::Action::NodeCreate {
                     title: format!("needle title {index}"),
-                    sub_title: String::new(),
+                    subtitle: String::new(),
                 },
                 500 + index,
             );

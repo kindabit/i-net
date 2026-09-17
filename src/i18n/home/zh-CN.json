@@ -17,14 +17,14 @@
     "archive-management": {
       "title": "归档管理",
       "archive": "归档",
-      "unarchive": "还原",
+      "unarchive": "解除归档",
       "delete": "删除",
       "status-archived": "已归档",
       "status-not-archived": "未归档",
       "empty": "暂无数据库",
       "close": "关闭",
       "archive-success": "数据库“{name}”已归档",
-      "unarchive-success": "数据库“{name}”已还原",
+      "unarchive-success": "数据库“{name}”已解除归档",
       "delete-success": "数据库“{name}”已删除",
       "wrong-password": "密码错误"
     },

@@ -8,9 +8,9 @@ pub const CANVAS_UNIVERSE_VIEWPORT_ID: &str = "canvas_universe";
 pub struct Viewport {
     /// 画布 id（uuid）或画布宇宙视口特殊值，主键。
     pub canvas_id: String,
-    /// 视口中心的 x 坐标。
+    /// 视口 x（屏幕坐标：画布原点相对视口中心的水平偏移）。
     pub x: f64,
-    /// 视口中心的 y 坐标。
+    /// 视口 y（屏幕坐标：画布原点相对视口中心的垂直偏移）。
     pub y: f64,
     /// 当前的缩放比例。
     pub zoom: f64,

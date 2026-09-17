@@ -11,16 +11,16 @@ use crate::util::file_system_util;
 /// - `key`: 32 字节的解密密钥。
 ///
 /// # 返回值
-/// 成功时返回 `Ok(())`；id 不存在时返回 `ErrorCode::NoDatabaseWithSuchId`，
-/// 数据库未归档时返回 `ErrorCode::DatabaseMustBeArchivedBeforeDelete`，
+/// 成功时返回 `Ok(())`；id 不存在时返回 `ErrorCode::NoUserDatabaseWithSuchId`，
+/// 数据库未归档时返回 `ErrorCode::UserDatabaseMustBeArchivedBeforeDelete`，
 /// 密钥无法正确解密时返回 `ErrorCode::FailToDecrypt`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn physical_delete(id: &str, key: [u8; 32]) -> Result<(), ErrorCode> {
     let connection = state::lock_connection();
     let metadata = dao::select_by_id(&connection, id)?
-        .ok_or_else(|| ErrorCode::NoDatabaseWithSuchId { id: id.to_string() })?;
+        .ok_or_else(|| ErrorCode::NoUserDatabaseWithSuchId { id: id.to_string() })?;
     if !metadata.archived {
-        return Err(ErrorCode::DatabaseMustBeArchivedBeforeDelete);
+        return Err(ErrorCode::UserDatabaseMustBeArchivedBeforeDelete);
     }
     let path = crate::state::path();
     // 通过实际解密一遍来验证密钥；数据库文件不存在时无需验证。

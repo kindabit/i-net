@@ -43,7 +43,7 @@ function toggle() {
 }
 
 function onDragStart(event: DragEvent, node: Node) {
-  event.dataTransfer?.setData("application/x-inet-recycle-node", node.id);
+  event.dataTransfer?.setData("application/x-i-net-recycle-node", node.id);
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   draggingId.value = node.id;
 }
@@ -130,10 +130,10 @@ defineExpose({
               <div class="recycle-bin-item-text">
                 <div class="recycle-bin-item-title">{{ node.title }}</div>
                 <div
-                  v-if="node.sub_title"
+                  v-if="node.subtitle"
                   class="recycle-bin-item-subtitle"
                 >
-                  {{ node.sub_title }}
+                  {{ node.subtitle }}
                 </div>
               </div>
             </div>

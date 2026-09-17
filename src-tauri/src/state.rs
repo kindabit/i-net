@@ -52,48 +52,48 @@ impl Path {
     /// 获取指定用户数据库的目录路径。
     ///
     /// # 参数
-    /// - `user_uuid`: 用户数据库 UUID。
+    /// - `user_database_id`: 用户数据库 id（uuid）。
     ///
     /// # 返回值
     /// 返回该用户数据库对应的目录路径。
-    pub fn user_database_directory(&self, user_uuid: &str) -> PathBuf {
-        self.user_database_set_directory.join(user_uuid)
+    pub fn user_database_directory(&self, user_database_id: &str) -> PathBuf {
+        self.user_database_set_directory.join(user_database_id)
     }
 
     /// 获取指定用户数据库文件路径。
     ///
     /// # 参数
-    /// - `user_uuid`: 用户数据库 UUID。
+    /// - `user_database_id`: 用户数据库 id（uuid）。
     ///
     /// # 返回值
     /// 返回该用户数据库对应的 SQLite 文件路径。
-    pub fn user_database_file(&self, user_uuid: &str) -> PathBuf {
-        self.user_database_directory(user_uuid)
+    pub fn user_database_file(&self, user_database_id: &str) -> PathBuf {
+        self.user_database_directory(user_database_id)
             .join("user_database.sqlite")
     }
 
     /// 获取指定用户数据库的附件目录路径。
     ///
     /// # 参数
-    /// - `user_uuid`: 用户数据库 UUID。
+    /// - `user_database_id`: 用户数据库 id（uuid）。
     ///
     /// # 返回值
     /// 返回该用户数据库对应的附件目录路径。
-    pub fn user_attachment_directory(&self, user_uuid: &str) -> PathBuf {
-        self.user_database_directory(user_uuid).join("attachment")
+    pub fn user_attachment_directory(&self, user_database_id: &str) -> PathBuf {
+        self.user_database_directory(user_database_id).join("attachment")
     }
 
     /// 获取指定用户数据库中某个附件的文件路径。
     ///
     /// # 参数
-    /// - `user_uuid`: 用户数据库 UUID。
-    /// - `attachment_uuid`: 附件 UUID。
+    /// - `user_database_id`: 用户数据库 id（uuid）。
+    /// - `attachment_id`: 附件 id（uuid）。
     ///
     /// # 返回值
     /// 返回该附件对应的二进制文件路径。
-    pub fn user_attachment_file(&self, user_uuid: &str, attachment_uuid: &str) -> PathBuf {
-        self.user_attachment_directory(user_uuid)
-            .join(format!("{}.bin", attachment_uuid))
+    pub fn user_attachment_file(&self, user_database_id: &str, attachment_id: &str) -> PathBuf {
+        self.user_attachment_directory(user_database_id)
+            .join(format!("{}.bin", attachment_id))
     }
 
     /// 校验目标路径不在应用数据目录内，防止导出等写操作覆盖用户数据库文件或附件文件。

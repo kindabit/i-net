@@ -248,8 +248,8 @@ async function save(): Promise<void> {
   if (!view || !dirty.value || saving.value) return;
   saving.value = true;
   try {
-    const content = new TextEncoder().encode(view.state.doc.toString());
-    await userDatabaseAttachmentUpdateFile(props.attachmentId, content);
+    const plaintext = new TextEncoder().encode(view.state.doc.toString());
+    await userDatabaseAttachmentUpdateFile(props.attachmentId, plaintext);
     dirty.value = false;
     snackbarText(t("database.canvas.attachment.text-saved"), "success");
   } catch (e) {

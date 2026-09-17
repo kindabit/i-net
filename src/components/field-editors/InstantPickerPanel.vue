@@ -54,8 +54,8 @@ const visibleWheels = computed<readonly Precision[]>(() => {
   return PART_ORDER.slice(hourIndex, precisionIndex + 1);
 });
 
-/** 字段值是否非空（全 0 的 DEFAULT_LOCAL_PARTS 为"字段值为空"的项目既有约定）。 */
-const hasValue = computed(() => !sameLocalParts(props.modelValue, DEFAULT_LOCAL_PARTS));
+/** 字段值是否为空值态（全 0 的 DEFAULT_LOCAL_PARTS 为"字段值为空"的项目既有约定）。 */
+const isEmpty = computed(() => sameLocalParts(props.modelValue, DEFAULT_LOCAL_PARTS));
 
 /**
  * 滚轮列更新：只修改对应位并保留其它位，立即整体 emit。
@@ -96,14 +96,14 @@ function onMonthSelect(date: { year: number; month: number }): void {
     <YearPicker
       v-if="precision === 'year'"
       :year="modelValue.year"
-      :has-value="hasValue"
+      :is-empty="isEmpty"
       @select="onYearSelect"
     />
     <MonthPicker
       v-else-if="precision === 'month'"
       :year="modelValue.year"
       :month="modelValue.month"
-      :has-value="hasValue"
+      :is-empty="isEmpty"
       @select="onMonthSelect"
     />
     <template v-else>

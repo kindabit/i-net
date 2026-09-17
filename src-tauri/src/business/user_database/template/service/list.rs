@@ -3,7 +3,7 @@ use crate::business::user_database::template::dao;
 use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
 
-/// 查询全部模板，按 order 升序返回。
+/// 查询全部模板，按 sort_order 升序返回。
 ///
 /// # 参数
 /// 无。

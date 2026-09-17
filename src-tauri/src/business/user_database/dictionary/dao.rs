@@ -14,7 +14,7 @@ pub(crate) enum DictionaryIden {
     Id,
     ParentId,
     Value,
-    Order,
+    SortOrder,
 }
 
 /// 从查询结果行构造 Dictionary。
@@ -23,7 +23,7 @@ fn map_row(row: &Row) -> rusqlite::Result<Dictionary> {
         id: row.get(0)?,
         parent_id: row.get(1)?,
         value: row.get(2)?,
-        order: row.get(3)?,
+        sort_order: row.get(3)?,
     })
 }
 
@@ -47,7 +47,7 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
             ColumnDef::new_with_type(DictionaryIden::Value, ColumnType::custom("TEXT")).not_null(),
         )
         .col(
-            ColumnDef::new_with_type(DictionaryIden::Order, ColumnType::custom("INTEGER")).not_null(),
+            ColumnDef::new_with_type(DictionaryIden::SortOrder, ColumnType::custom("INTEGER")).not_null(),
         )
         .extra("STRICT")
         .take();
@@ -71,15 +71,15 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
 /// # 返回值
 /// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
 pub fn batch_insert(connection: &Connection, dictionaries: &[Dictionary]) -> Result<(), ErrorCode> {
-    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 columns 声明序（id, parent_id, value, order），
-    // 因此循环内按位绑定 params![id, parent_id, value, order]。
+    // 占位符顺序约定：build 产出的 SQL 中 ? 依次对应 columns 声明序（id, parent_id, value, sort_order），
+    // 因此循环内按位绑定 params![id, parent_id, value, sort_order]。
     let (sql, _) = Query::insert()
         .into_table(DictionaryIden::Table)
         .columns([
             DictionaryIden::Id,
             DictionaryIden::ParentId,
             DictionaryIden::Value,
-            DictionaryIden::Order,
+            DictionaryIden::SortOrder,
         ])
         .values_panic(["".into(), None::<String>.into(), "".into(), 0i64.into()])
         .build(SqliteQueryBuilder);
@@ -94,7 +94,7 @@ pub fn batch_insert(connection: &Connection, dictionaries: &[Dictionary]) -> Res
                 dictionary.id,
                 dictionary.parent_id,
                 dictionary.value,
-                dictionary.order,
+                dictionary.sort_order,
             ])
             .map_err(|e| ErrorCode::DatabaseError {
                 detail: e.to_string(),
@@ -103,7 +103,7 @@ pub fn batch_insert(connection: &Connection, dictionaries: &[Dictionary]) -> Res
     Ok(())
 }
 
-/// 查询全部字典条目，按 "order" 升序。
+/// 查询全部字典条目，按 "sort_order" 升序。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -116,10 +116,10 @@ pub fn select_all(connection: &Connection) -> Result<Vec<Dictionary>, ErrorCode>
             DictionaryIden::Id,
             DictionaryIden::ParentId,
             DictionaryIden::Value,
-            DictionaryIden::Order,
+            DictionaryIden::SortOrder,
         ])
         .from(DictionaryIden::Table)
-        .order_by(DictionaryIden::Order, Order::Asc)
+        .order_by(DictionaryIden::SortOrder, Order::Asc)
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
@@ -194,12 +194,12 @@ mod tests {
     use super::*;
 
     /// 构造测试用 Dictionary。
-    fn dict(id: &str, parent_id: Option<&str>, value: &str, order: i64) -> Dictionary {
+    fn dict(id: &str, parent_id: Option<&str>, value: &str, sort_order: i64) -> Dictionary {
         Dictionary {
             id: id.to_string(),
             parent_id: parent_id.map(|s| s.to_string()),
             value: value.to_string(),
-            order,
+            sort_order,
         }
     }
 
@@ -245,7 +245,7 @@ mod tests {
         batch_insert(&connection, &[]).unwrap();
         assert!(select_all(&connection).unwrap().is_empty());
 
-        // batch_insert 成功路径：批量插入后 select_all 能按 order 升序取回（插乱序验证排序）。
+        // batch_insert 成功路径：批量插入后 select_all 能按 sort_order 升序取回（插乱序验证排序）。
         batch_insert(
             &connection,
             &[
@@ -299,7 +299,7 @@ mod tests {
         create_table(&connection).unwrap();
         assert!(matches!(
             connection.execute(
-                "INSERT INTO dictionary (id, parent_id, value, \"order\")
+                "INSERT INTO dictionary (id, parent_id, value, \"sort_order\")
                 VALUES ('strict-violation', NULL, x'0102', 1)",
                 [],
             ),

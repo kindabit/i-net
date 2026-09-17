@@ -3,7 +3,7 @@
  *
  * 边的形状为三次贝塞尔曲线：端点 p0/p1 为源/目标连接桩坐标，
  * 控制点沿各自 handle 轴向偏移（偏移距离为水平投影 |dx| 的一半，即 curvature=0.5）。
- * 本模块只包含纯函数，坐标单位为 flow 坐标；响应式与 DOM 测量由组件层负责。
+ * 本模块只包含纯函数，坐标单位为画布坐标；响应式与 DOM 测量由组件层负责。
  */
 
 /** 二维向量 */
@@ -26,12 +26,12 @@ function lerp(a: Vec2, b: Vec2, t: number): Vec2 {
 }
 
 /**
- * 根据 handle 方位计算单个控制点：从 pos 出发沿 handle 轴向偏移 distance。
- * 入参 handlePosition 取值为 top/right/bottom/left。
+ * 根据 handle 计算单个控制点：从 pos 出发沿 handle 轴向偏移 distance。
+ * 入参 handle 取值为 top/right/bottom/left。
  */
-function computeControlPoint(pos: Vec2, handlePosition: string, distance: number): Vec2 {
+function computeControlPoint(pos: Vec2, handle: string, distance: number): Vec2 {
   const cp = { x: pos.x, y: pos.y };
-  switch (handlePosition) {
+  switch (handle) {
     case "right":
       cp.x += distance;
       break;
@@ -51,7 +51,7 @@ function computeControlPoint(pos: Vec2, handlePosition: string, distance: number
 /**
  * 计算贝塞尔曲线的控制点。
  *
- * 入参为源/目标连接桩的 flow 坐标与各自 handle 方位（top/right/bottom/left）。
+ * 入参为源/目标连接桩的画布坐标与各自 handle（top/right/bottom/left）。
  * 控制点偏移距离为水平投影 |dx| × curvature（curvature=0.5）。
  * 注意：垂直边（dx=0）时偏移距离为 0，控制点与端点重合，曲线退化为直线——
  * 这是既定的外观行为，调用方在计算箭头朝向等派生量时需处理该退化场景（见 arrowDirection）。
@@ -61,8 +61,8 @@ export function computeControlPoints(
   sy: number,
   tx: number,
   ty: number,
-  sourcePosition: string,
-  targetPosition: string,
+  sourceHandle: string,
+  targetHandle: string,
 ): BezierPoints {
   const curvature = 0.5;
   const dx = tx - sx;
@@ -70,8 +70,8 @@ export function computeControlPoints(
   const p0: Vec2 = { x: sx, y: sy };
   const p1: Vec2 = { x: tx, y: ty };
 
-  const cp1 = computeControlPoint(p0, sourcePosition, Math.abs(dx) * curvature);
-  const cp2 = computeControlPoint(p1, targetPosition, Math.abs(dx) * curvature);
+  const cp1 = computeControlPoint(p0, sourceHandle, Math.abs(dx) * curvature);
+  const cp2 = computeControlPoint(p1, targetHandle, Math.abs(dx) * curvature);
 
   return { p0, cp1, cp2, p1 };
 }
@@ -126,7 +126,7 @@ export function midpointTangent(points: BezierPoints): Vec2 {
 }
 
 /**
- * 曲线在中点（t=0.5）处的参数速度 |B′(0.5)|（flow 坐标/单位参数）。
+ * 曲线在中点（t=0.5）处的参数速度 |B′(0.5)|（画布坐标/单位参数）。
  *
  * 用途：把像素缺口换算为参数间隔 δ = halfGap / speed，使缺口弧长 ≈ 2δ·speed 与边的朝向无关。
  * 不能用控制多边形长度（|cp1−p0|+|cp2−cp1|+|p1−cp2|）替代：它与中点速度的比值随朝向在
@@ -140,11 +140,11 @@ export function midpointSpeed(points: BezierPoints): number {
 /**
  * 轴对齐矩形沿给定方向过中心点的弦半长：min(halfWidth/|ux|, halfHeight/|uy|)。
  *
- * 入参 halfWidth/halfHeight 为矩形半宽/半高（flow 坐标），direction 为方向向量（无需归一化）。
+ * 入参 halfWidth/halfHeight 为矩形半宽/半高（画布坐标），direction 为方向向量（无需归一化）。
  * 用途：标签缺口只需覆盖标签矩形被曲线穿过的部分——水平边穿过宽度方向、垂直边穿过高度方向、
  * 对角边取两者的过渡；方向的某个分量接近 0 时对应轴不限制弦长（对应项为无穷大）。
  * direction 为零向量（曲线完全退化）时弦长无意义，按水平方向处理，返回 halfWidth。
- * 返回：弦半长（flow 坐标）。
+ * 返回：弦半长（画布坐标）。
  */
 export function rectChordHalfLength(halfWidth: number, halfHeight: number, direction: Vec2): number {
   const len = Math.hypot(direction.x, direction.y);
@@ -159,19 +159,19 @@ export function rectChordHalfLength(halfWidth: number, halfHeight: number, direc
 /**
  * 箭头朝向单位向量，取曲线末端切向（cp2→p1）。
  *
- * 入参 targetPosition 为目标 handle 方位（top/right/bottom/left）。
+ * 入参 targetHandle 为目标 handle（top/right/bottom/left）。
  * 退化场景处理：控制点与终点重合（如垂直边 dx=0 时控制距离为 0）时切向为零向量，
  * 此时按目标 handle 轴向确定朝向——按控制点的构造，非退化时 cp2 恒位于 p1 的 handle 轴线上，
  * cp2→p1 的方向本来就恒等于 handle 轴向，故该兜底与正常情形连续一致，
  * 节点被拖动经过 dx=0 时箭头朝向不会跳变。
  */
-export function arrowDirection(points: BezierPoints, targetPosition: string): Vec2 {
+export function arrowDirection(points: BezierPoints, targetHandle: string): Vec2 {
   const { cp2, p1 } = points;
   const dx = p1.x - cp2.x;
   const dy = p1.y - cp2.y;
   const len = Math.hypot(dx, dy);
   if (len > 0) return { x: dx / len, y: dy / len };
-  switch (targetPosition) {
+  switch (targetHandle) {
     case "top":
       return { x: 0, y: 1 };
     case "bottom":

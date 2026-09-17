@@ -4,21 +4,21 @@
       "title": "Database Error",
       "text": "{detail}"
     },
-    "DatabaseNameAlreadyExists": {
-      "title": "Database Name Exists",
-      "text": "A database named \"{name}\" already exists, please use a different name"
+    "UserDatabaseNameAlreadyExists": {
+      "title": "User Database Name Exists",
+      "text": "A user database named \"{name}\" already exists, please use a different name"
     },
-    "DatabaseMustBeArchivedBeforeDelete": {
+    "UserDatabaseMustBeArchivedBeforeDelete": {
       "title": "Archive Required Before Delete",
-      "text": "The database must be archived before it can be deleted"
+      "text": "The user database must be archived before it can be deleted"
     },
     "DataCorruptionCanvasRefMissing": {
       "title": "Canvas reference missing",
-      "text": "The canvas ({canvas_id}) referenced by canvas node ({node_id}) does not exist"
+      "text": "The canvas ({canvas_id}) referenced by canvas data node ({node_id}) does not exist"
     },
     "DataCorruptionDanglingShadow": {
       "title": "Dangling shadow reference",
-      "text": "The node ({missing_id}) referenced by shadow node ({shadow_id}) does not exist"
+      "text": "The producing edge ({missing_id}) of shadow node ({shadow_id}) does not exist"
     },
     "DataCorruptionEdgeEndpointMissing": {
       "title": "Edge endpoint missing",
@@ -48,9 +48,9 @@
       "title": "Shadow-to-shadow connection",
       "text": "Shadow node ({shadow_id}) is connected to another shadow node ({neighbor_id})"
     },
-    "DataCorruptionShadowRootTypeMismatch": {
-      "title": "Shadow root type mismatch",
-      "text": "The root origin node ({root_id}) of shadow node ({shadow_id}) has a type that contradicts the shadow direction"
+    "DataCorruptionShadowOriginTypeMismatch": {
+      "title": "Shadow origin node type mismatch",
+      "text": "The origin node ({origin_id}) of shadow node ({shadow_id}) has a type that contradicts the shadow direction"
     },
     "DataVersionMismatch": {
       "title": "Data Version Mismatch",
@@ -69,8 +69,8 @@
       "text": "Password cannot be empty"
     },
     "EmptyUserDatabaseName": {
-      "title": "Database Name Empty",
-      "text": "Database name cannot be empty"
+      "title": "User Database Name Empty",
+      "text": "User database name cannot be empty"
     },
     "FailToDeserializeAction": {
       "title": "Failed to Deserialize Log Action"
@@ -123,8 +123,8 @@
       "text": "{detail} (Path: {path})"
     },
     "InvalidUserDatabaseId": {
-      "title": "Invalid Database ID",
-      "text": "Invalid database ID: {id}"
+      "title": "Invalid User Database ID",
+      "text": "Invalid user database ID: {id}"
     },
     "FailToWriteFile": {
       "title": "Failed to Write File",
@@ -138,9 +138,9 @@
       "title": "Multiple Data Versions Found",
       "text": "The data version table contains multiple rows"
     },
-    "NoDatabaseWithSuchId": {
-      "title": "Database Not Found",
-      "text": "No database found with ID {id}"
+    "NoUserDatabaseWithSuchId": {
+      "title": "User Database Not Found",
+      "text": "No user database found with ID {id}"
     },
     "NoDataVersion": {
       "title": "No Data Version Found",
@@ -150,9 +150,9 @@
       "title": "Canvas Name Exists",
       "text": "A canvas named \"{name}\" already exists, please use a different name"
     },
-    "CanvasToPlainNodeEdge": {
-      "title": "Canvas node cannot connect to a regular node",
-      "text": "To make the target node depend on nodes inside a canvas, first create a new sub-canvas and move the target node into it, then connect the canvas node to the new sub-canvas node, so that dependencies stay centralized instead of being scattered across canvases"
+    "CanvasToDataNodeEdge": {
+      "title": "A canvas data node cannot connect to a data node",
+      "text": "To make the target node depend on nodes inside a canvas, first create a new sub-canvas and move the target node into it, then connect the canvas data node to the new sub-canvas data node, so that dependencies stay centralized instead of being scattered across canvases"
     },
     "NoCanvasWithSuchId": {
       "title": "Canvas Not Found",
@@ -186,9 +186,9 @@
       "title": "Edge Would Form Cycle",
       "text": "Creating this edge would form a cycle in the canvas"
     },
-    "InvalidNodePort": {
-      "title": "Invalid Node Port",
-      "text": "Invalid node port: {port}"
+    "InvalidHandle": {
+      "title": "Invalid Handle",
+      "text": "Invalid handle: {handle}"
     },
     "RootCanvasCannotBeDeleted": {
       "title": "Root Canvas Cannot Be Deleted",
@@ -231,7 +231,7 @@
       "title": "Deleting node permanently will disconnect nodes",
       "text": "The following nodes will lose connection: {nodes}"
     },
-    "NoDictionaryEntryWithSuchId": {
+    "NoDictionaryWithSuchId": {
       "title": "Dictionary entry not found",
       "text": "id: {id}"
     },
@@ -287,17 +287,17 @@
       "title": "Deleting edge will disconnect nodes",
       "text": "The following nodes will lose connection: {nodes}"
     },
-    "EdgeSameNodePort": {
-      "title": "Same Node Port",
-      "text": "The source and target nodes use the same port; this connection is not allowed"
+    "EdgeSameHandle": {
+      "title": "Same Handle",
+      "text": "The source and target nodes use the same handle; this connection is not allowed"
     },
     "InvalidShadowEdge": {
       "title": "Invalid shadow node connection",
-      "text": "An inflow shadow (shadow of a regular node) can only be the source of a connection, and an outflow shadow (shadow of a canvas node) can only be the target"
+      "text": "An inflow shadow (shadow of a data node) can only be the source of a connection, and an outflow shadow (shadow of a canvas data node) can only be the target"
     },
-    "NodeIsCanvasNode": {
-      "title": "Operation not allowed on canvas node",
-      "text": "A canvas node references a sub-canvas and does not support this operation"
+    "NodeIsCanvasDataNode": {
+      "title": "Operation not allowed on canvas data node",
+      "text": "A canvas data node references a sub-canvas and does not support this operation"
     },
     "NodeIsShadow": {
       "title": "Operation not allowed on shadow node",
@@ -314,6 +314,46 @@
     "InvalidLogTimeRange": {
       "title": "Invalid Log Time Range",
       "text": "The start time cannot be later than the end time"
+    },
+    "AttachmentNotInSameNode": {
+      "title": "Attachments Not in Same Node",
+      "text": "The two attachments do not belong to the same node, so their sort order cannot be swapped"
+    },
+    "AttachmentDeleted": {
+      "title": "Attachment Deleted",
+      "text": "This attachment has been deleted and cannot be operated on"
+    },
+    "FailToCompress": {
+      "title": "Compression Failed",
+      "text": "{detail}"
+    },
+    "FailToDecompress": {
+      "title": "Decompression Failed",
+      "text": "{detail}"
+    },
+    "ClipboardError": {
+      "title": "Clipboard Operation Failed",
+      "text": "{detail}"
+    },
+    "InvalidBackupFile": {
+      "title": "Invalid Backup File",
+      "text": "Invalid backup file: {detail}"
+    },
+    "UnsupportedBackupVersion": {
+      "title": "Unsupported Backup Version",
+      "text": "The backup file version ({version}) is incompatible with this application"
+    },
+    "BackupTooManyShardsLost": {
+      "title": "Too Many Backup Blocks Lost",
+      "text": "The backup file has {lost} corrupted block(s), exceeding the recoverable limit of {recoverable_limit}"
+    },
+    "FailToPackBackup": {
+      "title": "Failed to Pack Backup",
+      "text": "{detail}"
+    },
+    "FailToUnpackBackup": {
+      "title": "Failed to Unpack Backup",
+      "text": "{detail}"
     }
   }
 }

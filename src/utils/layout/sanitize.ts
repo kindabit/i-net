@@ -6,16 +6,16 @@
 
 import type {
   IncomingEdge,
-  RadialLayoutEdge,
-  RadialLayoutNode,
+  AutoLayoutEdge,
+  AutoLayoutNode,
 } from "./types";
 
 /** 清理后的图数据：节点索引、干净边集与邻接表。 */
 export interface SanitizedGraph {
   /** 节点 id → 节点输入。 */
-  nodeById: Map<string, RadialLayoutNode>;
+  nodeById: Map<string, AutoLayoutNode>;
   /** 有效边列表（自环、端点缺失与重复边已被剔除）。 */
-  edges: RadialLayoutEdge[];
+  edges: AutoLayoutEdge[];
   /** 节点 id → 出边目标 id 列表。 */
   outgoing: Map<string, string[]>;
   /** 节点 id → 入边信息列表。 */
@@ -32,12 +32,12 @@ export interface SanitizedGraph {
  * @returns 干净图数据。
  */
 export function sanitizeGraph(
-  nodes: RadialLayoutNode[],
-  edges: RadialLayoutEdge[],
+  nodes: AutoLayoutNode[],
+  edges: AutoLayoutEdge[],
 ): SanitizedGraph {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
-  const validEdges: RadialLayoutEdge[] = [];
+  const validEdges: AutoLayoutEdge[] = [];
   const seenEdgeKeys = new Set<string>();
   for (const edge of edges) {
     if (edge.source === edge.target) {
@@ -66,8 +66,8 @@ export function sanitizeGraph(
     outgoing.get(edge.source)!.push(edge.target);
     incoming.get(edge.target)!.push({
       parent: edge.source,
-      sourcePort: edge.sourcePort,
-      targetPort: edge.targetPort,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
     });
     indegree.set(edge.target, indegree.get(edge.target)! + 1);
   }

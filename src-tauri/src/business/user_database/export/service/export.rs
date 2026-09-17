@@ -127,9 +127,9 @@ fn handle_canvas(
 
     // 取出画布内未删除的节点，按标题排序。
     let mut nodes = node_dao::select_by_canvas_id_and_deleted(connection, &canvas.id, false)?;
-    // 影子节点只是原始节点在子画布内的引用展示，不作为独立数据导出；
+    // 影子节点只是本体节点在子画布内的引用展示，不作为独立数据导出；
     // 与影子相连的边会因两端节点集合过滤而自然排除。
-    nodes.retain(|n| n.shadow_id.is_none());
+    nodes.retain(|n| n.shadow_producing_edge_id.is_none());
     nodes.sort_by(|a, b| a.title.cmp(&b.title));
 
     // 节点 id 集合与标题映射，用于边的过滤与标题解析。
@@ -188,8 +188,8 @@ fn handle_node(
     md.push_str(&format!("### {}{}\n\n", text.node, node.title));
 
     // 副标题为空则省略。
-    if !node.sub_title.is_empty() {
-        md.push_str(&format!("{}{}\n\n", text.sub_title, node.sub_title));
+    if !node.subtitle.is_empty() {
+        md.push_str(&format!("{}{}\n\n", text.subtitle, node.subtitle));
     }
 
     // 字段表格（ExcludeFields 模式不输出）。

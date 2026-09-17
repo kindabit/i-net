@@ -33,10 +33,10 @@ mod tests {
         let first = register::preprocess(" db-1 ".to_string()).unwrap();
         assert_eq!(first.name, "db-1");
 
-        // register::preprocess 失败路径：名称重复时报 DatabaseNameAlreadyExists。
+        // register::preprocess 失败路径：名称重复时报 UserDatabaseNameAlreadyExists。
         assert!(matches!(
             register::preprocess("db-1".to_string()),
-            Err(ErrorCode::DatabaseNameAlreadyExists { .. })
+            Err(ErrorCode::UserDatabaseNameAlreadyExists { .. })
         ));
 
         // list::preprocess 成功路径：未归档列表包含刚注册的数据库。
@@ -64,10 +64,10 @@ mod tests {
             ));
         }
 
-        // archive::preprocess 失败路径：id 格式合法但不存在时报 NoDatabaseWithSuchId。
+        // archive::preprocess 失败路径：id 格式合法但不存在时报 NoUserDatabaseWithSuchId。
         assert!(matches!(
             archive::preprocess(uuid::Uuid::new_v4().to_string(), true),
-            Err(ErrorCode::NoDatabaseWithSuchId { .. })
+            Err(ErrorCode::NoUserDatabaseWithSuchId { .. })
         ));
 
         // archive::preprocess 成功路径：归档后数据库出现在归档列表。
@@ -103,11 +103,11 @@ mod tests {
         ));
 
         // physical_delete::preprocess 失败路径：数据库未归档时
-        // 报 DatabaseMustBeArchivedBeforeDelete。
+        // 报 UserDatabaseMustBeArchivedBeforeDelete。
         let second = register::preprocess("db-2".to_string()).unwrap();
         assert!(matches!(
             physical_delete::preprocess(second.id.clone(), "password".to_string()),
-            Err(ErrorCode::DatabaseMustBeArchivedBeforeDelete)
+            Err(ErrorCode::UserDatabaseMustBeArchivedBeforeDelete)
         ));
 
         // physical_delete::preprocess 成功路径：密码正确时删除数据库目录和记录。

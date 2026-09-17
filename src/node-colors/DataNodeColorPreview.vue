@@ -16,7 +16,7 @@ const props = defineProps<{
   /** 预览用标题 */
   title: string;
   /** 预览用副标题 */
-  subTitle: string;
+  subtitle: string;
 }>();
 
 /** 选中态：点击预览卡片切换（两个 pane 联动），用于预览选中边框色 */
@@ -79,11 +79,11 @@ function handleStyle(colors: DataNodeColorProperties) {
             <span class="node-color-preview__title-text">{{ title }}</span>
           </div>
           <div
-            v-if="subTitle"
+            v-if="subtitle"
             class="node-color-preview__subtitle"
             :style="{ color: pane.colors.subtitle }"
           >
-            {{ subTitle }}
+            {{ subtitle }}
           </div>
           <div class="node-color-preview__handle node-color-preview__handle--top" :style="handleStyle(pane.colors)" />
           <div class="node-color-preview__handle node-color-preview__handle--bottom" :style="handleStyle(pane.colors)" />

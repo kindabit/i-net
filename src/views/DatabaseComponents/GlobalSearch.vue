@@ -208,7 +208,7 @@ onUnmounted(() => {
             v-for="(item, i) in results"
             :key="item.id"
             :title="item.title"
-            :subtitle="item.sub_title ? `${item.sub_title} · ${item.canvas_name}` : item.canvas_name"
+            :subtitle="item.subtitle ? `${item.subtitle} · ${item.canvas_name}` : item.canvas_name"
             :active="i === highlightedIndex"
             :class="{ 'search-highlighted': i === highlightedIndex }"
             @mousedown.prevent="select(item)"

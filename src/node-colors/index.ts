@@ -1,5 +1,5 @@
 /**
- * 节点自定义颜色的纯逻辑契约层。
+ * 数据节点与画布节点自定义颜色的纯逻辑契约层。
  *
  * 存储格式：后端 Node/Canvas 实体的 color 字段。空串表示全部使用默认值；
  * 非空时为 JSON 对象 {"light": {...}, "dark": {...}}，每个主题对象只含有自定义值的键，
@@ -13,8 +13,8 @@
 import { isObjectLike, isString } from "lodash";
 import { t } from "@/i18n";
 import {
-  userDatabaseNodeColorList,
-  userDatabaseCanvasColorList,
+  userDatabaseDataNodeColorList,
+  userDatabaseCanvasNodeColorList,
 } from "@/api";
 
 /** 数据节点的可自定义颜色属性：键存在即自定义，缺失即使用默认值 */
@@ -95,7 +95,7 @@ const CANVAS_NODE_COLOR_KEYS = [
  * @param color 后端 color 字段原值
  * @returns 颜色方案（键缺失即默认值）
  */
-export function deserializeNodeColor(color: string): DataNodeColorScheme {
+export function deserializeDataNodeColor(color: string): DataNodeColorScheme {
   const scheme: DataNodeColorScheme = { light: {}, dark: {} };
   if (!color.trim()) return scheme;
   let parsed: unknown;
@@ -117,11 +117,11 @@ export function deserializeNodeColor(color: string): DataNodeColorScheme {
 
 /**
  * 解析 canvas 实体的 color 字段为颜色方案（canvas 侧唯一反序列化点）。
- * 规则与 deserializeNodeColor 相同。
+ * 规则与 deserializeDataNodeColor 相同。
  * @param color 后端 color 字段原值
  * @returns 颜色方案（键缺失即默认值）
  */
-export function deserializeCanvasColor(color: string): CanvasNodeColorScheme {
+export function deserializeCanvasNodeColor(color: string): CanvasNodeColorScheme {
   const scheme: CanvasNodeColorScheme = { light: {}, dark: {} };
   if (!color.trim()) return scheme;
   let parsed: unknown;
@@ -156,18 +156,18 @@ function hasAnyProperty(props: Record<string, string | undefined>): boolean {
  * @param color 颜色方案
  * @returns 存储字符串
  */
-export function serializeNodeColor(color: DataNodeColorScheme): string {
+export function serializeDataNodeColor(color: DataNodeColorScheme): string {
   if (!hasAnyProperty(color.light) && !hasAnyProperty(color.dark)) return "";
   return JSON.stringify(color);
 }
 
 /**
  * 序列化 canvas 颜色方案为存储字符串（canvas 侧唯一序列化点）。
- * 规则与 serializeNodeColor 相同。
+ * 规则与 serializeDataNodeColor 相同。
  * @param color 颜色方案
  * @returns 存储字符串
  */
-export function serializeCanvasColor(color: CanvasNodeColorScheme): string {
+export function serializeCanvasNodeColor(color: CanvasNodeColorScheme): string {
   if (!hasAnyProperty(color.light) && !hasAnyProperty(color.dark)) return "";
   return JSON.stringify(color);
 }
@@ -177,7 +177,7 @@ export function serializeCanvasColor(color: CanvasNodeColorScheme): string {
  * @param scheme 颜色方案
  * @returns 规范键字符串
  */
-function normalizeNodeColor(scheme: DataNodeColorScheme): string {
+function normalizeDataNodeColor(scheme: DataNodeColorScheme): string {
   return JSON.stringify({
     light: DATA_NODE_COLOR_KEYS.map((k) => [k, scheme.light[k] ?? null]),
     dark: DATA_NODE_COLOR_KEYS.map((k) => [k, scheme.dark[k] ?? null]),
@@ -189,7 +189,7 @@ function normalizeNodeColor(scheme: DataNodeColorScheme): string {
  * @param scheme 颜色方案
  * @returns 规范键字符串
  */
-function normalizeCanvasColor(scheme: CanvasNodeColorScheme): string {
+function normalizeCanvasNodeColor(scheme: CanvasNodeColorScheme): string {
   return JSON.stringify({
     light: CANVAS_NODE_COLOR_KEYS.map((k) => [k, scheme.light[k] ?? null]),
     dark: CANVAS_NODE_COLOR_KEYS.map((k) => [k, scheme.dark[k] ?? null]),
@@ -247,36 +247,36 @@ function addToGroups<TScheme>(
  * 收集全部未删除 node 的颜色组合历史。
  *
  * 调 node_color_list 获取数据，过滤 color 为空的项，反序列化后经
- * normalizeNodeColor 分组计数，按使用次数从大到小排序返回。
+ * normalizeDataNodeColor 分组计数，按使用次数从大到小排序返回。
  * @returns 数据节点历史颜色数组
  */
-export async function collectNodeColorList(): Promise<DataNodeHistoryColor[]> {
-  const entries = await userDatabaseNodeColorList();
+export async function collectDataNodeColorList(): Promise<DataNodeHistoryColor[]> {
+  const entries = await userDatabaseDataNodeColorList();
   const groups = new Map<string, HistoryGroup<DataNodeColorScheme>>();
   for (const entry of entries) {
     if (!entry.color.trim()) continue;
-    const scheme = deserializeNodeColor(entry.color);
-    addToGroups(groups, normalizeNodeColor(scheme), scheme, entry.title);
+    const scheme = deserializeDataNodeColor(entry.color);
+    addToGroups(groups, normalizeDataNodeColor(scheme), scheme, entry.title);
   }
   return buildHistoryList(groups);
 }
 
 /**
  * 收集全部未删除 canvas 的颜色组合历史。
- * 规则与 collectNodeColorList 相同；根画布名称固定为本地化"根画布"文案。
+ * 规则与 collectDataNodeColorList 相同；根画布名称固定为本地化"根画布"文案。
  * @returns 画布节点历史颜色数组
  */
-export async function collectCanvasColorList(): Promise<
+export async function collectCanvasNodeColorList(): Promise<
   CanvasNodeHistoryColor[]
 > {
-  const entries = await userDatabaseCanvasColorList();
+  const entries = await userDatabaseCanvasNodeColorList();
   const groups = new Map<string, HistoryGroup<CanvasNodeColorScheme>>();
   for (const entry of entries) {
     if (!entry.color.trim()) continue;
-    const scheme = deserializeCanvasColor(entry.color);
+    const scheme = deserializeCanvasNodeColor(entry.color);
     const name =
       entry.parent_id === null ? t("database.canvas.root-canvas") : entry.name;
-    addToGroups(groups, normalizeCanvasColor(scheme), scheme, name);
+    addToGroups(groups, normalizeCanvasNodeColor(scheme), scheme, name);
   }
   return buildHistoryList(groups);
 }

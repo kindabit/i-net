@@ -4,7 +4,7 @@
   从 KeePass 2.0 数据库（.kdbx）导入数据的对话框：用户选择数据库文件并输入其
   Master Password，确认后由前端读取文件字节、解密解析并构造好树形节点数据
   （含表示数据库本身的根节点、父子边、树形布局坐标与字段名国际化），再调用
-  后端聚合导入接口写库，在根画布下创建新画布节点。导入成功后 emit "success"
+  后端聚合导入接口写库，在根画布下创建新画布数据节点。导入成功后 emit "success"
   事件并携带新画布 id，父组件借此跳转至新画布。
 -->
 <script setup lang="ts">
@@ -152,7 +152,7 @@ async function confirmImport() {
       tree.nodes[0].title = canvasName;
     }
 
-    // d) 查找根画布（新画布节点的落点画布）
+    // d) 查找根画布（新画布数据节点的落点画布）
     const canvases = await userDatabaseCanvasList(false);
     const root = canvases.find((canvas) => canvas.parent_id === null);
     if (root === undefined) {
@@ -164,7 +164,7 @@ async function confirmImport() {
       return;
     }
 
-    // e) 画布节点 y = 根画布现有节点的最大 y（无节点取 -240）+ 240，x 恒 0
+    // e) 画布数据节点 y = 根画布现有节点的最大 y（无节点取 -240）+ 240，x 恒 0
     const existingNodes = await userDatabaseNodeList(root.id, false);
     const canvasNodeY =
       existingNodes.reduce((max, node) => Math.max(max, node.y), -240) + 240;

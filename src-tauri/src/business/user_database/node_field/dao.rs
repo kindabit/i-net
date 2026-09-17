@@ -18,8 +18,8 @@ pub(crate) enum NodeFieldIden {
     NodeId,
     Name,
     FieldType,
-    FieldValue,
-    Order,
+    Value,
+    SortOrder,
     DictionaryId,
 }
 
@@ -29,8 +29,8 @@ fn map_row(row: &Row) -> rusqlite::Result<NodeField> {
         node_id: row.get(0)?,
         name: row.get(1)?,
         field_type: row.get(2)?,
-        field_value: row.get(3)?,
-        order: row.get(4)?,
+        value: row.get(3)?,
+        sort_order: row.get(4)?,
         dictionary_id: row.get(5)?,
     })
 }
@@ -61,9 +61,9 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
         .col(
             ColumnDef::new_with_type(NodeFieldIden::FieldType, ColumnType::custom("TEXT")).not_null(),
         )
-        .col(ColumnDef::new_with_type(NodeFieldIden::FieldValue, ColumnType::custom("BLOB")))
+        .col(ColumnDef::new_with_type(NodeFieldIden::Value, ColumnType::custom("BLOB")))
         .col(
-            ColumnDef::new_with_type(NodeFieldIden::Order, ColumnType::custom("INTEGER")).not_null(),
+            ColumnDef::new_with_type(NodeFieldIden::SortOrder, ColumnType::custom("INTEGER")).not_null(),
         )
         .col(ColumnDef::new_with_type(NodeFieldIden::DictionaryId, ColumnType::custom("TEXT")))
         .foreign_key(&mut fk_node)
@@ -94,16 +94,16 @@ pub fn insert(connection: &Connection, node_field: &NodeField) -> Result<(), Err
             NodeFieldIden::NodeId,
             NodeFieldIden::Name,
             NodeFieldIden::FieldType,
-            NodeFieldIden::FieldValue,
-            NodeFieldIden::Order,
+            NodeFieldIden::Value,
+            NodeFieldIden::SortOrder,
             NodeFieldIden::DictionaryId,
         ])
         .values_panic([
             (&node_field.node_id).into(),
             (&node_field.name).into(),
             (&node_field.field_type).into(),
-            node_field.field_value.clone().into(),
-            node_field.order.into(),
+            node_field.value.clone().into(),
+            node_field.sort_order.into(),
             node_field.dictionary_id.clone().into(),
         ])
         .take();
@@ -116,7 +116,7 @@ pub fn insert(connection: &Connection, node_field: &NodeField) -> Result<(), Err
     Ok(())
 }
 
-/// 按节点 id 查询其全部字段，按 "order" 升序。
+/// 按节点 id 查询其全部字段，按 "sort_order" 升序。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -133,13 +133,13 @@ pub fn select_by_node_id(
             NodeFieldIden::NodeId,
             NodeFieldIden::Name,
             NodeFieldIden::FieldType,
-            NodeFieldIden::FieldValue,
-            NodeFieldIden::Order,
+            NodeFieldIden::Value,
+            NodeFieldIden::SortOrder,
             NodeFieldIden::DictionaryId,
         ])
         .from(NodeFieldIden::Table)
         .and_where(Expr::col(NodeFieldIden::NodeId).eq(node_id))
-        .order_by(NodeFieldIden::Order, Order::Asc)
+        .order_by(NodeFieldIden::SortOrder, Order::Asc)
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
     let mut statement = connection
@@ -212,13 +212,13 @@ mod tests {
     use super::*;
 
     /// 构造测试用 NodeField。
-    fn nf(node_id: &str, name: &str, order: i64) -> NodeField {
+    fn nf(node_id: &str, name: &str, sort_order: i64) -> NodeField {
         NodeField {
             node_id: node_id.to_string(),
             name: name.to_string(),
             field_type: "string:single-line".to_string(),
-            field_value: None,
-            order,
+            value: None,
+            sort_order,
             dictionary_id: None,
         }
     }
@@ -265,7 +265,7 @@ mod tests {
             Err(ErrorCode::DatabaseError { .. })
         ));
 
-        // insert 成功路径：插入后 select_by_node_id 按 order 升序取回。
+        // insert 成功路径：插入后 select_by_node_id 按 sort_order 升序取回。
         insert(&connection, &nf("n1", "f3", 3)).unwrap();
         insert(&connection, &nf("n1", "f1", 1)).unwrap();
         insert(&connection, &nf("n1", "f2", 2)).unwrap();
@@ -275,16 +275,16 @@ mod tests {
         assert_eq!(fields[1].name, "f2");
         assert_eq!(fields[2].name, "f3");
 
-        // field_value / dictionary_id 为 Some 和 None 的往返一致。
+        // value / dictionary_id 为 Some 和 None 的往返一致。
         let mut rich = nf("n2", "rich", 1);
-        rich.field_value = Some(vec![0x01, 0x02, 0x03]);
+        rich.value = Some(vec![0x01, 0x02, 0x03]);
         rich.dictionary_id = Some("dict-1".to_string());
         insert(&connection, &rich).unwrap();
         let selected = select_by_node_id(&connection, "n2").unwrap();
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].field_value.as_deref(), Some(&vec![0x01, 0x02, 0x03][..]));
+        assert_eq!(selected[0].value.as_deref(), Some(&vec![0x01, 0x02, 0x03][..]));
         assert_eq!(selected[0].dictionary_id.as_deref(), Some("dict-1"));
-        assert!(selected[0].order == 1);
+        assert!(selected[0].sort_order == 1);
 
         // insert 失败路径：联合主键 (node_id, name) 重复报 DatabaseError。
         assert!(matches!(
@@ -310,7 +310,7 @@ mod tests {
             id: "dict-1".to_string(),
             parent_id: None,
             value: "val-dict-1".to_string(),
-            order: 1,
+            sort_order: 1,
         };
         crate::business::user_database::dictionary::dao::batch_insert(&connection, &[dict_entry])
             .unwrap();
@@ -347,7 +347,7 @@ mod tests {
         create_table(&connection).unwrap();
         assert!(matches!(
             connection.execute(
-                "INSERT INTO node_field (node_id, name, field_type, field_value, \"order\", dictionary_id)
+                "INSERT INTO node_field (node_id, name, field_type, value, \"sort_order\", dictionary_id)
                 VALUES ('node-1', 'strict-violation', x'0102', NULL, 1, NULL)",
                 [],
             ),

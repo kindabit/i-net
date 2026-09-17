@@ -2,7 +2,7 @@
   编辑节点对话框。
 
   通过 defineExpose 的 open() 以 Promise 形式获取编辑结果：
-  确认返回 { title, subTitle }（trim 后的新值），取消返回 null
+  确认返回 { title, subtitle }（trim 后的新值），取消返回 null
   （对话框为 persistent，Esc 与点击遮罩均不关闭，Esc 语义保留给对话框内部控件，如字段名编辑的取消）。
   支持字段编辑与保存为模板。
   支持以只读形式查看节点（open 的 options.readonly）：只读模式下隐藏编辑类控件，
@@ -29,7 +29,7 @@ const nodeId = ref("");
 /** 编辑草稿 */
 const draft = reactive({
   title: "",
-  subTitle: "",
+  subtitle: "",
 });
 /** 标题错误提示 */
 const titleError = ref("");
@@ -40,7 +40,7 @@ const submitting = ref(false);
 /** 初始标题（用于比较是否有变化） */
 const originalTitle = ref("");
 /** 初始副标题（用于比较是否有变化） */
-const originalSubTitle = ref("");
+const originalSubtitle = ref("");
 /** 数据加载中 */
 const loading = ref(false);
 /** 保存为模板进行中 */
@@ -48,7 +48,7 @@ const savingTemplate = ref(false);
 /** 拖拽中记录的起点 uid */
 const draggingUid = ref<number | null>(null);
 /** 等待 Promise 结算的 resolve */
-let resolveOpen: ((value: { title: string; subTitle: string } | null) => void) | null = null;
+let resolveOpen: ((value: { title: string; subtitle: string } | null) => void) | null = null;
 
 const fieldList = useNodeFieldList();
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
@@ -60,16 +60,16 @@ const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
  * @returns 编辑模式确认返回 trim 后的新值，取消/关闭返回 null；只读模式永远返回 null
  */
 function open(
-  node: { id: string; title: string; subTitle: string },
+  node: { id: string; title: string; subtitle: string },
   options?: { readonly?: boolean },
-): Promise<{ title: string; subTitle: string } | null> {
+): Promise<{ title: string; subtitle: string } | null> {
   settle(null);
   readonly.value = options?.readonly ?? false;
   nodeId.value = node.id;
   draft.title = node.title;
-  draft.subTitle = node.subTitle;
+  draft.subtitle = node.subtitle;
   originalTitle.value = node.title;
-  originalSubTitle.value = node.subTitle;
+  originalSubtitle.value = node.subtitle;
   titleError.value = "";
   submitting.value = false;
   draggingUid.value = null;
@@ -98,7 +98,7 @@ async function loadData() {
  * 结算等待中的 Promise。
  * @param value 编辑结果
  */
-function settle(value: { title: string; subTitle: string } | null) {
+function settle(value: { title: string; subtitle: string } | null) {
   resolveOpen?.(value);
   resolveOpen = null;
 }
@@ -119,24 +119,24 @@ function onDropOn(uid: number) {
  * 校验失败时写入对应错误信息。
  * @returns 保存成功返回 trim 后的标题与副标题，校验失败返回 null
  */
-async function saveNodeChanges(): Promise<{ title: string; subTitle: string } | null> {
+async function saveNodeChanges(): Promise<{ title: string; subtitle: string } | null> {
   titleError.value = "";
   const title = draft.title.trim();
-  const subTitle = draft.subTitle.trim();
+  const subtitle = draft.subtitle.trim();
   if (title === "") {
     titleError.value = t("database.canvas.edit-node-title-required");
     return null;
   }
   if (!fieldList.validate()) return null;
-  if (title !== originalTitle.value || subTitle !== originalSubTitle.value) {
-    await userDatabaseNodeModify(nodeId.value, title, subTitle);
+  if (title !== originalTitle.value || subtitle !== originalSubtitle.value) {
+    await userDatabaseNodeModify(nodeId.value, title, subtitle);
     originalTitle.value = title;
-    originalSubTitle.value = subTitle;
+    originalSubtitle.value = subtitle;
   }
   if (fieldList.isDirty()) {
     await userDatabaseNodeFieldSet(nodeId.value, fieldList.toNodeFieldVOs());
   }
-  return { title, subTitle };
+  return { title, subtitle };
 }
 
 /** 确认编辑并提交 */
@@ -208,7 +208,7 @@ defineExpose({ open });
             </v-col>
             <v-col cols="6">
               <VTextField
-                v-model="draft.subTitle"
+                v-model="draft.subtitle"
                 :label="t('database.canvas.edit-node-subtitle-label')"
                 :readonly="readonly"
                 variant="outlined"

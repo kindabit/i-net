@@ -3,7 +3,7 @@
 
   以类似日历的网格方式选择年月：3 行乘 4 列共 12 个月份格子（月份名按当前语言本地化），
   头部左右箭头按年翻动（年份范围 0-9999，到达边界时对应箭头禁用），头部标题显示当前年份。
-  空值态（hasValue 为假）下视图初始化到当前本地年份且无选中高亮。
+  空值态（isEmpty 为真）下视图初始化到当前本地年份且无选中高亮。
 -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
@@ -19,8 +19,8 @@ const props = defineProps<{
   year: number;
   /** 当前选中的月份（1-12）。 */
   month: number;
-  /** 字段值是否非空（全 0 部件为"字段值为空"的项目约定）；空值态下不高亮选中项。 */
-  hasValue?: boolean;
+  /** 字段值是否为空值态（全 0 部件为"字段值为空"的项目约定）；空值态下不高亮选中项。 */
+  isEmpty: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +29,7 @@ const emit = defineEmits<{
 
 /** 视图显示的年份：有合法值时取选中年份，否则取当前本地年份。 */
 const viewYear = ref(
-  props.hasValue && props.year >= MIN_YEAR && props.year <= MAX_YEAR
+  !props.isEmpty && props.year >= MIN_YEAR && props.year <= MAX_YEAR
     ? props.year
     : new Date().getFullYear(),
 );
@@ -73,7 +73,7 @@ function changeYear(delta: number): void {
  */
 function isSelected(month: number): boolean {
   return (
-    (props.hasValue ?? false) && viewYear.value === props.year && month === props.month
+    !props.isEmpty && viewYear.value === props.year && month === props.month
   );
 }
 

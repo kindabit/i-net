@@ -1,31 +1,31 @@
 /**
  * 自动布局组合式函数。
  *
- * 在 `视图 → use-auto-layout → radial-layout` 调用链中，本模块作为视图与布局算法之间的适配层：
- * 从视图采集节点/边数据 → 调用 radial-layout 计算目标坐标 → 播放 rAF 动画移动节点 → 回调视图完成持久化。
+ * 在 `视图 → use-auto-layout → auto-layout` 调用链中，本模块作为视图与布局算法之间的适配层：
+ * 从视图采集节点/边数据 → 调用 auto-layout 计算目标坐标 → 播放 rAF 动画移动节点 → 回调视图完成持久化。
  */
 import { ref, type Ref } from "vue";
 import {
-  computeRadialLayout,
-  DEFAULT_RADIAL_LAYOUT_CONFIG,
-} from "@/utils/radial-layout";
+  computeAutoLayout,
+  DEFAULT_AUTO_LAYOUT_CONFIG,
+} from "@/utils/auto-layout";
 import type {
-  RadialLayoutEdge,
-  RadialLayoutNode,
-  RadialPortDirection,
-} from "@/utils/radial-layout";
+  AutoLayoutEdge,
+  AutoLayoutNode,
+  Handle,
+} from "@/utils/auto-layout";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import type { MoveNodeVO } from "@/api-types";
 
 /** 自动布局所需的单个节点信息（对应 vue-flow GraphNode 的子集）。 */
-interface AutoLayoutNode {
+interface AutoLayoutNodeInput {
   id: string;
   position: { x: number; y: number };
   dimensions?: { width: number; height: number };
 }
 
 /** 自动布局所需的单条边信息。 */
-interface AutoLayoutEdge {
+interface AutoLayoutEdgeInput {
   source: string;
   target: string;
   /** 可选：源 handle id（vue-flow 边的 sourceHandle，可能为 null）。 */
@@ -37,9 +37,9 @@ interface AutoLayoutEdge {
 /** 自动布局所需的视图适配参数。 */
 export interface AutoLayoutOptions {
   /** 获取当前 vue-flow 节点列表（GraphNode，含 position 与可选 dimensions）。 */
-  getNodes: () => AutoLayoutNode[];
+  getNodes: () => AutoLayoutNodeInput[];
   /** 获取当前 vue-flow 边列表（只需 source/target）。 */
-  getEdges: () => AutoLayoutEdge[];
+  getEdges: () => AutoLayoutEdgeInput[];
   /** 持久化回调：动画结束后以最终坐标调用（对应后端批量移动 API）。 */
   persist: (items: MoveNodeVO[]) => Promise<void>;
   /**
@@ -99,7 +99,7 @@ function animate(
  * @returns 节点的宽高
  */
 function getNodeSize(
-  node: AutoLayoutNode,
+  node: AutoLayoutNodeInput,
   fallbackSize: { width: number; height: number },
 ): { width: number; height: number } {
   const width =
@@ -114,20 +114,17 @@ function getNodeSize(
 }
 
 /**
- * 将 vue-flow 边的 handle id 映射为布局算法的端口方向。
+ * 将 vue-flow 边的 handle id 收窄为布局算法的连接桩。
  *
- * 普通画布 DataNode 的 handle id 即四方向（top/bottom/left/right），直接透传；
- * 画布宇宙 CanvasNode 的 handle id 为 source-right/target-left，映射为对应方向；
- * 空串、null、undefined 及任何未识别的 id 一律返回 undefined（算法按无端口处理）。
+ * handle id 即四方向（top/bottom/left/right），直接透传；
+ * 空串、null、undefined 及任何未识别的 id 一律返回 undefined（算法按无连接桩处理）。
  * @param handle vue-flow 边的 handle id（可能为 null/undefined）
- * @returns 端口方向；无法识别时返回 undefined
+ * @returns 连接桩；无法识别时返回 undefined
  */
-function toPortDirection(handle: string | null | undefined): RadialPortDirection | undefined {
+function toHandle(handle: string | null | undefined): Handle | undefined {
   if (handle === "top" || handle === "bottom" || handle === "left" || handle === "right") {
     return handle;
   }
-  if (handle === "source-right") return "right";
-  if (handle === "target-left") return "left";
   return undefined;
 }
 
@@ -150,7 +147,7 @@ export function useAutoLayout(options: AutoLayoutOptions): {
    *
    * 流程：
    * 1. 防重入：布局进行中时直接返回。
-   * 2. 收集节点尺寸与边，调用 computeRadialLayout 计算中心坐标。
+   * 2. 收集节点尺寸与边，调用 computeAutoLayout 计算中心坐标。
    * 3. 换算为左上角坐标并对齐到 snap 网格。
    * 4. 若所有节点新旧坐标相同则跳过动画与持久化。
    * 5. 300ms rAF 动画（easeInOutCubic）逐帧更新节点 position。
@@ -166,23 +163,23 @@ export function useAutoLayout(options: AutoLayoutOptions): {
       const vfEdges = options.getEdges();
 
       // 收集节点尺寸（优先 dimensions，否则 fallback）
-      const layoutNodes: RadialLayoutNode[] = vfNodes.map((node) => {
+      const layoutNodes: AutoLayoutNode[] = vfNodes.map((node) => {
         const { width, height } = getNodeSize(node, options.fallbackSize);
         return { id: node.id, width, height };
       });
 
-      const layoutEdges: RadialLayoutEdge[] = vfEdges.map((edge) => ({
+      const layoutEdges: AutoLayoutEdge[] = vfEdges.map((edge) => ({
         source: edge.source,
         target: edge.target,
-        sourcePort: toPortDirection(edge.sourceHandle),
-        targetPort: toPortDirection(edge.targetHandle),
+        sourceHandle: toHandle(edge.sourceHandle),
+        targetHandle: toHandle(edge.targetHandle),
       }));
 
       // 计算布局（中心坐标）
-      const centerPoints = computeRadialLayout(
+      const centerPoints = computeAutoLayout(
         layoutNodes,
         layoutEdges,
-        DEFAULT_RADIAL_LAYOUT_CONFIG,
+        DEFAULT_AUTO_LAYOUT_CONFIG,
       );
 
       // 换算为左上角坐标并对齐到 snap 网格

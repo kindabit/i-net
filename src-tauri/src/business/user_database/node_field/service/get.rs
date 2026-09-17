@@ -4,19 +4,19 @@ use crate::business::user_database::node_field::vo::NodeFieldVO;
 use crate::business::user_database::state;
 use crate::error_code::ErrorCode;
 
-/// 将字段值密文解密为明文字符串；blob 为 None 时返回 None。
+/// 将字段值密文解密为明文字符串；ciphertext 为 None 时返回 None。
 /// 解密成功但明文不是合法 UTF-8 时返回 `ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8`。
 fn decrypt_value(
     node_id: &str,
     name: &str,
-    blob: Option<Vec<u8>>,
+    ciphertext: Option<Vec<u8>>,
     key: &[u8; 32],
 ) -> Result<Option<String>, ErrorCode> {
-    let blob = match blob {
+    let ciphertext = match ciphertext {
         Some(b) => b,
         None => return Ok(None),
     };
-    let plaintext = crate::security::aes::decrypt(blob, *key)?;
+    let plaintext = crate::security::aes::decrypt(ciphertext, *key)?;
     let value = String::from_utf8(plaintext).map_err(|_| {
         ErrorCode::DataCorruptionNodeFieldValueInvalidUtf8 {
             node_id: node_id.to_string(),
@@ -45,7 +45,7 @@ pub fn get(node_id: &str) -> Result<Vec<NodeFieldVO>, ErrorCode> {
     let key = state::key();
     let mut vos = Vec::with_capacity(fields.len());
     for field in fields {
-        let value = decrypt_value(node_id, &field.name, field.field_value, &key)?;
+        let value = decrypt_value(node_id, &field.name, field.value, &key)?;
         vos.push(NodeFieldVO {
             name: field.name,
             field_type: field.field_type,

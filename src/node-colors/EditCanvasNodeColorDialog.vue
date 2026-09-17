@@ -9,15 +9,15 @@
 import { ref, watch } from "vue";
 import { t } from "@/i18n";
 import {
-  deserializeCanvasColor,
-  serializeCanvasColor,
-  collectCanvasColorList,
+  deserializeCanvasNodeColor,
+  serializeCanvasNodeColor,
+  collectCanvasNodeColorList,
   type CanvasNodeColorScheme,
   type CanvasNodeColorProperties,
   type CanvasNodeHistoryColor,
 } from "./index";
 import { CANVAS_NODE_COLOR_PRESETS } from "./color-presets";
-import { userDatabaseCanvasSetColor } from "@/api";
+import { userDatabaseCanvasNodeSetColor } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import ColorPairSwatch from "./ColorPairSwatch.vue";
 import ColorFieldEditor from "./ColorFieldEditor.vue";
@@ -64,7 +64,7 @@ function settle(value: string | null): void {
 async function loadHistory(): Promise<void> {
   history.value = [];
   try {
-    history.value = await collectCanvasColorList();
+    history.value = await collectCanvasNodeColorList();
   } catch (e) {
     snackbarErrorCode(e);
   }
@@ -77,7 +77,7 @@ async function loadHistory(): Promise<void> {
  */
 async function persist(color: string): Promise<void> {
   try {
-    await userDatabaseCanvasSetColor(currentCanvasId.value, color);
+    await userDatabaseCanvasNodeSetColor(currentCanvasId.value, color);
     settle(color);
     dialog.value = false;
   } catch (e) {
@@ -97,7 +97,7 @@ function open(canvasId: string, name: string, currentColor: string): Promise<str
   settle(null);
   currentCanvasId.value = canvasId;
   currentName.value = name;
-  draft.value = deserializeCanvasColor(currentColor);
+  draft.value = deserializeCanvasNodeColor(currentColor);
   dialog.value = true;
   void loadHistory();
   return new Promise((resolve) => {
@@ -117,7 +117,7 @@ function applyHistory(entry: CanvasNodeHistoryColor): void {
 
 /** 保存草稿 */
 function onSave(): void {
-  void persist(serializeCanvasColor(draft.value));
+  void persist(serializeCanvasNodeColor(draft.value));
 }
 
 /** 全部恢复默认 */
@@ -143,7 +143,7 @@ defineExpose({ open });
   <VDialog v-model="dialog" max-width="48rem" scrollable>
     <VCard>
       <VCardTitle>
-        {{ t("database.color-dialog.title-canvas") }}：{{ currentName }}
+        {{ t("database.color-dialog.title-canvas-node") }}：{{ currentName }}
       </VCardTitle>
       <VCardText>
         <!-- 预设区 -->

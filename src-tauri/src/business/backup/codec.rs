@@ -199,7 +199,7 @@ pub fn reconstruct_shards(
     if missing_count > params.parity_shards as usize {
         return Err(ErrorCode::BackupTooManyShardsLost {
             lost: missing_count,
-            recoverable: params.parity_shards as usize,
+            recoverable_limit: params.parity_shards as usize,
         });
     }
 

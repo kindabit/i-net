@@ -11,7 +11,7 @@ pub enum CompressParam {
     Brotli { quality: u32, window: u32 },
     /// zstd 压缩（通用兜底），level 为压缩等级。
     Zstd { level: i32 },
-    /// lzma 压缩（xz 容器格式，未压缩位图与可执行文件），无参数。
+    /// lzma 压缩（raw LZMA2 流，未压缩位图与可执行文件），无参数。
     Lzma,
     /// FLAC 压缩（标准 PCM WAV 文件），携带重建 WAV 头所需的参数。
     Flac {

@@ -11,7 +11,7 @@ pub struct ProbeResult {
     /// 损坏 shard 数。
     pub lost: usize,
     /// 可恢复上限（parity shard 数）。
-    pub limit: usize,
+    pub recoverable_limit: usize,
     /// 探测通过的文件路径，前端可继续用于 [`restore`](crate::business::backup::command::restore::restore) 命令。
     pub source_path: String,
 }

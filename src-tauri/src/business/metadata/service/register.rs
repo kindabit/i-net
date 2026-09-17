@@ -10,12 +10,12 @@ use crate::util::time_util;
 /// - `name`: 数据库名称。
 ///
 /// # 返回值
-/// 返回新建记录的元数据；名称重复时返回 `ErrorCode::DatabaseNameAlreadyExists`，
+/// 返回新建记录的元数据；名称重复时返回 `ErrorCode::UserDatabaseNameAlreadyExists`，
 /// 发生其他错误时返回对应的 `ErrorCode`。
 pub fn register(name: String) -> Result<Metadata, ErrorCode> {
     let connection = state::lock_connection();
     if dao::select_by_name(&connection, &name)?.is_some() {
-        return Err(ErrorCode::DatabaseNameAlreadyExists { name });
+        return Err(ErrorCode::UserDatabaseNameAlreadyExists { name });
     }
     let now = time_util::now();
     let metadata = Metadata {

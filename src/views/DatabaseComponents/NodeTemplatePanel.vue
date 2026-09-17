@@ -1,7 +1,7 @@
 <!--
   模板面板组件。
 
-  悬浮在画布左上角悬浮菜单右侧，展示空白节点与可复用的节点模板列表。
+  悬浮在画布左上角悬浮菜单右侧，展示空白节点与可复用的模板列表。
   支持将空白节点或模板拖拽到画布上创建节点，并提供"管理模板"入口。
   通过 defineExpose 暴露 open / close / toggle / visible 方法。
 -->
@@ -20,7 +20,7 @@ const visible = ref(false);
 const templates = ref<Template[]>([]);
 
 /**
- * 从后端加载当前数据库的节点模板列表并更新面板数据。
+ * 从后端加载当前数据库的模板列表并更新面板数据。
  * 无输入参数，无返回值；加载失败时通过全局 snackbar 展示错误。
  */
 async function loadTemplates() {
@@ -64,7 +64,7 @@ function toggle() {
  * @param event 拖拽事件对象
  * @param templateId 模板 ID（"blank" 表示空白节点）
  * @param name 模板名称，作为新节点的副标题
- * @param createCanvas 是否创建画布节点
+ * @param createCanvas 是否创建画布数据节点
  */
 function onDragStart(event: DragEvent, templateId: string, name: string, createCanvas: boolean) {
   event.dataTransfer!.setData("application/x-i-net-template", templateId);
@@ -77,13 +77,14 @@ function onDragStart(event: DragEvent, templateId: string, name: string, createC
 }
 
 /**
- * 将整行面板项设为拖拽预览图，并按鼠标在行内的偏移定位预览。
+ * 将整行面板项设为拖拽预览图，并按鼠标相对行元素的偏移（相对屏幕坐标）定位预览。
  * @param event 拖拽事件对象
  */
 function setDragImage(event: DragEvent) {
   const rowEl = (event.currentTarget as HTMLElement).closest(".panel-item") as HTMLElement | null;
   if (!rowEl) return;
   const rect = rowEl.getBoundingClientRect();
+  // 相对屏幕坐标（相对于行元素左上角）
   const offsetX = event.clientX - rect.left;
   const offsetY = event.clientY - rect.top;
   event.dataTransfer!.setDragImage(rowEl, offsetX, offsetY);
@@ -143,14 +144,14 @@ defineExpose({
             <VIcon
               icon="mdi-file-outline"
               class="drag-handle"
-              :title="t('database.canvas.drag-create-node')"
+              :title="t('database.canvas.drag-create-data-node')"
               draggable="true"
               @dragstart="($event: DragEvent) => onDragStart($event, 'blank', t('database.canvas.blank-node'), false)"
             />
             <VIcon
               icon="mdi-vector-square"
               class="drag-handle"
-              :title="t('database.canvas.drag-create-canvas-node')"
+              :title="t('database.canvas.drag-create-canvas-data-node')"
               draggable="true"
               @dragstart="($event: DragEvent) => onDragStart($event, 'blank', t('database.canvas.blank-node'), true)"
             />
@@ -167,14 +168,14 @@ defineExpose({
             <VIcon
               icon="mdi-file-outline"
               class="drag-handle"
-              :title="t('database.canvas.drag-create-node')"
+              :title="t('database.canvas.drag-create-data-node')"
               draggable="true"
               @dragstart="($event: DragEvent) => onDragStart($event, tpl.id, tpl.name, false)"
             />
             <VIcon
               icon="mdi-vector-square"
               class="drag-handle"
-              :title="t('database.canvas.drag-create-canvas-node')"
+              :title="t('database.canvas.drag-create-canvas-data-node')"
               draggable="true"
               @dragstart="($event: DragEvent) => onDragStart($event, tpl.id, tpl.name, true)"
             />

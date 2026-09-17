@@ -3,26 +3,26 @@
  *
  * 第 0 层（入度为 0 的根）：按 id 序水平排成一行并以分量原点居中。
  * 第 k 层（k≥1）按序执行四遍：
- *   ① 均布登记——登记需要均布方向的无端口子代；
+ *   ① 均布登记——登记需要均布方向的无连接桩子代；
  *   ② 理想位——节点理想位 = 全部入边锚点的均值（锚向锚距规则见
  *      anchor.ts），并记录单入边节点的锚向供兄弟分组；
  *   ③ 兄弟展开——同父同锚向的单入边兄弟沿锚向垂直方向等距对称排开；
- *   ④ 端口轴向间距约束——按端口方向强制每条有端口入边的父子最小间距
- *      （多父均值可能侵蚀端口承诺，如菱形带捷径场景）。
+ *   ④ 连接桩轴向间距约束——按连接桩方向强制每条有连接桩入边的父子最小间距
+ *      （多父均值可能侵蚀连接桩承诺，如菱形带捷径场景）。
  * 全部层放置完成后做确定性碰撞松弛（collision.ts）消除残余重叠。
  *
  * 后续层的锚点基于前序步骤修正后的坐标计算，新增步骤时注意插入位置
  * 对下游锚点的连锁影响。
  */
 
-import { anchorOffsetOf, flowDirectionOf, portDirectionOf } from "./anchor";
+import { anchorOffsetOf, flowDirectionOf, handleOf } from "./anchor";
 import { resolveCollisions } from "./collision";
 import {
-  PORT_ANGLE,
+  HANDLE_ANGLE,
   type IncomingEdge,
-  type RadialLayoutConfig,
-  type RadialLayoutNode,
-  type RadialLayoutPoint,
+  type AutoLayoutConfig,
+  type AutoLayoutNode,
+  type AutoLayoutPoint,
 } from "./types";
 import { compareId, normalizeAngle } from "./utils";
 
@@ -31,7 +31,7 @@ export interface ComponentLayout {
   /** 分量内节点 id 列表。 */
   nodeIds: string[];
   /** 节点 id → 局部中心坐标。 */
-  positions: Map<string, RadialLayoutPoint>;
+  positions: Map<string, AutoLayoutPoint>;
   /** 包围圆半径（含节点自身尺寸）。 */
   boundingRadius: number;
 }
@@ -41,7 +41,7 @@ export interface ComponentLayout {
  *
  * @param nodeIds 分量内节点 id 列表（必须全部成功分层）。
  * @param layer 节点 id → 层号（最长路径分层结果）。
- * @param incoming 节点 id → 入边信息列表（父节点 id 与可选端口方向）。
+ * @param incoming 节点 id → 入边信息列表（父节点 id 与可选连接桩）。
  * @param nodeById 节点 id → 节点输入。
  * @param config 布局参数。
  * @returns 分量局部布局结果。
@@ -50,8 +50,8 @@ export function layoutComponent(
   nodeIds: string[],
   layer: Map<string, number>,
   incoming: Map<string, IncomingEdge[]>,
-  nodeById: Map<string, RadialLayoutNode>,
-  config: RadialLayoutConfig,
+  nodeById: Map<string, AutoLayoutNode>,
+  config: AutoLayoutConfig,
 ): ComponentLayout {
   const byLayer = new Map<number, string[]>();
   for (const id of nodeIds) {
@@ -61,7 +61,7 @@ export function layoutComponent(
     byLayer.set(nodeLayer, list);
   }
   const maxLayer = Math.max(...byLayer.keys());
-  const positions = new Map<string, RadialLayoutPoint>();
+  const positions = new Map<string, AutoLayoutPoint>();
 
   // 节点间距统一按分量内最大节点尺寸计算，保证任何节点组合都不重叠。
   const span =
@@ -72,20 +72,20 @@ export function layoutComponent(
       }),
     ) + config.nodeMargin;
 
-  // 父节点 → 其有端口子边的锚向角列表（用于无端口均布方向的避让）。
-  const portedAnglesByParent = new Map<string, number[]>();
+  // 父节点 → 其有连接桩子边的锚向角列表（用于无连接桩均布方向的避让）。
+  const handleAnglesByParent = new Map<string, number[]>();
   for (const id of nodeIds) {
     for (const edge of incoming.get(id)!) {
       let angle: number | undefined;
-      if (edge.sourcePort !== undefined) {
-        angle = PORT_ANGLE[edge.sourcePort];
-      } else if (edge.targetPort !== undefined) {
-        angle = normalizeAngle(PORT_ANGLE[edge.targetPort] + Math.PI);
+      if (edge.sourceHandle !== undefined) {
+        angle = HANDLE_ANGLE[edge.sourceHandle];
+      } else if (edge.targetHandle !== undefined) {
+        angle = normalizeAngle(HANDLE_ANGLE[edge.targetHandle] + Math.PI);
       }
       if (angle !== undefined) {
-        const list = portedAnglesByParent.get(edge.parent) ?? [];
+        const list = handleAnglesByParent.get(edge.parent) ?? [];
         list.push(angle);
-        portedAnglesByParent.set(edge.parent, list);
+        handleAnglesByParent.set(edge.parent, list);
       }
     }
   }
@@ -107,11 +107,11 @@ export function layoutComponent(
     }
     const sorted = [...ids].sort(compareId);
 
-    // 第一遍：登记需要均布方向的无端口子代（父节点无流向可用的孤立根场景）。
+    // 第一遍：登记需要均布方向的无连接桩子代（父节点无流向可用的孤立根场景）。
     const spreadGroups = new Map<string, string[]>();
     for (const id of sorted) {
       for (const edge of incoming.get(id)!) {
-        if (edge.sourcePort !== undefined || edge.targetPort !== undefined) {
+        if (edge.sourceHandle !== undefined || edge.targetHandle !== undefined) {
           continue;
         }
         if (flowDirectionOf(edge.parent, positions, incoming) !== undefined) {
@@ -125,7 +125,7 @@ export function layoutComponent(
 
     // 第二遍：计算理想位（全部入边锚点的均值，锚点排序后求和保证确定性），
     // 并记录单入边节点的锚向（供兄弟分组使用）。
-    const idealOf = new Map<string, RadialLayoutPoint>();
+    const idealOf = new Map<string, AutoLayoutPoint>();
     const anchorAngleById = new Map<string, number>();
     for (const id of sorted) {
       const edges = incoming.get(id)!;
@@ -136,7 +136,7 @@ export function layoutComponent(
           positions,
           incoming,
           spreadGroups,
-          portedAnglesByParent,
+          handleAnglesByParent,
           span,
           config,
         );
@@ -196,9 +196,9 @@ export function layoutComponent(
       });
     }
 
-    // 第四遍：端口方向最小间距约束。多父节点的锚点均值可能违背某条入边的
-    // 端口方向承诺（如菱形带捷径场景，捷径父代的锚点把多父节点拽回近侧），
-    // 这里按端口轴向强制子节点与父节点保持 ringSpacing 间距。
+    // 第四遍：连接桩方向最小间距约束。多父节点的锚点均值可能违背某条入边的
+    // 连接桩方向承诺（如菱形带捷径场景，捷径父代的锚点把多父节点拽回近侧），
+    // 这里按连接桩轴向强制子节点与父节点保持 ringSpacing 间距。
     // 约束为"≥"型且父节点坐标已最终确定，每层单趟即可收敛；
     // 同一节点轴向约束矛盾时（病态输入），left/top 覆盖 right/bottom，保证确定性。
     for (const id of sorted) {
@@ -208,16 +208,16 @@ export function layoutComponent(
       let minCy = -Infinity;
       let maxCy = Infinity;
       for (const edge of incoming.get(id)!) {
-        const direction = portDirectionOf(edge);
-        if (direction === undefined) {
+        const handle = handleOf(edge);
+        if (handle === undefined) {
           continue;
         }
         const parentPos = positions.get(edge.parent)!;
-        if (direction === "right") {
+        if (handle === "right") {
           minCx = Math.max(minCx, parentPos.cx + config.ringSpacing);
-        } else if (direction === "left") {
+        } else if (handle === "left") {
           maxCx = Math.min(maxCx, parentPos.cx - config.ringSpacing);
-        } else if (direction === "bottom") {
+        } else if (handle === "bottom") {
           minCy = Math.max(minCy, parentPos.cy + config.ringSpacing);
         } else {
           maxCy = Math.min(maxCy, parentPos.cy - config.ringSpacing);

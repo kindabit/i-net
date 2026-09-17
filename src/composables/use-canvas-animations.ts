@@ -140,6 +140,7 @@ export function flyToRecycleBin(
   document.body.appendChild(clone);
 
   const targetRect = targetEl.getBoundingClientRect();
+  // 位移量（相对屏幕坐标）：原卡片中心 → 目标元素中心
   const dx = targetRect.left + targetRect.width / 2 - (rect.left + rect.width / 2);
   const dy = targetRect.top + targetRect.height / 2 - (rect.top + rect.height / 2);
 

@@ -14,17 +14,17 @@ pub enum ErrorCode {
     AttachmentDeleted,
     /// 画布名称已经存在，包含重复的画布名称。
     CanvasNameAlreadyExists { name: String },
-    /// 画布节点不能直接作为源连接普通节点（应先经子画布中转，避免依赖项散落各画布）。
-    CanvasToPlainNodeEdge,
+    /// 画布数据节点不能直接作为源连接数据节点（应先经子画布中转，避免依赖项散落各画布）。
+    CanvasToDataNodeEdge,
     /// 数据库操作失败，包含详细错误信息，仅限 dao 层使用。
     DatabaseError { detail: String },
-    /// 数据库名称已经存在，包含重复的数据库名称。
-    DatabaseNameAlreadyExists { name: String },
-    /// 数据库必须先归档才能删除。
-    DatabaseMustBeArchivedBeforeDelete,
-    /// 画布节点引用的画布不存在，包含画布节点 id 与缺失的画布 id。
+    /// 用户数据库名称已经存在，包含重复的用户数据库名称。
+    UserDatabaseNameAlreadyExists { name: String },
+    /// 用户数据库必须先归档才能删除。
+    UserDatabaseMustBeArchivedBeforeDelete,
+    /// 画布数据节点引用的画布不存在，包含画布数据节点 id 与缺失的画布 id。
     DataCorruptionCanvasRefMissing { node_id: String, canvas_id: String },
-    /// 影子链中途悬空：链上节点的 shadow_id 指向不存在的节点，包含悬空节点 id 与缺失的节点 id。
+    /// 影子链中途悬空：影子节点的产生边不存在，包含影子节点 id 与缺失的边 id。
     DataCorruptionDanglingShadow { shadow_id: String, missing_id: String },
     /// 边的端点节点不存在，包含边 id 与缺失的节点 id。
     DataCorruptionEdgeEndpointMissing { edge_id: String, node_id: String },
@@ -32,7 +32,7 @@ pub enum ErrorCode {
     DataCorruptionMissingShadow { edge_id: String },
     /// 节点字段值密文解密成功，但明文不是合法 UTF-8（字段值明文约定为 UTF-8 字符串），包含节点 id 与字段名称。
     DataCorruptionNodeFieldValueInvalidUtf8 { node_id: String, name: String },
-    /// 推导影子方向时发现节点不是影子（无 shadow_id），包含节点 id。属于程序缺陷。
+    /// 推导影子方向时发现节点不是影子（产生边 id 为空），包含节点 id。属于程序缺陷。
     DataCorruptionNodeNotShadow { id: String },
     /// 影子链成环，包含检测到成环的节点 id。
     DataCorruptionShadowChainCycle { id: String },
@@ -40,8 +40,8 @@ pub enum ErrorCode {
     DataCorruptionShadowEdgeDirectionMismatch { shadow_id: String, edge_id: String },
     /// 影子节点与另一个影子节点相连（影子之间不允许相连），包含两个影子节点的 id。
     DataCorruptionShadowNeighborIsShadow { shadow_id: String, neighbor_id: String },
-    /// 影子沿产生边链解析出的根本体节点类型与影子方向矛盾（入向影子的根本体应为普通节点，出向影子的根本体应为画布节点），包含影子节点 id 与根本体节点 id。
-    DataCorruptionShadowRootTypeMismatch { shadow_id: String, root_id: String },
+    /// 影子沿产生边链解析出的本体节点类型与影子方向矛盾（入向影子的本体应为数据节点，出向影子的本体应为画布数据节点），包含影子节点 id 与本体节点 id。
+    DataCorruptionShadowOriginTypeMismatch { shadow_id: String, origin_id: String },
     /// 数据版本不匹配，包含期望的版本和实际的版本。
     DataVersionMismatch {
         expected: DataVersion,
@@ -54,7 +54,7 @@ pub enum ErrorCode {
     /// 删除该边会物理删除影子节点并使所列节点失去连接，包含受影响节点的标题列表。
     EdgeDeleteDisconnectsNodes { nodes: Vec<String> },
     /// 源节点和目标节点使用了相同的连接桩，不允许建立这条边。
-    EdgeSameNodePort,
+    EdgeSameHandle,
     /// 新建该边会在画布内形成环。
     EdgeWouldFormCycle,
     /// 画布名称为空。
@@ -132,7 +132,7 @@ pub enum ErrorCode {
     /// 节点 id 无效，包含节点 id。
     InvalidNodeId { id: String },
     /// 节点连接桩无效，包含连接桩。
-    InvalidNodePort { port: String },
+    InvalidHandle { handle: String },
     /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
     InvalidPath { detail: String },
     /// 影子节点的连线方向不合法。
@@ -147,12 +147,12 @@ pub enum ErrorCode {
     NoAttachmentWithSuchId { id: String },
     /// 不存在指定 id 的画布，包含画布 id。
     NoCanvasWithSuchId { id: String },
-    /// 不存在指定 id 的数据库，包含数据库 id。
-    NoDatabaseWithSuchId { id: String },
+    /// 不存在指定 id 的用户数据库，包含用户数据库 id。
+    NoUserDatabaseWithSuchId { id: String },
     /// 数据版本表内没有数据。
     NoDataVersion,
     /// 不存在指定 id 的字典条目，包含字典条目 id。
-    NoDictionaryEntryWithSuchId { id: String },
+    NoDictionaryWithSuchId { id: String },
     /// 不存在指定 id 的边，包含边 id。
     NoEdgeWithSuchId { id: String },
     /// 不存在指定 id 的节点，包含节点 id。
@@ -161,8 +161,8 @@ pub enum ErrorCode {
     NoTemplateWithSuchId { id: String },
     /// 物理删除该节点会级联删除其在其它画布中的影子节点并使所列节点失去连接，包含受影响节点的标题列表。
     NodeDeleteDisconnectsNodes { nodes: Vec<String> },
-    /// 该操作不允许作用于画布节点。
-    NodeIsCanvasNode,
+    /// 该操作不允许作用于画布数据节点。
+    NodeIsCanvasDataNode,
     /// 该操作不允许作用于影子节点。
     NodeIsShadow,
     /// 要迁移的节点不属于同一个画布。
@@ -184,7 +184,7 @@ pub enum ErrorCode {
     /// 备份文件版本不兼容，包含读取到的版本号。
     UnsupportedBackupVersion { version: u16 },
     /// 备份文件中损坏的 shard 数超过可恢复上限，包含丢失数与可恢复上限。
-    BackupTooManyShardsLost { lost: usize, recoverable: usize },
+    BackupTooManyShardsLost { lost: usize, recoverable_limit: usize },
     /// 备份打包失败，包含详细错误信息。
     FailToPackBackup { detail: String },
     /// 备份解包失败，包含详细错误信息。
