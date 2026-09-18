@@ -213,6 +213,10 @@
     "EmptyDictionaryValue": {
       "title": "字典条目的值为空"
     },
+    "EmptyImportedCanvasList": {
+      "title": "导入画布列表为空",
+      "text": "导入画布列表为空：至少需要一个画布（KeePass 根分组对应的画布）"
+    },
     "EmptyNodeFieldName": {
       "title": "字段名称为空"
     },

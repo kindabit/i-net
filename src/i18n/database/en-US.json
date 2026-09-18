@@ -30,7 +30,11 @@
       "invalid-file": "Invalid KeePass 2.0 database file",
       "incorrect-password": "Incorrect master password, failed to decrypt the selected database",
       "importing": "Importing…",
-      "imported": "KeePass 2.0 data imported"
+      "imported": "KeePass 2.0 data imported",
+      "mode-label": "Import mode",
+      "mode-single": "Import into a single canvas",
+      "mode-canvases": "Generate one canvas per group",
+      "unnamed-group": "Unnamed Group"
     },
     "placeholder": "Database is open. Features will be added here.",
     "canvas-universe": {

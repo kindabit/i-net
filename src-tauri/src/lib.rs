@@ -163,6 +163,7 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::lifecycle::command::save::user_database_lifecycle_save,
             business::user_database::log::command::list::user_database_log_list,
             business::user_database::migration::command::import_keepass2::user_database_migration_import_keepass2,
+            business::user_database::migration::command::import_keepass2_canvases::user_database_migration_import_keepass2_canvases,
             business::user_database::migration::command::pick_file::user_database_migration_pick_file,
             business::user_database::migration::command::read_file::user_database_migration_read_file,
             business::user_database::node::command::create::user_database_node_create,

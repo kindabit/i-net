@@ -12,6 +12,7 @@ import type {
   Dictionary,
   Edge,
   ImportedEdgeVO,
+  ImportedCanvasVO,
   ImportedNodeVO,
   LogPageResponse,
   Metadata,
@@ -973,6 +974,19 @@ export async function userDatabaseMigrationImportKeepass2(
     nodes,
     edges,
   });
+}
+
+/**
+ * 将前端按 KeePass2 group 层级构造好的画布列表聚合导入用户数据库：后端在根画布下批量创建
+ * 整棵画布子树（每个 group 一个画布，宇宙坐标为前端算好的树形布局），画布内批量创建
+ * 数据节点（含字段）与引用直接子画布的画布数据节点（矩阵布局），全部操作聚合成一条日志条目。
+ * @param canvases 待导入的画布列表（第一个元素为根 group 对应的画布）
+ * @returns 根 group 画布的 id（供跳转至顶层新画布）
+ */
+export async function userDatabaseMigrationImportKeepass2Canvases(
+  canvases: ImportedCanvasVO[],
+): Promise<string> {
+  return invoke("user_database_migration_import_keepass2_canvases", { canvases });
 }
 
 // ==================== backup ====================

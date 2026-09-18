@@ -7,12 +7,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   installArgon2,
+  layoutImportedCanvases,
   layoutImportedTree,
   parseKeepass2Database,
+  parseKeepass2DatabaseCanvases,
   type ImportedTree,
   type Keepass2FieldText,
 } from "./keepass2";
-import type { ImportedEdgeVO, ImportedNodeVO } from "@/api-types";
+import type { ImportedCanvasVO, ImportedEdgeVO, ImportedNodeVO } from "@/api-types";
 
 /** 测试用字段名文案（取 zh-CN 表，与旧后端实现的中文文案一致） */
 const TEXT: Keepass2FieldText = {
@@ -86,6 +88,11 @@ function blankTree(nodeCount: number, edges: ImportedEdgeVO[]): ImportedTree {
     nodes: Array.from({ length: nodeCount }, () => blankNode()),
     edges,
   };
+}
+
+/** 构造布局测试用的空画布（无数据节点、无画布数据节点）。 */
+function blankCanvas(parentIndex: number | null): ImportedCanvasVO {
+  return { name: "", x: 0, y: 0, parent_index: parentIndex, nodes: [], canvas_nodes: [] };
 }
 
 describe("parseKeepass2Database", () => {
@@ -294,5 +301,164 @@ describe("layoutImportedTree", () => {
     expect([tree.nodes[1].x, tree.nodes[1].y]).toEqual([240, 80]);
     expect([tree.nodes[2].x, tree.nodes[2].y]).toEqual([240, 320]);
     expect([tree.nodes[0].x, tree.nodes[0].y]).toEqual([0, 200]);
+  });
+});
+
+describe("parseKeepass2DatabaseCanvases", () => {
+  it("成功解析官方测试数据库为画布列表", async () => {
+    // 意图：成功路径。每个 group 产出一张画布（含根 group），回收站 group 及其内容
+    // 不产出；画布按深度优先先序排列（父画布下标恒小于子画布），共 4 张画布：
+    // 根 group "sample"（2 个 entry + 子 group General、Internet）、General
+    //（2 个 entry + 子 group Subgroup）、Subgroup（1 个 entry）、Internet（1 个 entry）。
+    const canvases = await parseKeepass2DatabaseCanvases(readTestDatabase(), "demopass", TEXT);
+
+    expect(canvases).toHaveLength(4);
+
+    // 画布 0：根 group 画布（name=根 group 名、parent_index=null），含 2 个 entry
+    // 数据节点与 2 个画布数据节点（引用 General 与 Internet，下标引用先序位置）。
+    expect(canvases[0].name).toBe("sample");
+    expect(canvases[0].parent_index).toBeNull();
+    expect(canvases[0].nodes).toHaveLength(2);
+    expect(canvases[0].canvas_nodes).toEqual([
+      { x: 0, y: 0, ref_index: 1 },
+      { x: 0, y: 0, ref_index: 3 },
+    ]);
+
+    // 根 group 的 entry 转换规则与单画布路线一致：UserName 非空 → title=UserName、
+    // subtitle=Title，字段顺序 密码 → 访问链接 → 备注。
+    expect(canvases[0].nodes[0].title).toBe("User Name");
+    expect(canvases[0].nodes[0].subtitle).toBe("Sample Entry");
+    expect(canvases[0].nodes[0].fields).toEqual([
+      { name: "密码", field_type: "string:password", value: "Password", dictionary_id: null },
+      {
+        name: "访问链接",
+        field_type: "string:url",
+        value: "http://keepass.info/",
+        dictionary_id: null,
+      },
+      { name: "备注", field_type: "string:multiple-line", value: "Notes", dictionary_id: null },
+    ]);
+
+    // 画布 1：General（父画布为 0），含 2 个 entry 与 1 个画布数据节点（引用 Subgroup）。
+    expect(canvases[1].name).toBe("General");
+    expect(canvases[1].parent_index).toBe(0);
+    expect(canvases[1].nodes.map((node) => node.title)).toEqual(["Michael321", "Michael3210"]);
+    expect(canvases[1].canvas_nodes).toEqual([{ x: 0, y: 0, ref_index: 2 }]);
+
+    // 画布 2：Subgroup（父画布为 1），含 1 个 entry（UserName 非空 → title=UserName），
+    // 无画布数据节点。
+    expect(canvases[2].name).toBe("Subgroup");
+    expect(canvases[2].parent_index).toBe(1);
+    expect(canvases[2].nodes.map((node) => node.title)).toEqual(["jdoe"]);
+    expect(canvases[2].canvas_nodes).toEqual([]);
+
+    // 画布 3：Internet（父画布为 0），含 1 个 entry。
+    expect(canvases[3].name).toBe("Internet");
+    expect(canvases[3].parent_index).toBe(0);
+    expect(canvases[3].nodes.map((node) => node.title)).toEqual(["asdf"]);
+  });
+
+  it("错误密码报 incorrect-password", async () => {
+    // 意图：失败路径。Master Password 不正确时抛出 "incorrect-password"。
+    await expect(
+      parseKeepass2DatabaseCanvases(readTestDatabase(), "wrong", TEXT),
+    ).rejects.toBe("incorrect-password");
+  });
+
+  it("垃圾字节报 invalid-file", async () => {
+    // 意图：失败路径。文件签名无法识别时抛出 "invalid-file"。
+    const garbage = new TextEncoder().encode("this is not a kdbx file");
+    await expect(parseKeepass2DatabaseCanvases(garbage, "demopass", TEXT)).rejects.toBe(
+      "invalid-file",
+    );
+  });
+
+  it("成功解析现场构造的 KDBX 4.0 数据库为画布列表", async () => {
+    // 意图：成功路径（KDBX 4.0 / Argon2id）。根 group（1 个 entry + 1 个子 group）
+    // 产出 2 张画布，子 group 画布挂到根 group 画布（parent_index=0）。
+    const canvases = await parseKeepass2DatabaseCanvases(
+      await createKdbx4Database(),
+      "kdbx4pass",
+      TEXT,
+    );
+
+    expect(canvases).toHaveLength(2);
+    expect(canvases[0].name).toBe("Kdbx4Root");
+    expect(canvases[0].parent_index).toBeNull();
+    expect(canvases[0].nodes.map((node) => node.title)).toEqual(["kdbx4-user"]);
+    expect(canvases[0].canvas_nodes).toEqual([{ x: 0, y: 0, ref_index: 1 }]);
+    expect(canvases[1].name).toBe("Kdbx4Group");
+    expect(canvases[1].parent_index).toBe(0);
+    expect(canvases[1].nodes.map((node) => node.title)).toEqual(["Sub Entry"]);
+    expect(canvases[1].canvas_nodes).toEqual([]);
+  });
+});
+
+describe("layoutImportedCanvases", () => {
+  it("单张画布布局在空闲点（根画布右侧 240）", async () => {
+    // 意图：宇宙布局的树根取环形搜索的第一个空闲点——根画布在 (0, 0) 时，
+    // 半径 240、角度 0 的候选点 (240, 0) 空闲；单张画布（无子画布）即落于该点。
+    const canvases = [blankCanvas(null)];
+    layoutImportedCanvases(canvases, { x: 0, y: 0 }, [{ x: 0, y: 0 }]);
+    expect([canvases[0].x, canvases[0].y]).toEqual([240, 0]);
+  });
+
+  it("空闲点搜索避让现存画布", async () => {
+    // 意图：候选点 (240, 0) 已被现存画布占据、45° 候选点与其距离不足 200 时，
+    // 环形搜索继续向外取到 90° 候选点 (0, 240)（与两个现存画布的距离均不小于 200）。
+    const canvases = [blankCanvas(null)];
+    layoutImportedCanvases(canvases, { x: 0, y: 0 }, [
+      { x: 0, y: 0 },
+      { x: 240, y: 0 },
+    ]);
+    expect(canvases[0].x).toBeCloseTo(0, 10);
+    expect(canvases[0].y).toBeCloseTo(240, 10);
+  });
+
+  it("子画布按层级排在右侧列并占据连续行，父画布纵向居中", async () => {
+    // 意图：root[c1[g1, g2], c2] 的不均衡画布树：叶子 g1、g2、c2 依次占行
+    // 0/1/2（y=0/160/320），c1 居中于 g1 与 g2（y=80），root 居中于 c1 与 c2
+    //（y=(80+320)/2=200）；各画布 x = 树根 x（240）+ 深度 × 240。
+    const canvases = [
+      blankCanvas(null),
+      blankCanvas(0),
+      blankCanvas(0),
+      blankCanvas(1),
+      blankCanvas(1),
+    ];
+    layoutImportedCanvases(canvases, { x: 0, y: 0 }, [{ x: 0, y: 0 }]);
+    expect([canvases[3].x, canvases[3].y]).toEqual([720, 0]);
+    expect([canvases[4].x, canvases[4].y]).toEqual([720, 160]);
+    expect([canvases[1].x, canvases[1].y]).toEqual([480, 80]);
+    expect([canvases[2].x, canvases[2].y]).toEqual([480, 320]);
+    expect([canvases[0].x, canvases[0].y]).toEqual([240, 200]);
+  });
+
+  it("画布内数据节点与画布数据节点按矩阵平铺（数据节点在前）", async () => {
+    // 意图：画布内 3 个数据节点 + 1 个画布数据节点共 4 项，列数 ceil(sqrt(4))=2：
+    // 依次落于 (0,0)、(240,0)、(0,160)、(240,160)，画布数据节点排在数据节点之后。
+    const canvas = blankCanvas(null);
+    canvas.nodes = [blankNode(), blankNode(), blankNode()];
+    canvas.canvas_nodes = [{ x: 0, y: 0, ref_index: 0 }];
+    const canvases = [canvas];
+    layoutImportedCanvases(canvases, { x: 0, y: 0 }, [{ x: 0, y: 0 }]);
+    expect([canvas.nodes[0].x, canvas.nodes[0].y]).toEqual([0, 0]);
+    expect([canvas.nodes[1].x, canvas.nodes[1].y]).toEqual([240, 0]);
+    expect([canvas.nodes[2].x, canvas.nodes[2].y]).toEqual([0, 160]);
+    expect([canvas.canvas_nodes[0].x, canvas.canvas_nodes[0].y]).toEqual([240, 160]);
+  });
+
+  it("矩阵列数按 ceil(sqrt(n)) 取值", async () => {
+    // 意图：5 个数据节点的画布列数 ceil(sqrt(5))=3：前 3 个占满第 0 行
+    //（y=0），第 4、5 个落于第 1 行的前两列（y=160）。
+    const canvas = blankCanvas(null);
+    canvas.nodes = [blankNode(), blankNode(), blankNode(), blankNode(), blankNode()];
+    const canvases = [canvas];
+    layoutImportedCanvases(canvases, { x: 0, y: 0 }, [{ x: 0, y: 0 }]);
+    expect([canvas.nodes[0].x, canvas.nodes[0].y]).toEqual([0, 0]);
+    expect([canvas.nodes[1].x, canvas.nodes[1].y]).toEqual([240, 0]);
+    expect([canvas.nodes[2].x, canvas.nodes[2].y]).toEqual([480, 0]);
+    expect([canvas.nodes[3].x, canvas.nodes[3].y]).toEqual([0, 160]);
+    expect([canvas.nodes[4].x, canvas.nodes[4].y]).toEqual([240, 160]);
   });
 });

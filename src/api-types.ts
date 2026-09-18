@@ -179,6 +179,41 @@ export interface ImportedEdgeVO {
   target_index: number;
 }
 
+/**
+ * 多画布导入的画布数据节点值对象：在父画布中创建一个引用子画布的画布数据节点。
+ * ref_index 必须指向自身画布的直接子画布（被引用画布的 parent_index 必须指回自身画布）；
+ * 标题不随数据传入，后端写入时取被引用画布去重后的最终名称。
+ */
+export interface ImportedCanvasNodeVO {
+  /** 画布数据节点在其画布中的 x 坐标 */
+  x: number;
+  /** 画布数据节点在其画布中的 y 坐标 */
+  y: number;
+  /** 被引用子画布在导入画布列表中的下标 */
+  ref_index: number;
+}
+
+/**
+ * 多画布导入的画布值对象：按迁移源 group 层级构造好的画布数据。
+ * 列表按深度优先先序排列（父画布下标恒小于子画布），第一个元素为迁移源根 group
+ * 对应的画布（parent_index 为 null，挂到根画布）；宇宙坐标由前端按 group 层级
+ * 以树形布局计算，画布内节点坐标由前端以矩阵布局计算。
+ */
+export interface ImportedCanvasVO {
+  /** 画布名称（重名时后端自动追加 " 2"、" 3"…） */
+  name: string;
+  /** 画布在画布宇宙中的 x 坐标 */
+  x: number;
+  /** 画布在画布宇宙中的 y 坐标 */
+  y: number;
+  /** 父画布在导入画布列表中的下标；null 表示挂到根画布 */
+  parent_index: number | null;
+  /** 画布内的数据节点列表（矩阵布局坐标） */
+  nodes: ImportedNodeVO[];
+  /** 画布内的画布数据节点列表（引用直接子画布，矩阵布局坐标） */
+  canvas_nodes: ImportedCanvasNodeVO[];
+}
+
 /** 模板字段值对象。模板字段只定义结构，不含值。 */
 export interface TemplateFieldVO {
   name: string;

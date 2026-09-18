@@ -136,6 +136,10 @@
       "NodesImport": {
         "name": "数据导入",
         "detail": "导入 {node_count} 个节点至新画布“{canvas_name}”"
+      },
+      "CanvasesImport": {
+        "name": "数据导入",
+        "detail": "导入 {node_count} 个节点至 {canvas_count} 个新画布（顶层画布“{canvas_name}”）"
       }
     },
     "node-fields-change-added": "新增字段\u201c{name}\u201d（{type}）：{value}",

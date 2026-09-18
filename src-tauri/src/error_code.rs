@@ -65,6 +65,8 @@ pub enum ErrorCode {
     EmptyFileName,
     /// 字典条目值为空。
     EmptyDictionaryValue,
+    /// 数据迁移多画布导入的画布列表为空（至少需要一个迁移源根 group 对应的画布）。
+    EmptyImportedCanvasList,
     /// 节点字段名称为空。
     EmptyNodeFieldName,
     /// 偏好项名称为空。
@@ -123,6 +125,10 @@ pub enum ErrorCode {
     InvalidExportTargetPath { path: String },
     /// 导出模式字符串无效，包含原始模式字符串。
     InvalidExportMode { mode: String },
+    /// 数据迁移多画布导入的父画布下标无效（越界或非前向），包含画布下标与其父画布下标。
+    InvalidImportedCanvasIndex { canvas_index: u64, parent_index: u64 },
+    /// 数据迁移多画布导入的画布数据节点引用下标无效（越界或未指向自身画布的直接子画布），包含画布下标与引用下标。
+    InvalidImportedCanvasRefIndex { canvas_index: u64, ref_index: u64 },
     /// 数据迁移导入的边下标无效（越界或非前向），包含父节点下标与子节点下标。
     InvalidImportedEdgeIndex { source_index: u64, target_index: u64 },
     /// KeePass 2.0 数据库文件扩展名无效（仅允许 .kdbx，不区分大小写），包含目标路径。

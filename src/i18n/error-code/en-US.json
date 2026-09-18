@@ -213,6 +213,10 @@
     "EmptyDictionaryValue": {
       "title": "Empty dictionary entry value"
     },
+    "EmptyImportedCanvasList": {
+      "title": "Imported canvas list empty",
+      "text": "The imported canvas list is empty: at least one canvas (for the KeePass root group) is required"
+    },
     "EmptyNodeFieldName": {
       "title": "Empty field name"
     },
@@ -258,6 +262,14 @@
     "InvalidExportMode": {
       "title": "Invalid export mode",
       "text": "Invalid export mode: {mode}"
+    },
+    "InvalidImportedCanvasIndex": {
+      "title": "Invalid imported canvas index",
+      "text": "Invalid imported canvas index: canvas {canvas_index} has parent index {parent_index} (the parent index must be less than the canvas index)"
+    },
+    "InvalidImportedCanvasRefIndex": {
+      "title": "Invalid imported canvas ref index",
+      "text": "Invalid imported canvas ref index: the canvas node in canvas {canvas_index} references canvas {ref_index} (it must reference a direct child canvas of its own canvas)"
     },
     "InvalidImportedEdgeIndex": {
       "title": "Invalid imported edge index",

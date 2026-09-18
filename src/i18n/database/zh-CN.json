@@ -30,7 +30,11 @@
       "invalid-file": "无效的 KeePass 2.0 数据库文件",
       "incorrect-password": "Master Password 不正确，无法解密所选数据库",
       "importing": "导入中…",
-      "imported": "KeePass2 数据导入完成"
+      "imported": "KeePass2 数据导入完成",
+      "mode-label": "导入方式",
+      "mode-single": "导入单个画布",
+      "mode-canvases": "按分组生成多个画布",
+      "unnamed-group": "未命名分组"
     },
     "placeholder": "数据库已打开，功能将在此处添加。",
     "canvas-universe": {

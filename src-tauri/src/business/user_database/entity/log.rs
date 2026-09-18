@@ -181,6 +181,12 @@ pub enum Action {
     TemplateRename { old_name: String, new_name: String },
     /// 数据迁移导入节点，包含去重后的画布名称与导入的节点数量。
     NodesImport { canvas_name: String, node_count: i64 },
+    /// 数据迁移多画布导入，包含去重后的顶层画布名称、创建的画布数量与导入的节点总数量。
+    CanvasesImport {
+        canvas_name: String,
+        canvas_count: i64,
+        node_count: i64,
+    },
 }
 
 /// 日志实体类，记录创建对象和修改对象的行为，提供一定程度的追溯能力。
