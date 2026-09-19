@@ -1,5 +1,7 @@
 mod create;
 mod export;
+// get 当前仅被单元测试使用（生产代码无调用者），只在测试构建中编译，避免未使用告警。
+#[cfg(test)]
 mod get;
 mod import;
 mod initialize;
@@ -16,6 +18,7 @@ mod update_file;
 
 pub use create::create;
 pub use export::export;
+#[cfg(test)]
 pub use get::get;
 pub use import::import;
 pub use initialize::initialize;

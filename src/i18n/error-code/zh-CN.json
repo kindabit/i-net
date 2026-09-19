@@ -79,6 +79,10 @@
       "title": "反序列化数据库失败",
       "text": "{detail}"
     },
+    "FailToDetermineHomeDirectory": {
+      "title": "无法确定主目录",
+      "text": "无法确定当前用户的主目录：{detail}"
+    },
     "FailToOpenConnection": {
       "title": "打开数据库连接失败",
       "text": "{detail}"
@@ -270,10 +274,6 @@
     "InvalidKdbxFileExtension": {
       "title": "文件扩展名无效",
       "text": "文件扩展名无效：只能读取扩展名为 .kdbx 的 KeePass 2.0 数据库文件（{path}）"
-    },
-    "InvalidPath": {
-      "title": "路径无效",
-      "text": "路径无效：{detail}"
     },
     "NoAttachmentWithSuchId": {
       "title": "附件不存在",

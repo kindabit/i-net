@@ -1,0 +1,16 @@
+{
+  "file-picker": {
+    "home": "Home",
+    "roots": "Drives",
+    "up": "Parent Folder",
+    "path-label": "Path",
+    "file-name-label": "File name",
+    "show-all-files": "Show all files",
+    "empty": "This folder is empty",
+    "file-name-required": "Enter a file name",
+    "file-name-invalid": "The file name contains invalid characters or ends with a period",
+    "file-name-reserved": "This name is reserved by the system",
+    "overwrite-title": "File already exists",
+    "overwrite-text": "\"{name}\" already exists. Overwrite?"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "file-picker": {
+    "home": "主目录",
+    "roots": "驱动器",
+    "up": "上级目录",
+    "path-label": "路径",
+    "file-name-label": "文件名",
+    "show-all-files": "显示全部文件",
+    "empty": "此目录为空",
+    "file-name-required": "请输入文件名",
+    "file-name-invalid": "文件名包含非法字符，或以点号结尾",
+    "file-name-reserved": "该名称是系统保留文件名",
+    "overwrite-title": "文件已存在",
+    "overwrite-text": "\"{name}\" 已存在，是否覆盖？"
+  }
+}

@@ -79,6 +79,10 @@
       "title": "Failed to Deserialize Database",
       "text": "{detail}"
     },
+    "FailToDetermineHomeDirectory": {
+      "title": "Failed to Determine Home Directory",
+      "text": "Failed to determine the current user's home directory: {detail}"
+    },
     "FailToOpenConnection": {
       "title": "Failed to Open Database Connection",
       "text": "{detail}"
@@ -278,10 +282,6 @@
     "InvalidKdbxFileExtension": {
       "title": "Invalid file extension",
       "text": "Invalid file extension: only KeePass 2.0 database files with the .kdbx extension can be read ({path})"
-    },
-    "InvalidPath": {
-      "title": "Invalid path",
-      "text": "Invalid path: {detail}"
     },
     "NoAttachmentWithSuchId": {
       "title": "Attachment not found",

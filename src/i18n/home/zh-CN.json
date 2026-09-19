@@ -49,8 +49,7 @@
       "phase-backup-pack": "正在打包数据目录",
       "phase-backup-encode": "正在生成校验数据",
       "phase-backup-write": "正在写入备份文件",
-      "success": "备份已保存",
-      "cancelled": "已取消保存"
+      "success": "备份已保存"
     },
     "restore": {
       "title": "还原数据目录",

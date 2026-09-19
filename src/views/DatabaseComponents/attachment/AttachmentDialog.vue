@@ -26,6 +26,7 @@ import {
 import type { AttachmentVO } from "@/api-types";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 import AttachmentPreviewDialog from "./AttachmentPreviewDialog.vue";
 import { formatSize, resolveTextAttachmentFileName } from "./attachment-types";
 
@@ -55,6 +56,7 @@ const orphanFiles = ref<string[]>([]);
 const draggingId = ref<string | null>(null);
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
 const previewDialogRef = ref<InstanceType<typeof AttachmentPreviewDialog>>();
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 
 /** 当前处于重命名编辑态的附件 id（同时最多一个） */
 const renamingId = ref<string | null>(null);
@@ -107,14 +109,18 @@ async function loadData(): Promise<void> {
 }
 
 /**
- * 导入附件：由后端弹出系统文件选择对话框，导入成功后局部刷新；取消选择静默返回。
+ * 导入附件：由前端文件选择器选择源文件，导入成功后局部刷新；用户取消选择静默返回。
  * 无输入参数，无返回值。
  */
 async function importAttachment(): Promise<void> {
+  const sourcePath = await filePickerRef.value?.open({
+    mode: "open",
+    title: t("database.canvas.attachment.import"),
+  });
+  if (!sourcePath) return;
   importing.value = true;
   try {
-    const imported = await userDatabaseAttachmentImport(nodeId.value);
-    if (imported === null) return;
+    await userDatabaseAttachmentImport(nodeId.value, sourcePath);
     snackbarText(t("database.canvas.attachment.imported"), "success");
     await loadData();
   } catch (e) {
@@ -183,13 +189,18 @@ watch(renameDraft, () => {
 });
 
 /**
- * 导出附件：由后端弹出系统保存对话框，导出成功后提示；取消选择静默返回。
+ * 导出附件：由前端文件选择器选择目标路径，导出成功后提示；用户取消选择静默返回。
  * @param attachment 目标附件
  */
 async function exportAttachment(attachment: AttachmentVO): Promise<void> {
+  const targetPath = await filePickerRef.value?.open({
+    mode: "save",
+    title: t("database.canvas.attachment.export"),
+    defaultFileName: attachment.file_name,
+  });
+  if (!targetPath) return;
   try {
-    const exported = await userDatabaseAttachmentExport(attachment.id);
-    if (!exported) return;
+    await userDatabaseAttachmentExport(attachment.id, targetPath);
     snackbarText(t("database.canvas.attachment.exported"), "success");
   } catch (e) {
     snackbarErrorCode(e);
@@ -650,6 +661,7 @@ defineExpose({ open });
     <AttachmentPreviewDialog ref="previewDialogRef" />
     <ConfirmDialog ref="confirmDialogRef" />
   </VDialog>
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

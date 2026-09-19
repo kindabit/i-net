@@ -2,6 +2,7 @@ pub mod app_info;
 pub mod backup;
 pub mod clipboard;
 pub mod fatal_exit;
+pub mod file_system;
 pub mod metadata;
 pub mod preference;
 pub mod reclaim;

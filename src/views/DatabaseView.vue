@@ -25,6 +25,7 @@ import { LAST_SCENE_KEY } from "./Home.vue";
 import LogDialog from "./DatabaseComponents/LogDialog.vue";
 import ExportDialog from "./DatabaseComponents/ExportDialog.vue";
 import KeePass2Import from "@/components/migration/KeePass2Import.vue";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { loadDictionary, clearDictionary } from "@/dictionary";
 import {
@@ -42,6 +43,7 @@ const showCloseConfirm = ref(false);
 const logDialogRef = useTemplateRef<InstanceType<typeof LogDialog>>("logDialogRef");
 const exportDialogRef = useTemplateRef<InstanceType<typeof ExportDialog>>("exportDialogRef");
 const keepass2ImportRef = useTemplateRef<InstanceType<typeof KeePass2Import>>("keepass2ImportRef");
+const filePickerRef = useTemplateRef<InstanceType<typeof FilePickerDialog>>("filePickerRef");
 
 let unlistenClose: (() => void) | undefined;
 
@@ -134,13 +136,21 @@ async function handleSaveAndExit() {
   }
 }
 
-/** 导出数据库：弹出导出对话框收集模式，调用后端导出；取消静默返回，成功提示，失败展示错误 */
+/**
+ * 导出数据库：弹出导出对话框收集模式，再经前端文件选择器选择目标路径；
+ * 任一环节取消都静默返回，成功提示，失败展示错误。
+ */
 async function handleExport() {
   const mode = await exportDialogRef.value?.open();
   if (!mode) return;
   try {
-    const exported = await userDatabaseExport(mode);
-    if (!exported) return;
+    const targetPath = await filePickerRef.value?.open({
+      mode: "save",
+      title: t("database.export.button"),
+      defaultFileName: t("database.export.default-file-name"),
+    });
+    if (!targetPath) return;
+    await userDatabaseExport(mode, targetPath);
     snackbarText(t("database.export.exported"), "success");
   } catch (error) {
     snackbarErrorCode(error);
@@ -262,6 +272,7 @@ async function doClose() {
     <LogDialog ref="logDialogRef" />
     <ExportDialog ref="exportDialogRef" />
     <KeePass2Import ref="keepass2ImportRef" @success="onImportSuccess" />
+    <FilePickerDialog ref="filePickerRef" />
   </div>
 </template>
 

@@ -1,37 +1,29 @@
-//! `restore_probe` 命令：弹出文件对话框并做校验探测，不替换数据。
+//! `restore_probe` 命令：对前端文件选择器选定的备份文件做校验探测，不替换数据。
+//!
+//! 用户取消选择由前端文件选择器处理，命令本身不再涉及对话框交互。
 
-use tauri::AppHandle;
-use tauri_plugin_dialog::DialogExt;
+use std::path::PathBuf;
 
 use crate::business::backup::command::response::ProbeResult;
 use crate::business::backup::service;
 use crate::error_code::ErrorCode;
 
-/// 命令入口：弹出文件对话框并做校验探测，不替换数据。
+/// 命令入口：对前端文件选择器选定的备份文件做校验探测，不替换数据。
 ///
 /// # 参数
-/// - `app_handle`：Tauri 应用句柄（由 Tauri 自动注入）。
+/// - `source_path`：备份文件路径，由前端文件选择器提供。
 ///
 /// # 返回值
-/// - 用户取消对话框时返回 `Ok(None)`。
-/// - 校验完成时返回 `Ok(Some(ProbeResult))`。
-/// - 用户选择的路径无法转换为本地文件系统路径、或文件损坏不可读时返回对应的 `ErrorCode`。
+/// 校验完成时返回 `Ok(ProbeResult)`（`source_path` 回显入参路径）；
+/// 路径非法或文件损坏不可读时返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn backup_restore_probe(app_handle: AppHandle) -> Result<Option<ProbeResult>, ErrorCode> {
-    let target = match app_handle.dialog().file().blocking_pick_file() {
-        Some(p) => p.into_path().map_err(|e| ErrorCode::InvalidPath {
-            detail: format!(
-                "failed to convert selected file path to filesystem path: {}",
-                e
-            ),
-        })?,
-        None => return Ok(None),
-    };
+pub fn backup_restore_probe(source_path: String) -> Result<ProbeResult, ErrorCode> {
+    let target = PathBuf::from(source_path);
     let (recoverable, lost, recoverable_limit) = service::probe(&target)?;
-    Ok(Some(ProbeResult {
+    Ok(ProbeResult {
         recoverable,
         lost,
         recoverable_limit,
         source_path: target.to_string_lossy().to_string(),
-    }))
+    })
 }

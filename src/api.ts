@@ -10,6 +10,7 @@ import type {
   CanvasNodeColorEntry,
   DataNodeColorEntry,
   Dictionary,
+  DirectoryListingVO,
   Edge,
   ImportedEdgeVO,
   ImportedCanvasVO,
@@ -728,19 +729,27 @@ export async function userDatabaseTemplateSetFields(
 }
 
 /**
- * 导出模板数据：由后端弹出系统保存对话框，将 template、template_field、dictionary 数据导出到 SQLite 文件。
- * @returns 导出成功返回 true，用户取消返回 false
+ * 导出模板数据：将 template、template_field、dictionary 数据导出到指定 SQLite 文件。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
+ * @param targetPath 目标文件绝对路径
+ * @returns 无返回值
  */
-export async function userDatabaseTemplateExport(): Promise<boolean> {
-  return invoke<boolean>("user_database_template_export");
+export async function userDatabaseTemplateExport(
+  targetPath: string,
+): Promise<void> {
+  return invoke("user_database_template_export", { targetPath });
 }
 
 /**
- * 导入模板数据：由后端弹出系统文件选择对话框，读取 SQLite 文件并替换当前 template、template_field、dictionary 数据。
- * @returns 导入成功返回 true，用户取消返回 false
+ * 导入模板数据：读取指定 SQLite 文件并替换当前 template、template_field、dictionary 数据。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
+ * @param sourcePath 源文件绝对路径
+ * @returns 无返回值
  */
-export async function userDatabaseTemplateImport(): Promise<boolean> {
-  return invoke<boolean>("user_database_template_import");
+export async function userDatabaseTemplateImport(
+  sourcePath: string,
+): Promise<void> {
+  return invoke("user_database_template_import", { sourcePath });
 }
 
 // ==================== user_database / attachment ====================
@@ -762,15 +771,19 @@ export async function userDatabaseAttachmentCreate(
 }
 
 /**
- * 导入附件：由后端弹出系统文件选择对话框，将用户选中的文件加密后存为节点的附件。
+ * 导入附件：将指定源文件加密后存为节点的附件。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
  * @param nodeId 节点 id
- * @returns 新建附件的值对象；用户在系统对话框中取消选择时返回 null
+ * @param sourcePath 源文件绝对路径
+ * @returns 新建附件的值对象
  */
 export async function userDatabaseAttachmentImport(
   nodeId: string,
-): Promise<AttachmentVO | null> {
-  return invoke<AttachmentVO | null>("user_database_attachment_import", {
+  sourcePath: string,
+): Promise<AttachmentVO> {
+  return invoke<AttachmentVO>("user_database_attachment_import", {
     nodeId,
+    sourcePath,
   });
 }
 
@@ -804,14 +817,17 @@ export async function userDatabaseAttachmentLoad(
 }
 
 /**
- * 导出附件：由后端弹出系统保存对话框，将附件明文写入用户选择的目标文件。
+ * 导出附件：将附件明文写入指定的目标文件。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
  * @param id 附件 id
- * @returns 是否完成导出；用户在系统对话框中取消选择时返回 false
+ * @param targetPath 目标文件绝对路径
+ * @returns 无返回值
  */
 export async function userDatabaseAttachmentExport(
   id: string,
-): Promise<boolean> {
-  return invoke<boolean>("user_database_attachment_export", { id });
+  targetPath: string,
+): Promise<void> {
+  return invoke("user_database_attachment_export", { id, targetPath });
 }
 
 /**
@@ -915,30 +931,25 @@ export type UserDatabaseExportMode =
   | "include-values";
 
 /**
- * 导出整个用户数据库为 markdown 文件；由后端弹出系统保存对话框，用户在系统保存对话框中取消时返回 false。
+ * 导出整个用户数据库为 markdown 文件。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
  * 导出文件的固定文案语言取当前 i18n 语言（前端充当语言 gate）。
  * @param mode 字段导出模式
- * @returns 导出成功返回 true，用户取消返回 false
+ * @param targetPath 目标文件绝对路径
+ * @returns 无返回值
  */
 export async function userDatabaseExport(
   mode: UserDatabaseExportMode,
-): Promise<boolean> {
-  return invoke<boolean>("user_database_export_export", {
+  targetPath: string,
+): Promise<void> {
+  return invoke("user_database_export_export", {
     mode,
     locale: currentLocale.value,
+    targetPath,
   });
 }
 
 // ==================== user_database / migration ====================
-
-/**
- * 弹出系统文件选择对话框选择 KeePass2 数据库文件（.kdbx）；由后端弹出系统对话框，
- * 用户在系统对话框中取消时返回 null。
- * @returns 选中的文件路径，用户取消返回 null
- */
-export async function userDatabaseMigrationPickFile(): Promise<string | null> {
-  return invoke<string | null>("user_database_migration_pick_file");
-}
 
 /**
  * 读取文件的全部字节（用于前端解析 KeePass2 数据库文件），后端对内容不透明。
@@ -992,13 +1003,18 @@ export async function userDatabaseMigrationImportKeepass2Canvases(
 // ==================== backup ====================
 
 /**
- * 全量备份数据目录（除日志外）；由后端弹出系统保存对话框，用户在系统保存对话框中取消时返回 false。
+ * 全量备份数据目录（除日志外）到指定目标路径。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
  * 备份过程中会通过 Tauri Event 上报进度（事件名 "backup-progress"）。
  * @param redundancyRatio 冗余比例，范围 (0, 1)，如 0.05 表示增加 5% 体积
- * @returns 备份完成返回 true，用户取消系统对话框返回 false
+ * @param targetPath 目标文件绝对路径
+ * @returns 无返回值
  */
-export async function backupBackup(redundancyRatio: number): Promise<boolean> {
-  return invoke<boolean>("backup_backup", { redundancyRatio });
+export async function backupBackup(
+  redundancyRatio: number,
+  targetPath: string,
+): Promise<void> {
+  return invoke("backup_backup", { redundancyRatio, targetPath });
 }
 
 /**
@@ -1025,11 +1041,15 @@ export interface BackupProbeResult {
 }
 
 /**
- * 探测备份文件：弹文件对话框、校验 Header 与 shard SHA-256，但不替换数据。
- * @returns 用户取消返回 null；否则返回探测结果（含可继续使用的源路径）
+ * 探测指定备份文件：校验 Header 与 shard SHA-256，但不替换数据。
+ * 路径由前端文件选择器提供；用户取消选择由调用方处理。
+ * @param sourcePath 备份文件绝对路径
+ * @returns 探测结果（含可继续用于 `backupRestore` 的源路径）
  */
-export async function backupRestoreProbe(): Promise<BackupProbeResult | null> {
-  return invoke<BackupProbeResult | null>("backup_restore_probe");
+export async function backupRestoreProbe(
+  sourcePath: string,
+): Promise<BackupProbeResult> {
+  return invoke<BackupProbeResult>("backup_restore_probe", { sourcePath });
 }
 
 /**
@@ -1071,6 +1091,36 @@ export async function reclaimUserDatabase(): Promise<void> {
  */
 export async function fatalExit(detail: string): Promise<void> {
   await invoke("fatal_exit", { detail });
+}
+
+// ==================== file_system ====================
+
+/**
+ * 读取指定目录的内容。
+ * @param path 目录路径；null 表示用户主目录
+ * @returns 目录清单（含当前路径、父路径与条目列表）
+ */
+export async function fileSystemListDirectory(
+  path: string | null,
+): Promise<DirectoryListingVO> {
+  return invoke<DirectoryListingVO>("file_system_list_directory", { path });
+}
+
+/**
+ * 查询文件系统根路径列表。
+ * @returns 根路径列表（Windows 为盘符根，POSIX 为 "/"）
+ */
+export async function fileSystemRoots(): Promise<string[]> {
+  return invoke<string[]>("file_system_roots");
+}
+
+/**
+ * 判断指定路径是否存在。
+ * @param path 待判断的路径
+ * @returns 路径存在时返回 true
+ */
+export async function fileSystemPathExists(path: string): Promise<boolean> {
+  return invoke<boolean>("file_system_path_exists", { path });
 }
 
 // ==================== app_info ====================

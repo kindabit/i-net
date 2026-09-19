@@ -3,9 +3,7 @@
 //!
 //! 启动阶段前端尚未就绪，错误无法经由 invoke 到达前端的受控崩溃通道
 //! （use-fatal-error / FatalErrorDialog / fatal_exit），也无法从前端获取语言偏好，
-//! 因此本模块向 i18n 模块传入 `None` 以取系统语言的提示文本，并直接使用 rfd 的
-//! 阻塞式原生对话框（tauri-plugin-dialog 的对话框派发依赖事件循环，setup 阶段
-//! 事件循环尚未启动，不可用）。
+//! 因此本模块向 i18n 模块传入 `None` 以取系统语言的提示文本，并直接使用 rfd 的阻塞式原生对话框。
 
 use crate::common::data_version::entity::DataVersion;
 use crate::error_code::ErrorCode;

@@ -297,3 +297,23 @@ export interface AttachmentVO {
   /** 附件文件是否丢失（元数据存在但附件目录中没有对应文件） */
   missing_file: boolean;
 }
+
+/** 目录内的单个条目。 */
+export interface DirectoryEntryVO {
+  /** 条目名称 */
+  name: string;
+  /** 条目的完整路径 */
+  path: string;
+  /** 是否为目录 */
+  is_directory: boolean;
+}
+
+/** 一次目录读取的结果。 */
+export interface DirectoryListingVO {
+  /** 当前目录的完整路径 */
+  path: string;
+  /** 父目录的完整路径；当前为根目录时为 null */
+  parent: string | null;
+  /** 目录内的条目列表（目录优先、名称升序） */
+  entries: DirectoryEntryVO[];
+}

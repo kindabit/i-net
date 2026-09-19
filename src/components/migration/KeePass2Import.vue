@@ -20,7 +20,6 @@ import {
   userDatabaseCanvasList,
   userDatabaseMigrationImportKeepass2,
   userDatabaseMigrationImportKeepass2Canvases,
-  userDatabaseMigrationPickFile,
   userDatabaseMigrationReadFile,
   userDatabaseNodeList,
 } from "@/api";
@@ -28,6 +27,7 @@ import type { ImportedCanvasVO } from "@/api-types";
 import type { ImportedTree } from "@/migration/keepass2";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { triggerFatalError } from "@/composables/use-fatal-error";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 import PasswordField from "@/components/PasswordField.vue";
 import {
   layoutImportedCanvases,
@@ -54,10 +54,10 @@ const importMode = ref<"single" | "canvases">("single");
 const fileError = ref("");
 /** 密码校验错误文案 */
 const passwordError = ref("");
-/** 文件选择进行中（系统对话框打开期间） */
-const picking = ref(false);
 /** 导入进行中 */
 const importing = ref(false);
+/** 文件选择器对话框引用 */
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 
 /**
  * 打开对话框并重置表单状态（文件路径空、密码空、导入方式单画布、校验错误清空）。
@@ -68,7 +68,6 @@ function open() {
   importMode.value = "single";
   fileError.value = "";
   passwordError.value = "";
-  picking.value = false;
   importing.value = false;
   dialog.value = true;
 }
@@ -79,21 +78,18 @@ watch(masterPassword, () => {
 });
 
 /**
- * 触发"选择文件"按钮：调后端弹出系统文件选择对话框；
- * 用户在系统对话框中取消时保持原状，选中时回填路径并清除路径校验错误。
+ * 触发"选择文件"按钮：由前端文件选择器选择 KeePass2 数据库文件（.kdbx）；
+ * 用户取消选择时保持原状，选中时回填路径并清除路径校验错误。
  */
 async function pickFile() {
-  picking.value = true;
-  try {
-    const picked = await userDatabaseMigrationPickFile();
-    if (picked === null) return;
-    filePath.value = picked;
-    fileError.value = "";
-  } catch (error) {
-    snackbarErrorCode(error);
-  } finally {
-    picking.value = false;
-  }
+  const picked = await filePickerRef.value?.open({
+    mode: "open",
+    title: t("database.migration.pick-file"),
+    extensions: ["kdbx"],
+  });
+  if (!picked) return;
+  filePath.value = picked;
+  fileError.value = "";
 }
 
 /**
@@ -175,7 +171,7 @@ async function importSingleCanvas(
   // 画布名取文件名 stem
   const canvasName = fileNameStem(filePath.value);
   if (canvasName === "") {
-    // 防御分支：文件路径不含文件名（理论上后端文件选择对话框不会返回这种路径），
+    // 防御分支：文件路径不含文件名（理论上前端文件选择器不会返回这种路径），
     // 无法推导画布名，按无效文件提示并保持对话框打开供用户重选。
     snackbarText(t("database.migration.invalid-file"), "error");
     return null;
@@ -236,7 +232,7 @@ async function importCanvases(
   // 顶层画布名取文件名 stem
   const canvasName = fileNameStem(filePath.value);
   if (canvasName === "") {
-    // 防御分支：文件路径不含文件名（理论上后端文件选择对话框不会返回这种路径），
+    // 防御分支：文件路径不含文件名（理论上前端文件选择器不会返回这种路径），
     // 无法推导画布名，按无效文件提示并保持对话框打开供用户重选。
     snackbarText(t("database.migration.invalid-file"), "error");
     return null;
@@ -329,7 +325,6 @@ defineExpose({ open });
               <VBtn
                 variant="text"
                 size="small"
-                :loading="picking"
                 @click="pickFile"
               >
                 {{ t("database.migration.pick-file") }}
@@ -374,6 +369,7 @@ defineExpose({ open });
       </VCardActions>
     </VCard>
   </VDialog>
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

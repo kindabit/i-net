@@ -13,6 +13,7 @@
       "mode-mask-values-hint": "Export field names and types; field values will be masked",
       "mode-include-values": "Include Fields and Values",
       "mode-include-values-hint": "Fully export all fields with plaintext values",
+      "default-file-name": "user_database.md",
       "exported": "Database exported"
     },
     "migration": {

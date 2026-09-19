@@ -15,6 +15,7 @@ import type { AttachmentVO } from "@/api-types";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { viewerTypeOf, type AttachmentViewerType } from "./attachment-types";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 
 /** 各查看器类型对应的异步组件加载器（动态 import，按需分包） */
 const VIEWER_LOADERS: Record<AttachmentViewerType, () => Promise<Component>> = {
@@ -44,6 +45,8 @@ const viewerComponent = computed(() =>
 
 /** 通用确认对话框引用（文本查看器未保存修改的关闭确认） */
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
+/** 文件选择器对话框引用 */
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 /** 当前查看器组件实例；仅文本查看器暴露 hasUnsavedChanges()，供关闭前查询未保存状态 */
 const viewerRef = ref<{ hasUnsavedChanges?: () => boolean } | null>(null);
 
@@ -80,16 +83,21 @@ async function loadContent(id: string): Promise<void> {
 }
 
 /**
- * 导出当前附件：由后端弹出系统保存对话框，导出成功后提示；取消选择静默返回。
+ * 导出当前附件：由前端文件选择器选择目标路径，导出成功后提示；用户取消选择静默返回。
  * 无输入参数，无返回值。
  */
 async function exportCurrent(): Promise<void> {
   const current = attachment.value;
   if (!current) return;
+  const targetPath = await filePickerRef.value?.open({
+    mode: "save",
+    title: t("database.canvas.attachment.export"),
+    defaultFileName: current.file_name,
+  });
+  if (!targetPath) return;
   exporting.value = true;
   try {
-    const exported = await userDatabaseAttachmentExport(current.id);
-    if (!exported) return;
+    await userDatabaseAttachmentExport(current.id, targetPath);
     snackbarText(t("database.canvas.attachment.exported"), "success");
   } catch (e) {
     snackbarErrorCode(e);
@@ -173,6 +181,7 @@ defineExpose({ open });
     </VCard>
   </VDialog>
   <ConfirmDialog ref="confirmDialogRef" />
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

@@ -82,7 +82,8 @@ export default defineConfig(async ({ mode }) => {
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       // 4. onlyoffice 套件/构建产物均在 packages/ 与 public/ 下，源码不引用，无需监视（数千文件）
-      ignored: ["**/src-tauri/**", "**/packages/**", "**/public/**"],
+      // 5. .temp 为临时文件目录（脚本、测试产物等），其内容变化不应触发页面重载
+      ignored: ["**/src-tauri/**", "**/packages/**", "**/public/**", "**/.temp/**"],
     },
   },
   };

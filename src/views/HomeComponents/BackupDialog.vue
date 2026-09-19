@@ -4,7 +4,7 @@
   流程：
   1. 打开时异步查询当前数据目录大小。
   2. 用户调整冗余比例（默认 5%），实时显示预估备份大小。
-  3. 点击"开始备份"调用后端命令，后端弹出系统保存对话框。
+  3. 点击"开始备份"后由前端文件选择器选择目标路径，确认后调用后端命令。
   4. 备份过程中通过 "backup-progress" 事件更新进度条与阶段文案。
   5. 完成后 snackbar 提示并自动关闭对话框。
 -->
@@ -17,11 +17,13 @@ import {
 } from "@/api";
 import { snackbarErrorCode, snackbarText } from "@/composables/use-snackbar";
 import { useBackupProgress } from "@/composables/use-backup-progress";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 
 const dialog = ref(false);
 const dataSize = ref<number | null>(null);
 const redundancyRatio = ref(0.05);
 const backing = ref(false);
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 
 const {
   phase: progressPhase,
@@ -89,20 +91,23 @@ function close() {
 defineExpose({ open, close });
 
 /**
- * 触发后端备份命令；用户取消系统对话框时不视为错误。
+ * 触发备份：先由前端文件选择器选择目标路径，用户取消时静默返回；
+ * 确认路径后调用后端备份命令。
  *
  * 不监听进度事件做收尾：invoke 返回即意味着后端已走完整流程；
  * 进度事件只用于进度条展示。
  */
 async function start() {
+  const targetPath = await filePickerRef.value?.open({
+    mode: "save",
+    title: t("home.backup.title"),
+    defaultFileName: "backup.ibackup",
+  });
+  if (!targetPath) return;
   backing.value = true;
   try {
-    const saved = await backupBackup(redundancyRatio.value);
-    if (saved) {
-      snackbarText(t("home.backup.success"), "success");
-    } else {
-      snackbarText(t("home.backup.cancelled"), "info");
-    }
+    await backupBackup(redundancyRatio.value, targetPath);
+    snackbarText(t("home.backup.success"), "success");
   } catch (error) {
     snackbarErrorCode(error);
   } finally {
@@ -168,6 +173,7 @@ async function start() {
       </VCardActions>
     </VCard>
   </VDialog>
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

@@ -83,6 +83,8 @@ pub enum ErrorCode {
     FailToDeserializeAction,
     /// 反序列化数据库失败，包含详细错误信息，仅限 connection 业务模块使用。
     FailToDeserializeDatabase { detail: String },
+    /// 无法确定当前用户的主目录，包含详细错误信息。
+    FailToDetermineHomeDirectory { detail: String },
     /// 打开数据库连接失败，包含详细错误信息，仅限 connection 业务模块使用。
     FailToOpenConnection { detail: String },
     /// 序列化日志行为失败。
@@ -139,8 +141,6 @@ pub enum ErrorCode {
     InvalidNodeId { id: String },
     /// 节点连接桩无效，包含连接桩。
     InvalidHandle { handle: String },
-    /// 用户在系统对话框中选择的路径无法转换为本地文件系统路径，包含详细错误信息。
-    InvalidPath { detail: String },
     /// 影子节点的连线方向不合法。
     InvalidShadowEdge,
     /// 模板 id 无效，包含模板 id。

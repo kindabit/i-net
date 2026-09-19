@@ -17,6 +17,7 @@ import { useTemplateFieldList } from "@/composables/use-template-field-list";
 import TemplateField from "@/components/TemplateField.vue";
 import NameInputDialog from "@/components/NameInputDialog.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 
 const dialog = ref(false);
 const templates = ref<Template[]>([]);
@@ -30,6 +31,7 @@ const confirmingClose = ref(false);
 const fieldList = useTemplateFieldList();
 const nameInputDialogRef = ref<InstanceType<typeof NameInputDialog>>();
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>();
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 
 const selectedTemplate = computed(() =>
   templates.value.find((t) => t.id === selectedId.value),
@@ -167,13 +169,19 @@ async function refreshTemplates() {
 }
 
 /**
- * 导出模板数据：由后端弹出系统保存对话框，导出成功后提示；取消静默返回。
+ * 导出模板数据：先由前端文件选择器选择目标路径，用户取消时静默返回；
+ * 导出成功后提示。
  * 无输入参数，无返回值。
  */
 async function onExport(): Promise<void> {
+  const targetPath = await filePickerRef.value?.open({
+    mode: "save",
+    title: t("database.canvas.export-templates"),
+    defaultFileName: "templates.sqlite",
+  });
+  if (!targetPath) return;
   try {
-    const exported = await userDatabaseTemplateExport();
-    if (!exported) return;
+    await userDatabaseTemplateExport(targetPath);
     snackbarText(t("database.canvas.templates-exported"), "success");
   } catch (e) {
     snackbarErrorCode(e);
@@ -181,7 +189,7 @@ async function onExport(): Promise<void> {
 }
 
 /**
- * 导入模板数据：需用户确认后，由后端弹出系统文件选择对话框，导入成功后刷新并提示；取消静默返回。
+ * 导入模板数据：需用户确认后，由前端文件选择器选择源文件，导入成功后刷新并提示；取消静默返回。
  * 无输入参数，无返回值。
  */
 async function onImport(): Promise<void> {
@@ -191,9 +199,13 @@ async function onImport(): Promise<void> {
     confirmColor: "warning",
   });
   if (!confirmed) return;
+  const sourcePath = await filePickerRef.value?.open({
+    mode: "open",
+    title: t("database.canvas.import-templates"),
+  });
+  if (!sourcePath) return;
   try {
-    const imported = await userDatabaseTemplateImport();
-    if (!imported) return;
+    await userDatabaseTemplateImport(sourcePath);
     snackbarText(t("database.canvas.templates-imported"), "success");
     selectedId.value = null;
     await loadData();
@@ -346,6 +358,7 @@ defineExpose({ open });
     <NameInputDialog ref="nameInputDialogRef" />
     <ConfirmDialog ref="confirmDialogRef" />
   </VDialog>
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

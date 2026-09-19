@@ -49,8 +49,7 @@
       "phase-backup-pack": "Packing data directory",
       "phase-backup-encode": "Generating parity data",
       "phase-backup-write": "Writing backup file",
-      "success": "Backup saved",
-      "cancelled": "Save cancelled"
+      "success": "Backup saved"
     },
     "restore": {
       "title": "Restore Data Directory",

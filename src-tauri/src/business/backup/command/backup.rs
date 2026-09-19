@@ -1,11 +1,10 @@
-//! `backup` 命令：弹出系统保存对话框让用户选择目标文件，然后交给 [`preprocess`] 完成校验与打包。
+//! `backup` 命令：目标路径由前端文件选择器提供，交给 [`preprocess`] 完成校验与打包。
 //!
-//! 流程：command 仅负责与 Tauri 交互（弹保存对话框、判断用户取消、
-//! 把 [`AppHandle`] 包装成进度回调闭包）；选定路径后调用 [`preprocess`]，
-//! 由它校验参数、补齐扩展名并调用 [`service::pack`]。
+//! 流程：command 仅负责把 [`AppHandle`] 包装成进度回调闭包，
+//! 并调用 [`preprocess`]，由它校验参数、补齐扩展名并调用 [`service::pack`]。
 //! preprocess 与 service 不依赖任何 Tauri 类型。
 //!
-//! 用户在系统保存对话框中选择的路径若无 `.ibackup` 扩展名，会自动补上；
+//! 用户选定的目标路径若无 `.ibackup` 扩展名，会自动补上；
 //! 这是为了与 [`restore`] 端的校验（依赖 `IBACKUP\0` magic）保持一致，
 //! 同时让用户在文件管理器里能直观识别备份文件。
 //!
@@ -15,7 +14,6 @@
 use std::path::PathBuf;
 
 use tauri::AppHandle;
-use tauri_plugin_dialog::DialogExt;
 
 use crate::business::backup::command::progress::{progress_emitter, BACKUP_PROGRESS_EVENT};
 use crate::business::backup::progress::Phase;
@@ -25,36 +23,26 @@ use crate::error_code::ErrorCode;
 /// 备份文件扩展名。
 const BACKUP_EXTENSION: &str = "ibackup";
 
-/// 命令入口：仅与 Tauri 交互 —— 弹出系统保存对话框让用户选择目标文件，
-/// 用户取消时直接返回 `Ok(false)`；否则把 Tauri 的 [`tauri_plugin_dialog::FilePath`]
-/// 转换为本地文件系统 [`PathBuf`]，并把 [`AppHandle`] 包装成进度回调闭包，
-/// 一并交给 [`preprocess`]。
+/// 命令入口：把 [`AppHandle`] 包装成进度回调闭包，
+/// 连同前端文件选择器提供的目标路径一并交给 [`preprocess`]。
 ///
 /// # 参数
 /// - `app_handle`：Tauri 应用句柄（由 Tauri 自动注入）。
 /// - `redundancy_ratio`：冗余比例，范围 `(0, 1)`。
+/// - `target_path`：目标文件路径，由前端文件选择器提供。
 ///
 /// # 返回值
-/// - 用户取消对话框时返回 `Ok(false)`。
-/// - 备份完成时返回 `Ok(true)`。
-/// - 任意错误返回对应的 `ErrorCode`。
+/// 备份完成时返回 `Ok(())`；任意错误返回对应的 `ErrorCode`。
 #[tauri::command]
-pub fn backup_backup(app_handle: AppHandle, redundancy_ratio: f32) -> Result<bool, ErrorCode> {
-    let target_path = app_handle.dialog().file().blocking_save_file();
-    match target_path {
-        Some(path) => {
-            let path = path.into_path().map_err(|e| ErrorCode::InvalidPath {
-                detail: format!(
-                    "failed to convert selected file path to filesystem path: {}",
-                    e
-                ),
-            })?;
-            let on_progress = progress_emitter(&app_handle, BACKUP_PROGRESS_EVENT);
-            preprocess(redundancy_ratio, path, &on_progress)?;
-            Ok(true)
-        }
-        None => Ok(false),
-    }
+pub fn backup_backup(
+    app_handle: AppHandle,
+    redundancy_ratio: f32,
+    target_path: String,
+) -> Result<(), ErrorCode> {
+    let target_path = PathBuf::from(target_path);
+    let on_progress = progress_emitter(&app_handle, BACKUP_PROGRESS_EVENT);
+    preprocess(redundancy_ratio, target_path, &on_progress)?;
+    Ok(())
 }
 
 /// `backup` 命令的 preprocess 函数：校验冗余比例、拒绝位于应用数据目录内的目标路径、
@@ -62,7 +50,7 @@ pub fn backup_backup(app_handle: AppHandle, redundancy_ratio: f32) -> Result<boo
 ///
 /// # 参数
 /// - `redundancy_ratio`：冗余比例，范围 `(0, 1)`。
-/// - `target_path`：用户在保存对话框中选定的目标文件路径。
+/// - `target_path`：用户选定的目标文件路径。
 /// - `on_progress`：进度回调，透传给 [`service::pack`] 上报备份进度。
 ///
 /// # 返回值

@@ -2,7 +2,7 @@
   数据目录还原对话框。
 
   流程：
-  1. 用户点击"选择备份文件"，后端弹出系统打开对话框，做 header + shard 校验。
+  1. 用户点击"选择备份文件"，前端弹出文件选择器，后端做 header + shard 校验。
   2. 校验通过 → 显示校验结论 + "确认还原"按钮。
   3. 校验不通过 → 显示不可还原结论，"确认还原"按钮禁用。
   4. 用户点击"确认还原" → 后端执行完整还原流程。
@@ -18,6 +18,7 @@ import {
 } from "@/api";
 import { snackbarErrorCode } from "@/composables/use-snackbar";
 import { useBackupProgress } from "@/composables/use-backup-progress";
+import FilePickerDialog from "@/components/FilePickerDialog.vue";
 
 const emit = defineEmits<{
   /** 还原成功后通知父组件弹出"还原成功"对话框 */
@@ -29,6 +30,8 @@ const dialog = ref(false);
 const probeResult = ref<BackupProbeResult | null>(null);
 /** 是否处于还原流程中（用于禁用按钮与显示进度）。 */
 const restoring = ref(false);
+/** 文件选择器实例：负责选择备份文件路径。 */
+const filePickerRef = ref<InstanceType<typeof FilePickerDialog>>();
 
 const { phase: progressPhase, progress: progressValue } = useBackupProgress(
   "restore-progress",
@@ -83,12 +86,18 @@ function open() {
 }
 
 /**
- * 触发"选择备份文件"按钮：调 `restoreProbe` 让后端弹对话框并做校验。
+ * 触发"选择备份文件"按钮：先由前端文件选择器选择备份文件，用户取消时静默返回；
+ * 确认路径后调 `restoreProbe` 做校验。
  */
 async function pickAndProbe() {
+  const sourcePath = await filePickerRef.value?.open({
+    mode: "open",
+    title: t("home.restore.select-file"),
+    extensions: ["ibackup"],
+  });
+  if (!sourcePath) return;
   try {
-    const result = await backupRestoreProbe();
-    if (!result) return; // 用户在系统对话框中取消
+    const result = await backupRestoreProbe(sourcePath);
     probeResult.value = result;
   } catch (error) {
     snackbarErrorCode(error);
@@ -165,6 +174,7 @@ defineExpose({ open, close });
       </VCardActions>
     </VCard>
   </VDialog>
+  <FilePickerDialog ref="filePickerRef" />
 </template>
 
 <style lang="scss" scoped>

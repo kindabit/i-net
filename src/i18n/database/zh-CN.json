@@ -13,6 +13,7 @@
       "mode-mask-values-hint": "导出字段名和字段类型，字段值将被打码",
       "mode-include-values": "包含字段且包含字段值",
       "mode-include-values-hint": "完整导出所有字段，字段值为明文",
+      "default-file-name": "用户数据库.md",
       "exported": "数据库已导出"
     },
     "migration": {

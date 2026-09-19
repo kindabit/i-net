@@ -107,7 +107,6 @@ fn initialize_logging(log_directory: &std::path::Path) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(argv: argv::ArgV) {
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             business::app_info::app_info_get,
@@ -115,6 +114,9 @@ pub fn run(argv: argv::ArgV) {
             business::backup::command::restore::backup_restore,
             business::backup::command::restore_probe::backup_restore_probe,
             business::backup::command::data_directory_size::backup_data_directory_size,
+            business::file_system::command::list_directory::file_system_list_directory,
+            business::file_system::command::roots::file_system_roots,
+            business::file_system::command::path_exists::file_system_path_exists,
             business::reclaim::command::metadata::reclaim_metadata,
             business::reclaim::command::preference::reclaim_preference,
             business::reclaim::command::user_database::reclaim_user_database,
@@ -164,7 +166,6 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::log::command::list::user_database_log_list,
             business::user_database::migration::command::import_keepass2::user_database_migration_import_keepass2,
             business::user_database::migration::command::import_keepass2_canvases::user_database_migration_import_keepass2_canvases,
-            business::user_database::migration::command::pick_file::user_database_migration_pick_file,
             business::user_database::migration::command::read_file::user_database_migration_read_file,
             business::user_database::node::command::create::user_database_node_create,
             business::user_database::node::command::copy::user_database_node_copy,
