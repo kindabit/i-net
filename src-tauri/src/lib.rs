@@ -10,6 +10,11 @@ mod state;
 mod test;
 mod util;
 
+// 调试自动化模块仅在 debug 构建并显式启用 feature 时参与编译，
+// release 构建即使误带 feature 也会被 debug_assertions 门禁排除。
+#[cfg(all(feature = "debug-automation", debug_assertions))]
+mod debug_automation;
+
 /// 初始化应用程序数据目录，并返回相关路径信息。
 ///
 /// # 参数
@@ -206,6 +211,11 @@ pub fn run(argv: argv::ArgV) {
             }
             if let Err(error) = business::metadata::service::initialize() {
                 startup_error::abort(startup_error::Database::Metadata, &error);
+            }
+            // 调试自动化服务只监听回环地址，启动失败仅记录日志，不影响应用启动。
+            #[cfg(all(feature = "debug-automation", debug_assertions))]
+            if let Err(error) = debug_automation::initialize(_app.handle().clone()) {
+                tracing::error!("failed to initialize the debug automation server: {error}");
             }
             Ok(())
         })

@@ -15,7 +15,10 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev --features debug-automation",
+    "tauri:build:debug": "tauri build --debug --no-bundle --features debug-automation",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

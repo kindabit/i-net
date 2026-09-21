@@ -19,6 +19,17 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = ["isolation"] }
 
+[features]
+# 仅供调试构建使用的 LLM 自动化 HTTP 服务器。每条代码路径都额外受
+# `debug_assertions` 门控，因此发布构建即使误带该 feature 也绝不会包含本模块。
+# 通过 `tauri:dev` 包脚本启用。
+debug-automation = [
+    "dep:axum",
+    "dep:enigo",
+    "dep:image",
+    "dep:windows",
+]
+
 [dependencies]
 tauri = { version = "2", features = ["isolation"] }
 tauri-plugin-opener = "2"
@@ -29,7 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 directories = "6"
 sys-locale = "0.3"
-tokio = { version = "1", features = ["fs"] }
+tokio = { version = "1", features = ["fs", "net", "rt-multi-thread", "macros", "sync", "time"] }
 aes-gcm-siv = "0.12.0-rc.3"
 sha2 = "0.11"
 sysinfo = "0.39.2"
@@ -53,5 +64,23 @@ reed-solomon-erasure = "6"
 tar = "0.4"
 walkdir = "2"
 sea-query = { version = "1", default-features = false, features = ["backend-sqlite", "derive"] }
+
+# 以下依赖仅用于服务仅调试构建可用的 `debug-automation` feature。
+# 自动化 API 的 HTTP 服务器（Tokio 项目，维护活跃）。
+axum = { version = "0.8", optional = true }
+# 操作系统级输入模拟（Windows 上使用 SendInput）；使原生 HTML5 拖放能够启动。
+enigo = { version = "0.6", optional = true }
+# 捕获窗口帧的 PNG 编码。
+image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
+# 窗口几何 shim（窗口矩形、客户区原点、逐窗口 DPI）。
+windows = { version = "0.62", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_Xps",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
