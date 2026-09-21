@@ -92,6 +92,9 @@ useMenuDismiss(extensionMenuOpen, ".field-extension-popper, .tree-select-popper"
 /** 字段名是否处于编辑态。 */
 const editingName = ref(false);
 
+/** 本次字段名编辑是否已被 Esc 取消；取消后的 blur 不得提交草稿。 */
+let cancelRequested = false;
+
 /** 字段名编辑草稿，进入编辑态时以 row.name 初始化；提交时才写回 row.name。 */
 const nameDraft = ref("");
 
@@ -142,6 +145,7 @@ function onFieldTypeChange(newType: string): void {
  */
 async function startNameEdit(): Promise<void> {
   if (props.readonly) return;
+  cancelRequested = false;
   nameDraft.value = props.row.name;
   editingName.value = true;
   await nextTick();
@@ -150,17 +154,29 @@ async function startNameEdit(): Promise<void> {
 }
 
 /**
- * 失焦提交字段名：以草稿 trim 后的结果写回行模型并退出编辑态。
+ * 失焦提交字段名：以草稿 trim 后的结果写回行模型并退出编辑态；
+ * 取消标记置位时忽略该次失焦，不写回行模型。
  */
 function commitNameEdit(): void {
+  if (cancelRequested) {
+    cancelRequested = false;
+    return;
+  }
   props.row.name = nameDraft.value.trim();
   editingName.value = false;
 }
 
 /**
- * 取消字段名编辑：不写回行模型，直接退出编辑态。
+ * 按下 Esc 取消字段名编辑：标记本次编辑已取消并退出编辑态，不写回行模型。
+ * IME 组合期间直接返回，把 Esc 交给输入法处理；否则阻止默认行为与冒泡，
+ * 避免持久对话框响应 Escape 产生抖动动画。
+ * @param event 键盘事件
  */
-function cancelNameEdit(): void {
+function cancelNameEdit(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  event.preventDefault();
+  event.stopPropagation();
+  cancelRequested = true;
   editingName.value = false;
 }
 
@@ -219,7 +235,7 @@ function submitNameEditOnEnter(event: KeyboardEvent): void {
             :class="{ 'field-name-edit--error': ownError?.highlight === 'name' }"
             @blur="commitNameEdit"
             @keyup.enter="submitNameEditOnEnter"
-            @keyup.esc="cancelNameEdit"
+            @keydown.esc="cancelNameEdit"
           />
           <VSpacer />
           <VMenu
