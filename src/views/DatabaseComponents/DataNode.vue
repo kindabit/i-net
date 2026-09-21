@@ -251,6 +251,7 @@ async function onShadowVirtualEdgeClick() {
       v-if="data.shadowDirection"
       class="shadow-virtual-edge"
       :class="`shadow-virtual-edge--${data.shadowDirection}`"
+      role="button"
       :title="t(`database.canvas.shadow-${data.shadowDirection}-hint`)"
       @click.stop="onShadowVirtualEdgeClick"
       @pointerdown.stop

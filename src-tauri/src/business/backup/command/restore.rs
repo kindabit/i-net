@@ -18,13 +18,15 @@ use crate::util::preprocess_util;
 /// 命令入口：接收 IPC 参数（备份文件路径），把 [`AppHandle`] 包装成进度回调闭包，
 /// 转发给 [`preprocess`]。
 ///
+/// 命令异步执行，避免还原期间长时间阻塞窗口事件循环。
+///
 /// # 参数
 /// - `app_handle`：Tauri 应用句柄（由 Tauri 自动注入）。
 /// - `source_path`：备份文件的绝对路径（来自前端 `restore_probe` 选择的文件）。
 ///
 /// # 返回值
 /// 还原完成时返回 `Ok(())`；任意错误返回对应的 `ErrorCode`。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_restore(app_handle: AppHandle, source_path: String) -> Result<(), ErrorCode> {
     let on_progress = progress_emitter(&app_handle, RESTORE_PROGRESS_EVENT);
     preprocess(source_path, &on_progress)

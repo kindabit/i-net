@@ -26,6 +26,8 @@ const BACKUP_EXTENSION: &str = "ibackup";
 /// 命令入口：把 [`AppHandle`] 包装成进度回调闭包，
 /// 连同前端文件选择器提供的目标路径一并交给 [`preprocess`]。
 ///
+/// 命令异步执行，避免备份期间长时间阻塞窗口事件循环。
+///
 /// # 参数
 /// - `app_handle`：Tauri 应用句柄（由 Tauri 自动注入）。
 /// - `redundancy_ratio`：冗余比例，范围 `(0, 1)`。
@@ -33,7 +35,7 @@ const BACKUP_EXTENSION: &str = "ibackup";
 ///
 /// # 返回值
 /// 备份完成时返回 `Ok(())`；任意错误返回对应的 `ErrorCode`。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_backup(
     app_handle: AppHandle,
     redundancy_ratio: f32,

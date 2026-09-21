@@ -196,6 +196,7 @@ defineExpose({ open });
                 v-for="field in NODE_FIELDS"
                 :key="'light-' + field.key"
                 :label="t(field.labelKey)"
+                :swatch-aria-label="t('database.color-dialog.section-light') + ' ' + t(field.labelKey)"
                 v-model="draft.light[field.key]"
                 @reset="delete draft.light[field.key]"
               />
@@ -208,6 +209,7 @@ defineExpose({ open });
                 v-for="field in NODE_FIELDS"
                 :key="'dark-' + field.key"
                 :label="t(field.labelKey)"
+                :swatch-aria-label="t('database.color-dialog.section-dark') + ' ' + t(field.labelKey)"
                 v-model="draft.dark[field.key]"
                 @reset="delete draft.dark[field.key]"
               />

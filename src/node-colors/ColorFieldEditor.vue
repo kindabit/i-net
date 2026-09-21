@@ -4,6 +4,7 @@
   由标签、色块按钮、颜色选择器菜单、清除按钮和 hex 文本组成。
   色块展示当前颜色（modelValue 缺失时展示默认态斜线纹），点击弹出 VColorPicker，
   清除按钮触发 reset 事件（由父组件将该颜色键恢复为默认，即置为缺失）。
+  色块以按钮语义对外暴露，其可访问名称可经 swatchAriaLabel 传入带主题语境的文案。
 -->
 <script setup lang="ts">
 import { ref, computed } from "vue";
@@ -15,6 +16,8 @@ const props = defineProps<{
   label: string;
   /** 当前颜色值（缺失表示默认态） */
   modelValue?: string;
+  /** 色块按钮的无障碍名称；缺省时回退为 label。 */
+  swatchAriaLabel?: string;
 }>();
 
 const emit = defineEmits<{
@@ -53,6 +56,8 @@ const hexText = computed(() => (isDefault.value ? "—" : props.modelValue));
           class="color-field-editor__swatch"
           :class="{ 'color-field-editor__swatch--default': isDefault }"
           :style="{ backgroundColor: modelValue }"
+          role="button"
+          :aria-label="swatchAriaLabel ?? label"
           v-bind="activatorProps"
         />
       </template>

@@ -4,6 +4,7 @@
   以对角三角分割方式同时展示亮色与暗色两个颜色值，用于预设和历史记录的快速视觉辨识。
   左上三角为亮色主题色，右下三角为暗色主题色；对应主题色缺失（使用默认值）时该三角显示默认斜线纹。
   可选 tooltip 展示详细信息，文本中的换行符会被真实渲染为多行。
+  色块以按钮语义对外暴露，可访问名称取自 tooltip 文案。
 -->
 <script setup lang="ts">
 withDefaults(
@@ -24,7 +25,13 @@ const emit = defineEmits<{ click: [] }>();
 <template>
   <VTooltip :disabled="!tooltip" location="top">
     <template #activator="{ props: activatorProps }">
-      <div class="color-pair-swatch" v-bind="activatorProps" @click="emit('click')">
+      <div
+        class="color-pair-swatch"
+        role="button"
+        :aria-label="tooltip || undefined"
+        v-bind="activatorProps"
+        @click="emit('click')"
+      >
         <div
           class="color-pair-swatch__top-left"
           :class="{ 'color-pair-swatch__triangle--default': lightColor === undefined }"

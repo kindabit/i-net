@@ -6,7 +6,9 @@ use crate::error_code::ErrorCode;
 use crate::state::path;
 
 /// 提供给前端的"当前数据目录大小"查询入口。
-#[tauri::command]
+///
+/// 命令异步执行，避免统计大量文件时长时间占用窗口事件循环。
+#[tauri::command(async)]
 pub fn backup_data_directory_size() -> Result<u64, ErrorCode> {
     service::data_directory_size(&path().data_directory)
 }

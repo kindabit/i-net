@@ -10,13 +10,15 @@ use crate::error_code::ErrorCode;
 
 /// 命令入口：对前端文件选择器选定的备份文件做校验探测，不替换数据。
 ///
+/// 命令异步执行，避免探测大型备份文件时长时间阻塞窗口事件循环。
+///
 /// # 参数
 /// - `source_path`：备份文件路径，由前端文件选择器提供。
 ///
 /// # 返回值
 /// 校验完成时返回 `Ok(ProbeResult)`（`source_path` 回显入参路径）；
 /// 路径非法或文件损坏不可读时返回对应的 `ErrorCode`。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_restore_probe(source_path: String) -> Result<ProbeResult, ErrorCode> {
     let target = PathBuf::from(source_path);
     let (recoverable, lost, recoverable_limit) = service::probe(&target)?;
