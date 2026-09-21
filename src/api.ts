@@ -155,19 +155,6 @@ export async function userDatabaseLifecycleClose(): Promise<void> {
 // ==================== user_database / canvas ====================
 
 /**
- * 在指定父画布下新建子画布（后端自动选取合适位置）。
- * @param parentId 父画布 id
- * @param name 画布名称
- * @returns 新建的画布
- */
-export async function userDatabaseCanvasCreate(
-  parentId: string,
-  name: string,
-): Promise<Canvas> {
-  return invoke<Canvas>("user_database_canvas_create", { parentId, name });
-}
-
-/**
  * 批量移动画布的坐标（单个画布移动也走此接口）。
  * @param items 画布坐标列表，每个元素包含 id、x、y
  * @returns 无返回值

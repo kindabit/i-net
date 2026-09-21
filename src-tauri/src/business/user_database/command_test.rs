@@ -63,22 +63,21 @@ fn test_user_database_command_all_functions() {
     assert_eq!(canvases.len(), 1);
     let root_id = canvases[0].id.clone();
 
-    // canvas::command::create::preprocess 失败路径：父画布 id 非法时报 InvalidCanvasId。
+    // canvas::service::create 失败路径：父画布不存在时报 NoCanvasWithSuchId（命令层接口已删除，参数校验由调用方负责）。
     assert!(matches!(
-        canvas::command::create::preprocess("no-such-id".to_string(), "c".to_string()),
-        Err(ErrorCode::InvalidCanvasId { .. })
+        canvas::service::create("no-such-id", "c".to_string()),
+        Err(ErrorCode::NoCanvasWithSuchId { .. })
     ));
 
-    // canvas::command::create::preprocess 失败路径：名称为空时报 EmptyCanvasName。
-    assert!(matches!(
-        canvas::command::create::preprocess(root_id.clone(), "  ".to_string()),
-        Err(ErrorCode::EmptyCanvasName)
-    ));
-
-    // canvas::command::create::preprocess 成功路径：名称两侧空白字符被裁剪。
-    let child =
-        canvas::command::create::preprocess(root_id.clone(), " child ".to_string()).unwrap();
+    // canvas::service::create 成功路径：在根画布下新建子画布。
+    let child = canvas::service::create(&root_id, "child".to_string()).unwrap();
     assert_eq!(child.name, "child");
+
+    // canvas::service::create 失败路径：名称重复时报 CanvasNameAlreadyExists。
+    assert!(matches!(
+        canvas::service::create(&root_id, "child".to_string()),
+        Err(ErrorCode::CanvasNameAlreadyExists { .. })
+    ));
 
     // canvas::command::rename::preprocess 失败路径：id 非法时报 InvalidCanvasId，名称为空时报 EmptyCanvasName。
     assert!(matches!(
@@ -1186,8 +1185,8 @@ fn test_user_database_command_all_functions() {
     assert_eq!(entries[0].color, node_color);
 
     // == canvas::command::color_list::preprocess 成功路径：根画布已带色；另建无色画布与已删除带色画布，验证只返回未删除带色画布 ==
-    let plain_canvas = canvas::command::create::preprocess(root_id.clone(), "plain-canvas".to_string()).unwrap();
-    let deleted_colored_canvas = canvas::command::create::preprocess(root_id.clone(), "deleted-colored-canvas".to_string()).unwrap();
+    let plain_canvas = canvas::service::create(&root_id, "plain-canvas".to_string()).unwrap();
+    let deleted_colored_canvas = canvas::service::create(&root_id, "deleted-colored-canvas".to_string()).unwrap();
     canvas::command::set_color::preprocess(deleted_colored_canvas.id.clone(), "{\"fill\":\"#00ff00\"}".to_string()).unwrap();
     canvas::command::logical_delete::preprocess(deleted_colored_canvas.id.clone()).unwrap();
     // 无色画布 color 保持空串，不应出现在结果中。

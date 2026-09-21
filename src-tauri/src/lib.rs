@@ -149,7 +149,6 @@ pub fn run(argv: argv::ArgV) {
             business::user_database::attachment::command::swap_sort_order::user_database_attachment_swap_sort_order,
             business::user_database::attachment::command::update_file::user_database_attachment_update_file,
             business::user_database::canvas::command::color_list::user_database_canvas_node_color_list,
-            business::user_database::canvas::command::create::user_database_canvas_create,
             business::user_database::canvas::command::list::user_database_canvas_list,
             business::user_database::canvas::command::logical_delete::user_database_canvas_logical_delete,
             business::user_database::canvas::command::move_canvases::user_database_canvas_move_canvases,
