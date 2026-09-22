@@ -25,8 +25,8 @@ pub fn list(canvas_id: &str, deleted: bool) -> Result<Vec<NodeVO>, ErrorCode> {
 }
 
 /// 将 Node 转换为 NodeVO：影子节点沿产生边链解析到本体节点，合并本体的展示数据
-/// （title / subtitle / color）；canvas_ref_id 恒为 None 不合并（出向影子本体引用的
-/// 子画布 id 改由 shadow_origin_canvas_ref_id 单独携带，仅出向影子有值）。
+/// （title / subtitle / color）与书签状态（bookmarked）；canvas_ref_id 恒为 None 不合并
+///（出向影子本体引用的子画布 id 改由 shadow_origin_canvas_ref_id 单独携带，仅出向影子有值）。
 ///
 /// 影子链由 resolve_origin 内部防环保证完整；悬空、端点缺失或成环即数据损坏，
 /// 返回 DataCorruption* 错误；本体节点类型与影子方向矛盾时返回
@@ -62,6 +62,7 @@ pub(crate) fn to_vo(connection: &Connection, node: Node) -> Result<NodeVO, Error
     merged.title = origin.title.clone();
     merged.subtitle = origin.subtitle.clone();
     merged.color = origin.color.clone();
+    merged.bookmarked = origin.bookmarked;
     Ok(NodeVO {
         node: merged,
         shadow_origin_id: Some(origin.id.clone()),
@@ -96,6 +97,7 @@ mod tests {
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         }
     }
 

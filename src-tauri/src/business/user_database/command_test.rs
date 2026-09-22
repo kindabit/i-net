@@ -1340,5 +1340,92 @@ fn test_user_database_command_all_functions() {
     lifecycle::command::close::preprocess().unwrap();
     }
 
+    // == 阶段八：node_tag 标签与 node 书签命令 ==
+    {
+    lifecycle::command::initialize::preprocess(
+        registered.id.clone(),
+        "password".to_string(),
+    )
+    .unwrap();
+
+    let canvases = canvas::service::list(false).unwrap();
+    let root_id = canvases[0].id.clone();
+    let node = node::service::create(
+        &root_id,
+        "cmd-tag-node".to_string(),
+        String::new(),
+        0.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+
+    // node_tag::command::list_for_node::preprocess 失败路径：node_id 非法 → InvalidNodeId。
+    assert!(matches!(
+        node_tag::command::list_for_node::preprocess("no-such-id".to_string()),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // node_tag::command::set_for_node::preprocess 失败路径：node_id 非法 → InvalidNodeId。
+    assert!(matches!(
+        node_tag::command::set_for_node::preprocess("no-such-id".to_string(), vec!["a".to_string()]),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // node_tag::command::list_nodes::preprocess 成功路径：未使用过的标签返回空列表。
+    assert!(node_tag::command::list_nodes::preprocess("unused-tag".to_string())
+        .unwrap()
+        .is_empty());
+
+    // node_tag::command::set_for_node::preprocess 成功路径：入参规整（trim / 去空 / 去重）后落库。
+    node_tag::command::set_for_node::preprocess(
+        node.id.clone(),
+        vec![
+            "  cmd-tag  ".to_string(),
+            String::new(),
+            "cmd-tag".to_string(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        node_tag::command::list_for_node::preprocess(node.id.clone()).unwrap(),
+        vec!["cmd-tag"]
+    );
+
+    // node_tag::command::list_nodes::preprocess 成功路径：标签 trim 后精确匹配到该节点。
+    let tagged_nodes =
+        node_tag::command::list_nodes::preprocess("  cmd-tag  ".to_string()).unwrap();
+    assert_eq!(tagged_nodes.len(), 1);
+    assert_eq!(tagged_nodes[0].id, node.id);
+
+    // node_tag::command::list::preprocess 成功路径：返回标签与计数。
+    let tags = node_tag::command::list::preprocess().unwrap();
+    assert!(tags.contains(&node_tag::vo::NodeTagVO {
+        name: "cmd-tag".to_string(),
+        node_count: 1
+    }));
+
+    // node::command::set_bookmarked::preprocess 失败路径：id 非法 → InvalidNodeId。
+    assert!(matches!(
+        node::command::set_bookmarked::preprocess("no-such-id".to_string(), true),
+        Err(ErrorCode::InvalidNodeId { .. })
+    ));
+
+    // node::command::set_bookmarked::preprocess 成功路径：收藏后 list_bookmarked 返回该节点。
+    node::command::set_bookmarked::preprocess(node.id.clone(), true).unwrap();
+    let bookmarked = node::command::list_bookmarked::preprocess().unwrap();
+    assert_eq!(bookmarked.len(), 1);
+    assert_eq!(bookmarked[0].id, node.id);
+    assert!(bookmarked[0].bookmarked);
+
+    // node::command::set_bookmarked::preprocess 成功路径：取消收藏后列表变空。
+    node::command::set_bookmarked::preprocess(node.id.clone(), false).unwrap();
+    assert!(node::command::list_bookmarked::preprocess().unwrap().is_empty());
+
+    lifecycle::command::save::preprocess().unwrap();
+    lifecycle::command::close::preprocess().unwrap();
+    }
+
     test::cleanup(&path);
 }

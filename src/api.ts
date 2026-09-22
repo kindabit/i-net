@@ -20,6 +20,7 @@ import type {
   MoveNodeVO,
   Node,
   NodeFieldVO,
+  NodeTagVO,
   NodeVO,
   Template,
   TemplateFieldVO,
@@ -418,6 +419,72 @@ export async function userDatabaseNodeSearch(
   query: string,
 ): Promise<NodeSearchResponse[]> {
   return invoke<NodeSearchResponse[]>("user_database_node_search", { query });
+}
+
+/**
+ * 查询全部活跃标签（计数大于 0 的标签），用于标签云与编辑对话框的标签候选。
+ * @returns 标签列表（按节点数量降序、标签名升序）
+ */
+export async function userDatabaseNodeTagList(): Promise<NodeTagVO[]> {
+  return invoke<NodeTagVO[]>("user_database_node_tag_list");
+}
+
+/**
+ * 查询指定节点的标签名列表。
+ * @param nodeId 节点 id
+ * @returns 标签名列表（升序）
+ */
+export async function userDatabaseNodeTagListForNode(
+  nodeId: string,
+): Promise<string[]> {
+  return invoke<string[]>("user_database_node_tag_list_for_node", { nodeId });
+}
+
+/**
+ * 全量覆盖写指定节点的标签（后端会 trim、去空串并去重）。
+ * @param nodeId 节点 id
+ * @param tags 新的标签名列表
+ * @returns 无返回值
+ */
+export async function userDatabaseNodeTagSetForNode(
+  nodeId: string,
+  tags: string[],
+): Promise<void> {
+  return invoke("user_database_node_tag_set_for_node", { nodeId, tags });
+}
+
+/**
+ * 查询具有指定标签的节点列表（排除已删除与影子节点）。
+ * @param tag 标签名
+ * @returns 节点搜索结果列表
+ */
+export async function userDatabaseNodeTagListNodes(
+  tag: string,
+): Promise<NodeSearchResponse[]> {
+  return invoke<NodeSearchResponse[]>("user_database_node_tag_list_nodes", { tag });
+}
+
+/**
+ * 设置节点的书签状态。
+ * @param nodeId 节点 id
+ * @param bookmarked 是否加入书签
+ * @returns 无返回值
+ */
+export async function userDatabaseNodeSetBookmarked(
+  nodeId: string,
+  bookmarked: boolean,
+): Promise<void> {
+  return invoke("user_database_node_set_bookmarked", { id: nodeId, bookmarked });
+}
+
+/**
+ * 查询全部书签节点（排除已删除与影子节点）。
+ * @returns 节点搜索结果列表
+ */
+export async function userDatabaseNodeListBookmarked(): Promise<
+  NodeSearchResponse[]
+> {
+  return invoke<NodeSearchResponse[]>("user_database_node_list_bookmarked");
 }
 
 /**

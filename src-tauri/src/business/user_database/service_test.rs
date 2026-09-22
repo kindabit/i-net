@@ -3140,3 +3140,337 @@ fn test_user_database_service_all_functions() {
 
     test::cleanup(&path);
 }
+
+/// 节点标签与书签的会话级集成测试：在一个打开的用户数据库中覆盖
+/// node_tag 的 set_for_node / list / list_for_node / list_nodes 与 node 的
+/// set_bookmarked / list_bookmarked 的成功与失败路径，以及日志载荷、
+/// 节点物理删除后标签行的级联消失。
+#[test]
+fn test_node_tag_and_bookmark_service() {
+    let _guard = test::acquire_test_lock();
+
+    let path = test::create_test_path();
+    crate::state::set_path(path.clone());
+    metadata::service::initialize().unwrap();
+    let registered = metadata::service::register("node-tag-test-db".to_string()).unwrap();
+    let id = registered.id.clone();
+    lifecycle::service::initialize(&id, test::test_key()).unwrap();
+
+    // 根画布与三个数据节点。
+    let root_id = canvas::service::list(false)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.parent_id.is_none())
+        .unwrap()
+        .id;
+    let node_1 = node::service::create(
+        &root_id,
+        "tag-node-1".to_string(),
+        String::new(),
+        0.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let node_2 = node::service::create(
+        &root_id,
+        "tag-node-2".to_string(),
+        String::new(),
+        100.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+    let node_3 = node::service::create(
+        &root_id,
+        "tag-node-3".to_string(),
+        String::new(),
+        200.0,
+        0.0,
+        None,
+        false,
+    )
+    .unwrap();
+    // 画布数据节点 + 数据节点到它的边，在引用的子画布中产生影子节点（影子不属于 node_1）。
+    let canvas_node = node::service::create(
+        &root_id,
+        "tag-canvas-node".to_string(),
+        String::new(),
+        300.0,
+        0.0,
+        None,
+        true,
+    )
+    .unwrap();
+    let child_canvas_id = canvas_node.canvas_ref_id.clone().unwrap();
+    edge::service::create(
+        &root_id,
+        &node_1.id,
+        "right".to_string(),
+        &canvas_node.id,
+        "left".to_string(),
+        false,
+    )
+    .unwrap();
+    let shadow = node::service::list(&child_canvas_id, false)
+        .unwrap()
+        .into_iter()
+        .find(|n| n.shadow_origin_id.as_deref() == Some(node_1.id.as_str()))
+        .unwrap();
+
+    // ===== set_for_node 失败路径 =====
+    // 节点不存在时报 NoNodeWithSuchId。
+    assert!(matches!(
+        node_tag::service::set_for_node(
+            &uuid::Uuid::new_v4().to_string(),
+            vec!["x".to_string()]
+        ),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
+    // 影子节点时报 NodeIsShadow。
+    assert!(matches!(
+        node_tag::service::set_for_node(&shadow.id, vec!["x".to_string()]),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+
+    // list_for_node 成功路径：无标签节点返回空列表（不校验节点存在，影子节点同样返回空列表）。
+    assert!(node_tag::service::list_for_node(&node_1.id).unwrap().is_empty());
+    assert!(node_tag::service::list_for_node(&shadow.id).unwrap().is_empty());
+
+    // ===== set_for_node 规整与新增 =====
+    // 入参 trim、丢弃空串、去重后落库；日志载荷 added 升序、removed 为空。
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    node_tag::service::set_for_node(
+        &node_1.id,
+        vec![
+            "  alpha  ".to_string(),
+            String::new(),
+            "   ".to_string(),
+            "alpha".to_string(),
+            "beta".to_string(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        node_tag::service::list_for_node(&node_1.id).unwrap(),
+        vec!["alpha", "beta"]
+    );
+    assert_eq!(
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
+        log_total_before + 1
+    );
+    let tags_log = log::service::list(
+        0,
+        1,
+        LogFilter {
+            actions: Some(vec!["NodeTagsModify".to_string()]),
+            ..LogFilter::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        &tags_log.items[0].action,
+        entity::Action::NodeTagsModify { node_title, added, removed }
+            if node_title == "tag-node-1"
+                && added == &vec!["alpha".to_string(), "beta".to_string()]
+                && removed.is_empty()
+    ));
+
+    // 无变化不写日志：顺序不同、含重复与空白的等价入参不产生新日志。
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    node_tag::service::set_for_node(
+        &node_1.id,
+        vec!["beta".to_string(), " beta ".to_string(), "alpha".to_string()],
+    )
+    .unwrap();
+    assert_eq!(
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
+        log_total_before
+    );
+
+    // 删除标签：日志载荷 added 为空、removed 升序。
+    // 休眠 2 毫秒确保本条日志的 time 严格大于上一条 NodeTagsModify 日志（同毫秒时按 uuid 决胜，顺序不确定）。
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    node_tag::service::set_for_node(&node_1.id, vec!["beta".to_string()]).unwrap();
+    assert_eq!(
+        node_tag::service::list_for_node(&node_1.id).unwrap(),
+        vec!["beta"]
+    );
+    let tags_log = log::service::list(
+        0,
+        1,
+        LogFilter {
+            actions: Some(vec!["NodeTagsModify".to_string()]),
+            ..LogFilter::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        &tags_log.items[0].action,
+        entity::Action::NodeTagsModify { node_title, added, removed }
+            if node_title == "tag-node-1"
+                && added.is_empty()
+                && removed == &vec!["alpha".to_string()]
+    ));
+
+    // ===== list 计数 =====
+    // node_2 / node_3 共享标签 shared，计数为 2；beta 计数为 1。
+    node_tag::service::set_for_node(&node_2.id, vec!["shared".to_string()]).unwrap();
+    node_tag::service::set_for_node(&node_3.id, vec!["shared".to_string()]).unwrap();
+    let tags = node_tag::service::list().unwrap();
+    assert!(tags.contains(&node_tag::vo::NodeTagVO {
+        name: "shared".to_string(),
+        node_count: 2
+    }));
+    assert!(tags.contains(&node_tag::vo::NodeTagVO {
+        name: "beta".to_string(),
+        node_count: 1
+    }));
+
+    // ===== list_nodes =====
+    // shared 命中 node_2 与 node_3，按画布名称、节点标题排序。
+    let nodes = node_tag::service::list_nodes("shared").unwrap();
+    assert_eq!(nodes.len(), 2);
+    assert!(nodes.iter().any(|n| n.id == node_2.id));
+    assert!(nodes.iter().any(|n| n.id == node_3.id));
+    // beta 命中 node_1。
+    let nodes = node_tag::service::list_nodes("beta").unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].id, node_1.id);
+    // 不存在的标签返回空列表。
+    assert!(node_tag::service::list_nodes("no-such-tag").unwrap().is_empty());
+
+    // ===== 逻辑删除节点与影子节点不参与标签统计与列表 =====
+    // 逻辑删除 node_3 后 shared 计数降为 1，list_nodes 不再返回 node_3。
+    node::service::logical_delete(&node_3.id).unwrap();
+    let tags = node_tag::service::list().unwrap();
+    assert!(tags.contains(&node_tag::vo::NodeTagVO {
+        name: "shared".to_string(),
+        node_count: 1
+    }));
+    let nodes = node_tag::service::list_nodes("shared").unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].id, node_2.id);
+
+    // 直接向影子节点写入 shared 标签行（绕过 service 守卫，模拟异常数据）：
+    // 统计与 list_nodes 仍然排除影子节点。
+    {
+        let connection = state::lock_connection();
+        node_tag::dao::insert(&connection, &shadow.id, "shared").unwrap();
+    }
+    let tags = node_tag::service::list().unwrap();
+    assert!(tags.contains(&node_tag::vo::NodeTagVO {
+        name: "shared".to_string(),
+        node_count: 1
+    }));
+    let nodes = node_tag::service::list_nodes("shared").unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].id, node_2.id);
+
+    // ===== 全局搜索按标签命中 =====
+    // shared 只命中未删除的 node_2。
+    let results = node::service::search(&["shared".to_string()]).unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, node_2.id);
+
+    // 替换 node_1 的标签为含 LIKE 特殊字符的标签，按字面字符命中。
+    node_tag::service::set_for_node(&node_1.id, vec!["100%_tag".to_string()]).unwrap();
+    let results = node::service::search(&["100%_tag".to_string()]).unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, node_1.id);
+    let results = node::service::search(&["100%".to_string()]).unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, node_1.id);
+
+    // ===== set_bookmarked 失败路径 =====
+    // 节点不存在时报 NoNodeWithSuchId。
+    assert!(matches!(
+        node::service::set_bookmarked(&uuid::Uuid::new_v4().to_string(), true),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
+    // 影子节点时报 NodeIsShadow。
+    assert!(matches!(
+        node::service::set_bookmarked(&shadow.id, true),
+        Err(ErrorCode::NodeIsShadow)
+    ));
+
+    // ===== set_bookmarked 无变化不写日志，有变化写 NodeBookmarkModify =====
+    // 默认未收藏，设置为 false 时不写日志。
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    node::service::set_bookmarked(&node_1.id, false).unwrap();
+    assert_eq!(
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
+        log_total_before
+    );
+    // 设置为 true：写日志且载荷正确。
+    node::service::set_bookmarked(&node_1.id, true).unwrap();
+    let bookmark_log = log::service::list(
+        0,
+        1,
+        LogFilter {
+            actions: Some(vec!["NodeBookmarkModify".to_string()]),
+            ..LogFilter::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        &bookmark_log.items[0].action,
+        entity::Action::NodeBookmarkModify { node_title, bookmarked }
+            if node_title == "tag-node-1" && *bookmarked
+    ));
+    // list_bookmarked 返回该节点且 bookmarked = true。
+    let bookmarked = node::service::list_bookmarked().unwrap();
+    assert_eq!(bookmarked.len(), 1);
+    assert_eq!(bookmarked[0].id, node_1.id);
+    assert!(bookmarked[0].bookmarked);
+
+    // 收藏 node_2 后逻辑删除：list_bookmarked 排除已逻辑删除的节点。
+    node::service::set_bookmarked(&node_2.id, true).unwrap();
+    node::service::logical_delete(&node_2.id).unwrap();
+    let bookmarked = node::service::list_bookmarked().unwrap();
+    assert_eq!(bookmarked.len(), 1);
+    assert_eq!(bookmarked[0].id, node_1.id);
+
+    // 取消收藏 node_1：写日志（bookmarked = false），列表变空；再次取消不写日志。
+    // 休眠 2 毫秒确保本条日志的 time 严格大于上一条 NodeBookmarkModify 日志（同毫秒时按 uuid 决胜，顺序不确定）。
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    node::service::set_bookmarked(&node_1.id, false).unwrap();
+    let bookmark_log = log::service::list(
+        0,
+        1,
+        LogFilter {
+            actions: Some(vec!["NodeBookmarkModify".to_string()]),
+            ..LogFilter::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        &bookmark_log.items[0].action,
+        entity::Action::NodeBookmarkModify { node_title, bookmarked }
+            if node_title == "tag-node-1" && !*bookmarked
+    ));
+    assert!(node::service::list_bookmarked().unwrap().is_empty());
+    let log_total_before = log::service::list(0, 1, LogFilter::default()).unwrap().total;
+    node::service::set_bookmarked(&node_1.id, false).unwrap();
+    assert_eq!(
+        log::service::list(0, 1, LogFilter::default()).unwrap().total,
+        log_total_before
+    );
+
+    // ===== 节点物理删除后 node_tag 行级联消失 =====
+    // node_3 已逻辑删除但仍有 shared 标签行，物理删除后标签行随外键级联消失。
+    node::service::physical_delete(&node_3.id, false).unwrap();
+    assert!(node_tag::service::list_for_node(&node_3.id).unwrap().is_empty());
+    // node_2 同样物理删除后标签行消失。
+    node::service::physical_delete(&node_2.id, false).unwrap();
+    assert!(node_tag::service::list_for_node(&node_2.id).unwrap().is_empty());
+    let tags = node_tag::service::list().unwrap();
+    assert!(!tags.iter().any(|tag| tag.name == "shared"));
+
+    lifecycle::service::save().unwrap();
+    lifecycle::service::close().unwrap();
+
+    test::cleanup(&path);
+}

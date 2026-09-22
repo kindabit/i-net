@@ -1,6 +1,6 @@
 use crate::business::metadata;
 use crate::business::metadata::entity::Metadata;
-use crate::business::user_database::{attachment, canvas, dictionary, edge, log, node, node_field, registry, state, template, viewport};
+use crate::business::user_database::{attachment, canvas, dictionary, edge, log, node, node_field, node_tag, registry, state, template, viewport};
 use crate::common::connection;
 use crate::error_code::ErrorCode;
 use crate::util::{file_system_util, time_util};
@@ -46,6 +46,7 @@ pub fn initialize(id: &str, key: [u8; 32]) -> Result<Metadata, ErrorCode> {
         viewport::service::initialize()?;
         registry::service::initialize()?;
         node::service::initialize()?;
+        node_tag::service::initialize()?;
         attachment::service::initialize()?;
         node_field::service::initialize()?;
         template::service::initialize()?;

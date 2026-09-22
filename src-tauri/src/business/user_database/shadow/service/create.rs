@@ -100,6 +100,7 @@ fn create_shadow(
         deleted: false,
         color: String::new(),
         shadow_producing_edge_id: Some(edge_id.to_string()),
+        bookmarked: false,
     };
     node::dao::insert(connection, &shadow)
 }

@@ -15,6 +15,8 @@ export interface DataNodeData {
   canvasRefId: string | null;
   /** 数据节点自定义颜色字符串，空串 = 默认 */
   color: string;
+  /** 是否已加入书签（画布上仅非影子节点显示书签图标，影子节点不显示） */
+  bookmarked: boolean;
   /** 影子节点本体节点的 id（对应后端 shadow_origin_id）；null 表示数据节点（用于判断是否影子节点、以及影子节点编辑对话框与迁移落点的定位锚点） */
   shadowOriginId: string | null;
   /** 影子节点的本体节点是否已被逻辑删除（数据节点恒为 false） */
@@ -47,6 +49,7 @@ export function toVFNode(node: Node, position?: { x: number; y: number }): VFNod
       subtitle: node.subtitle,
       canvasRefId: node.canvas_ref_id,
       color: node.color,
+      bookmarked: node.bookmarked ?? false,
       shadowOriginId: vo.shadow_origin_id ?? null,
       shadowOriginDeleted: vo.shadow_origin_deleted ?? false,
       shadowDirection: vo.shadow_direction ?? null,

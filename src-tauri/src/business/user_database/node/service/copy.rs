@@ -56,6 +56,7 @@ pub fn copy(id: &str, canvas_id: &str, x: f64, y: f64) -> Result<Node, ErrorCode
         deleted: false,
         color: source.color.clone(),
         shadow_producing_edge_id: None,
+        bookmarked: false,
     };
     dao::insert(&connection, &node)?;
 

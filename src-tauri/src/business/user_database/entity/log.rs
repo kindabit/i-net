@@ -100,6 +100,17 @@ pub enum Action {
         node_title: String,
         changes: Vec<NodeFieldChange>,
     },
+    /// 修改节点的标签集合，包含节点标题、新增的标签名称列表和移除的标签名称列表（均按升序排序）。
+    NodeTagsModify {
+        node_title: String,
+        added: Vec<String>,
+        removed: Vec<String>,
+    },
+    /// 修改节点的书签状态，包含节点标题和新的书签状态。
+    NodeBookmarkModify {
+        node_title: String,
+        bookmarked: bool,
+    },
     /// 新建附件（空内容的文本附件），包含节点标题和附件文件名。
     AttachmentCreate {
         node_title: String,

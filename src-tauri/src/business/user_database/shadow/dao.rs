@@ -33,6 +33,7 @@ pub fn select_by_producing_edge_id(
             NodeIden::Deleted,
             NodeIden::Color,
             NodeIden::ShadowProducingEdgeId,
+            NodeIden::Bookmarked,
         ])
         .from(NodeIden::Table)
         .and_where(Expr::col(NodeIden::ShadowProducingEdgeId).eq(edge_id))
@@ -73,6 +74,7 @@ mod tests {
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         }
     }
 

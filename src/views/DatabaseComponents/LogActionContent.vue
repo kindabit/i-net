@@ -2,7 +2,8 @@
   日志行为内容渲染组件。
 
   按行为类型渲染单条日志的名称与详情文案，置于日志列表项的默认插槽中使用；
-  节点字段编辑行为额外渲染逐字段变更列表（含掩码字段值与空值处理）。
+  节点字段编辑行为额外渲染逐字段变更列表（含掩码字段值与空值处理）；
+  节点书签修改行为在书签状态为布尔值时选择加入/取消的专属详情文案。
 -->
 <script setup lang="ts">
 import { computed } from "vue";
@@ -37,14 +38,56 @@ const nodeFieldsModifyData = computed(() =>
     : null,
 );
 
+/** 节点书签修改行为的数据载荷（对应后端 Action::NodeBookmarkModify 的 data 形状） */
+type NodeBookmarkModifyData = {
+  /** 节点标题 */
+  node_title: string;
+  /** 书签状态；布尔值表示加入（true）或取消（false），字符串表示后端直接提供的状态文案 */
+  bookmarked: boolean | string;
+};
+
+/**
+ * 节点书签修改行为的数据；其它行为类型时为 null。
+ * 模板据此把布尔书签状态渲染为加入/取消的专属文案。
+ */
+const nodeBookmarkModifyData = computed(() =>
+  props.action.variant === "NodeBookmarkModify"
+    ? (props.action.data as NodeBookmarkModifyData)
+    : null,
+);
+
+/**
+ * 渲染节点书签修改行为的详情文案：布尔状态选择加入/取消的专属文案，其它情况按通用插值渲染。
+ * @param data 节点书签修改行为的数据
+ * @returns 可直接展示的文案字符串
+ */
+function renderBookmarkModify(data: NodeBookmarkModifyData): string {
+  if (typeof data.bookmarked === "boolean") {
+    return t(
+      data.bookmarked
+        ? "log.action.NodeBookmarkModify.detail-added"
+        : "log.action.NodeBookmarkModify.detail-removed",
+      { node_title: data.node_title },
+    );
+  }
+  return t("log.action.NodeBookmarkModify.detail", {
+    node_title: data.node_title,
+    bookmarked: String(data.bookmarked ?? ""),
+  });
+}
+
 /**
  * 将日志行为的数据转换为 i18n 插值参数。
+ * 数组值以顿号连接（如标签列表），空数组显示为占位符"—"。
  * @param action 日志行为
  * @returns 键值对形式的插值参数对象
  */
 function detailParams(action: LogAction): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(action.data).map(([k, v]) => [k, String(v)]),
+    Object.entries(action.data).map(([k, v]) => [
+      k,
+      Array.isArray(v) ? (v.length > 0 ? v.join("、") : "—") : String(v),
+    ]),
   );
 }
 
@@ -133,6 +176,14 @@ function renderChange(change: NodeFieldChange): string {
         </div>
       </div>
     </div>
+  </template>
+  <template v-else-if="nodeBookmarkModifyData">
+    <VListItemTitle>
+      {{ t("log.action.NodeBookmarkModify.name") }}
+    </VListItemTitle>
+    <VListItemSubtitle>
+      {{ renderBookmarkModify(nodeBookmarkModifyData) }}
+    </VListItemSubtitle>
   </template>
   <template v-else>
     <VListItemTitle>

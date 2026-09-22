@@ -9,6 +9,7 @@ pub mod log;
 pub mod migration;
 pub mod node;
 pub mod node_field;
+pub mod node_tag;
 pub mod registry;
 pub mod shadow;
 pub mod state;

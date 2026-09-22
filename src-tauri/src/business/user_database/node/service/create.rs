@@ -72,6 +72,7 @@ pub fn create(
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         };
 
         if let Err(e) = dao::insert(&connection, &node) {
@@ -100,6 +101,7 @@ pub fn create(
         deleted: false,
         color: String::new(),
         shadow_producing_edge_id: None,
+        bookmarked: false,
     };
     dao::insert(&connection, &node)?;
     if let Some(ref tid) = template_id {

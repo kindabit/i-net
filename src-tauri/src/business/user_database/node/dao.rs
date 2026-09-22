@@ -5,11 +5,13 @@ use crate::business::user_database::edge::dao::EdgeIden;
 use crate::business::user_database::entity::Node;
 use crate::business::user_database::node::response::DataNodeColorEntry;
 use crate::business::user_database::node::response::NodeSearchResponse;
+use crate::business::user_database::node_tag::dao as node_tag_dao;
+use crate::business::user_database::node_tag::dao::NodeTagIden;
 use crate::error_code::ErrorCode;
 use crate::util::sea_query_util::values_to_params;
 use sea_query::{
-    ColumnDef, ColumnType, Cond, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Index, JoinType,
-    LikeExpr, Order, Query, SqliteQueryBuilder, Table,
+    Alias, ColumnDef, ColumnType, Cond, Expr, ExprTrait, ForeignKey, ForeignKeyAction, Index,
+    JoinType, LikeExpr, Order, Query, SqliteQueryBuilder, Table,
 };
 
 /// node 表的标识符集合，作为 sea-query 构建语句时使用的受控术语表。
@@ -27,6 +29,7 @@ pub(crate) enum NodeIden {
     Deleted,
     Color,
     ShadowProducingEdgeId,
+    Bookmarked,
 }
 
 /// 从查询结果行构造 Node。
@@ -43,6 +46,7 @@ pub(crate) fn map_row(row: &Row) -> rusqlite::Result<Node> {
         deleted: row.get::<_, i64>(7)? != 0,
         color: row.get(8)?,
         shadow_producing_edge_id: row.get(9)?,
+        bookmarked: row.get::<_, i64>(10)? != 0,
     })
 }
 
@@ -92,6 +96,11 @@ pub fn create_table(connection: &Connection) -> Result<(), ErrorCode> {
         .col(ColumnDef::new_with_type(NodeIden::Deleted, ColumnType::custom("INTEGER")).not_null())
         .col(ColumnDef::new_with_type(NodeIden::Color, ColumnType::custom("TEXT")).not_null())
         .col(ColumnDef::new_with_type(NodeIden::ShadowProducingEdgeId, ColumnType::custom("TEXT")))
+        .col(
+            ColumnDef::new_with_type(NodeIden::Bookmarked, ColumnType::custom("INTEGER"))
+                .not_null()
+                .default(0),
+        )
         .foreign_key(&mut fk_canvas)
         .foreign_key(&mut fk_ref)
         .foreign_key(&mut fk_shadow)
@@ -129,6 +138,7 @@ pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
             NodeIden::Deleted,
             NodeIden::Color,
             NodeIden::ShadowProducingEdgeId,
+            NodeIden::Bookmarked,
         ])
         .values_panic([
             (&node.id).into(),
@@ -141,6 +151,7 @@ pub fn insert(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
             (node.deleted as i64).into(),
             (&node.color).into(),
             node.shadow_producing_edge_id.clone().into(),
+            (node.bookmarked as i64).into(),
         ])
         .take();
     let (sql, values) = query.build(SqliteQueryBuilder);
@@ -173,6 +184,7 @@ pub fn select_by_id(connection: &Connection, id: &str) -> Result<Option<Node>, E
             NodeIden::Deleted,
             NodeIden::Color,
             NodeIden::ShadowProducingEdgeId,
+            NodeIden::Bookmarked,
         ])
         .from(NodeIden::Table)
         .and_where(Expr::col(NodeIden::Id).eq(id))
@@ -216,6 +228,7 @@ pub fn select_by_canvas_id_and_deleted(
             NodeIden::Deleted,
             NodeIden::Color,
             NodeIden::ShadowProducingEdgeId,
+            NodeIden::Bookmarked,
         ])
         .from(NodeIden::Table)
         .and_where(Expr::col(NodeIden::CanvasId).eq(canvas_id))
@@ -259,6 +272,7 @@ pub fn update(connection: &Connection, node: &Node) -> Result<(), ErrorCode> {
             (NodeIden::Deleted, (node.deleted as i64).into()),
             (NodeIden::Color, node.color.clone().into()),
             (NodeIden::ShadowProducingEdgeId, node.shadow_producing_edge_id.clone().into()),
+            (NodeIden::Bookmarked, (node.bookmarked as i64).into()),
         ])
         .and_where(Expr::col(NodeIden::Id).eq(node.id.clone()))
         .take();
@@ -317,6 +331,7 @@ pub fn select_by_canvas_ref_id(
             NodeIden::Deleted,
             NodeIden::Color,
             NodeIden::ShadowProducingEdgeId,
+            NodeIden::Bookmarked,
         ])
         .from(NodeIden::Table)
         .and_where(Expr::col(NodeIden::CanvasRefId).eq(canvas_ref_id))
@@ -334,7 +349,7 @@ pub fn select_by_canvas_ref_id(
         })
 }
 
-/// 从查询结果行构造 NodeSearchResponse。
+/// 从查询结果行构造 NodeSearchResponse。tags 不在 SQL 行内，由 fill_search_tags 在查询后统一填充。
 fn map_search_row(row: &Row) -> rusqlite::Result<NodeSearchResponse> {
     Ok(NodeSearchResponse {
         id: row.get(0)?,
@@ -345,7 +360,28 @@ fn map_search_row(row: &Row) -> rusqlite::Result<NodeSearchResponse> {
         subtitle: row.get(5)?,
         canvas_ref_id: row.get(6)?,
         canvas_name: row.get(7)?,
+        canvas_is_root: row.get::<_, i64>(9)? != 0,
+        bookmarked: row.get::<_, i64>(8)? != 0,
+        tags: Vec::new(),
     })
+}
+
+/// 为搜索结果列表逐项填充节点携带的全部标签（按标签名称升序）。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `results`: 待填充的搜索结果列表，原地修改各项的 tags 字段。
+///
+/// # 返回值
+/// 成功时返回 `Ok(())`；若发生错误则返回对应的 `ErrorCode`。
+fn fill_search_tags(
+    connection: &Connection,
+    results: &mut [NodeSearchResponse],
+) -> Result<(), ErrorCode> {
+    for item in results.iter_mut() {
+        item.tags = node_tag_dao::select_tags_by_node_id(connection, &item.id)?;
+    }
+    Ok(())
 }
 
 /// 转义 LIKE 模式中的特殊字符（`\`、`%`、`_`），使它们按字面字符匹配。
@@ -353,12 +389,48 @@ fn escape_like_pattern(pattern: &str) -> String {
     pattern.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
+/// 返回全局搜索类查询共用的列集合：节点基础字段、所在画布名称与书签状态。
+fn search_columns() -> [sea_query::ColumnRef; 9] {
+    [
+        (NodeIden::Table, NodeIden::Id).into(),
+        (NodeIden::Table, NodeIden::CanvasId).into(),
+        (NodeIden::Table, NodeIden::X).into(),
+        (NodeIden::Table, NodeIden::Y).into(),
+        (NodeIden::Table, NodeIden::Title).into(),
+        (NodeIden::Table, NodeIden::Subtitle).into(),
+        (NodeIden::Table, NodeIden::CanvasRefId).into(),
+        (CanvasIden::Table, CanvasIden::Name).into(),
+        (NodeIden::Table, NodeIden::Bookmarked).into(),
+    ]
+}
+
+/// 构造“节点带标签”的存在性子查询：node_tag.node_id = node.id AND node_tag.tag 匹配给定条件。
+///
+/// # 参数
+/// - `tag_condition`: 作用于 node_tag.tag 列的匹配条件（精确匹配或 LIKE）。
+///
+/// # 返回值
+/// 返回可直接放入 WHERE 的 EXISTS 子查询表达式。
+fn exists_tag(tag_condition: Expr) -> Expr {
+    Expr::exists(
+        Query::select()
+            .column((NodeTagIden::Table, NodeTagIden::NodeId))
+            .from(NodeTagIden::Table)
+            .and_where(
+                Expr::col((NodeTagIden::Table, NodeTagIden::NodeId))
+                    .equals((NodeIden::Table, NodeIden::Id)),
+            )
+            .and_where(tag_condition)
+            .take(),
+    )
+}
+
 /// 按关键词列表在所有画布中搜索节点（AND 语义）。
 ///
-/// 每个关键词独立匹配节点标题、节点副标题或所在画布名称（OR），关键词之间为 AND 关系。
+/// 每个关键词独立匹配节点标题、节点副标题、所在画布名称或节点标签（OR），关键词之间为 AND 关系。
 /// 逻辑删除的节点与逻辑删除的画布内的节点均被排除。
 /// 影子节点（`shadow_producing_edge_id IS NOT NULL`）不参与全局搜索。
-/// 结果按画布名称、节点标题排序，最多返回 50 条。
+/// 结果按画布名称、节点标题排序，最多返回 50 条；每项附带该节点的全部标签（按标签名称升序）。
 ///
 /// # 参数
 /// - `connection`: 数据库连接。
@@ -371,18 +443,12 @@ pub fn search_by_keywords(
     keywords: &[String],
 ) -> Result<Vec<NodeSearchResponse>, ErrorCode> {
     let mut query = Query::select();
-    let cols: [sea_query::ColumnRef; 8] = [
-        (NodeIden::Table, NodeIden::Id).into(),
-        (NodeIden::Table, NodeIden::CanvasId).into(),
-        (NodeIden::Table, NodeIden::X).into(),
-        (NodeIden::Table, NodeIden::Y).into(),
-        (NodeIden::Table, NodeIden::Title).into(),
-        (NodeIden::Table, NodeIden::Subtitle).into(),
-        (NodeIden::Table, NodeIden::CanvasRefId).into(),
-        (CanvasIden::Table, CanvasIden::Name).into(),
-    ];
     query
-        .columns(cols)
+        .columns(search_columns())
+        .expr_as(
+            Expr::col((CanvasIden::Table, CanvasIden::ParentId)).is_null(),
+            Alias::new("canvas_is_root"),
+        )
         .from(NodeIden::Table)
         .join(
             JoinType::Join,
@@ -407,8 +473,12 @@ pub fn search_by_keywords(
                 )
                 .add(
                     Expr::col((CanvasIden::Table, CanvasIden::Name))
-                        .like(LikeExpr::new(pattern).escape('\\')),
+                        .like(LikeExpr::new(pattern.clone()).escape('\\')),
                 )
+                .add(exists_tag(
+                    Expr::col((NodeTagIden::Table, NodeTagIden::Tag))
+                        .like(LikeExpr::new(pattern).escape('\\')),
+                ))
                 .into(),
         );
     }
@@ -427,10 +497,118 @@ pub fn search_by_keywords(
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
         })?;
-    rows.collect::<Result<Vec<_>, _>>()
+    let mut results = rows
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|e| ErrorCode::DatabaseError {
             detail: e.to_string(),
-        })
+        })?;
+    fill_search_tags(connection, &mut results)?;
+    Ok(results)
+}
+
+/// 查询所有被收藏的节点（书签列表）。
+///
+/// 过滤逻辑删除的节点、逻辑删除的画布内的节点与影子节点；结果按画布名称、节点标题排序；
+/// 每项附带该节点的全部标签（按标签名称升序）。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+///
+/// # 返回值
+/// 返回被收藏节点的搜索结果列表；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_bookmarked(connection: &Connection) -> Result<Vec<NodeSearchResponse>, ErrorCode> {
+    let query = Query::select()
+        .columns(search_columns())
+        .expr_as(
+            Expr::col((CanvasIden::Table, CanvasIden::ParentId)).is_null(),
+            Alias::new("canvas_is_root"),
+        )
+        .from(NodeIden::Table)
+        .join(
+            JoinType::Join,
+            CanvasIden::Table,
+            Expr::col((NodeIden::Table, NodeIden::CanvasId))
+                .equals((CanvasIden::Table, CanvasIden::Id)),
+        )
+        .and_where(Expr::col((NodeIden::Table, NodeIden::Deleted)).eq(0))
+        .and_where(Expr::col((CanvasIden::Table, CanvasIden::Deleted)).eq(0))
+        .and_where(Expr::col((NodeIden::Table, NodeIden::ShadowProducingEdgeId)).is_null())
+        .and_where(Expr::col((NodeIden::Table, NodeIden::Bookmarked)).ne(0))
+        .order_by((CanvasIden::Table, CanvasIden::Name), Order::Asc)
+        .order_by((NodeIden::Table, NodeIden::Title), Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    let rows = statement
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_search_row)
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    let mut results = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    fill_search_tags(connection, &mut results)?;
+    Ok(results)
+}
+
+/// 按标签查询节点（标签精确匹配）。
+///
+/// 过滤逻辑删除的节点、逻辑删除的画布内的节点与影子节点；结果按画布名称、节点标题排序；
+/// 每项附带该节点的全部标签（按标签名称升序）。
+///
+/// # 参数
+/// - `connection`: 数据库连接。
+/// - `tag`: 标签名称，精确匹配 node_tag.tag 列。
+///
+/// # 返回值
+/// 返回携带该标签的节点搜索结果列表；若发生错误则返回对应的 `ErrorCode`。
+pub fn select_by_tag(connection: &Connection, tag: &str) -> Result<Vec<NodeSearchResponse>, ErrorCode> {
+    let query = Query::select()
+        .columns(search_columns())
+        .expr_as(
+            Expr::col((CanvasIden::Table, CanvasIden::ParentId)).is_null(),
+            Alias::new("canvas_is_root"),
+        )
+        .from(NodeIden::Table)
+        .join(
+            JoinType::Join,
+            CanvasIden::Table,
+            Expr::col((NodeIden::Table, NodeIden::CanvasId))
+                .equals((CanvasIden::Table, CanvasIden::Id)),
+        )
+        .and_where(Expr::col((NodeIden::Table, NodeIden::Deleted)).eq(0))
+        .and_where(Expr::col((CanvasIden::Table, CanvasIden::Deleted)).eq(0))
+        .and_where(Expr::col((NodeIden::Table, NodeIden::ShadowProducingEdgeId)).is_null())
+        .and_where(exists_tag(
+            Expr::col((NodeTagIden::Table, NodeTagIden::Tag)).eq(tag),
+        ))
+        .order_by((CanvasIden::Table, CanvasIden::Name), Order::Asc)
+        .order_by((NodeIden::Table, NodeIden::Title), Order::Asc)
+        .take();
+    let (sql, values) = query.build(SqliteQueryBuilder);
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    let rows = statement
+        .query_map(rusqlite::params_from_iter(values_to_params(values)), map_search_row)
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    let mut results = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ErrorCode::DatabaseError {
+            detail: e.to_string(),
+        })?;
+    fill_search_tags(connection, &mut results)?;
+    Ok(results)
 }
 
 /// 批量移动节点坐标：只更新 x、y 两列，prepared statement 只 prepare 一次。
@@ -556,6 +734,7 @@ mod tests {
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         }
     }
 
@@ -691,6 +870,8 @@ mod tests {
         // 搜索段画布与节点统一使用 s- 前缀，与上文流程节点隔离，
         // 避免上文流程中未删除节点（如 canvas-2 中的 id-3）被 INNER JOIN 命中而干扰断言。
         crate::business::user_database::canvas::dao::create_table(&connection).unwrap();
+        // 搜索条件包含节点标签的 EXISTS 子查询，因此需要 node_tag 表存在。
+        crate::business::user_database::node_tag::dao::create_table(&connection).unwrap();
 
         // 准备画布数据。
         let canvas1 = crate::business::user_database::entity::Canvas {
@@ -983,6 +1164,150 @@ mod tests {
         crate::business::user_database::canvas::dao::insert(&connection, &canvas_shadow).unwrap();
         let results = search_by_keywords(&connection, &["Findable".to_string()]).unwrap();
         assert!(!results.iter().any(|n| n.id == "shadow-searchable"));
+
+        // ===== bookmarked 读写往返与建表默认值 =====
+        // insert 语句省略 bookmarked 列时按 DEFAULT 0 落库，读出 bookmarked = false。
+        connection
+            .execute(
+                "INSERT INTO node (id, canvas_id, x, y, title, subtitle, canvas_ref_id, deleted, color, shadow_producing_edge_id)
+                VALUES ('bk-sql-default', 's-canvas-1', 0.0, 0.0, 'SQL Default', '', NULL, 0, '', NULL)",
+                [],
+            )
+            .unwrap();
+        assert!(!select_by_id(&connection, "bk-sql-default").unwrap().unwrap().bookmarked);
+
+        // dao 写入 true 后读出 bookmarked = true；写回 false 后读出 bookmarked = false。
+        let mut to_bookmark = select_by_id(&connection, "bk-sql-default").unwrap().unwrap();
+        to_bookmark.bookmarked = true;
+        update(&connection, &to_bookmark).unwrap();
+        assert!(select_by_id(&connection, "bk-sql-default").unwrap().unwrap().bookmarked);
+        to_bookmark.bookmarked = false;
+        update(&connection, &to_bookmark).unwrap();
+        assert!(!select_by_id(&connection, "bk-sql-default").unwrap().unwrap().bookmarked);
+
+        // ===== search_by_keywords 标签命中 =====
+        // 标签命中未删除节点。
+        crate::business::user_database::node_tag::dao::insert(&connection, "s-node-1", "backend")
+            .unwrap();
+        let results = search_by_keywords(&connection, &["backend".to_string()]).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "s-node-1");
+        // 结果附带节点全部标签。
+        assert_eq!(results[0].tags, vec!["backend".to_string()]);
+
+        // 结果中的标签按名称升序（插入序与名称序不一致时仍按名称序返回）。
+        crate::business::user_database::node_tag::dao::insert(&connection, "s-node-1", "apis")
+            .unwrap();
+        let results = search_by_keywords(&connection, &["backend".to_string()]).unwrap();
+        assert_eq!(results[0].tags, vec!["apis".to_string(), "backend".to_string()]);
+
+        // 未携带标签的节点在结果中 tags 为空列表。
+        let results = search_by_keywords(&connection, &["Python".to_string()]).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "s-node-2");
+        assert!(results[0].tags.is_empty());
+
+        // 标签含 LIKE 特殊字符时按字面字符匹配（转义复用 escape_like_pattern）。
+        crate::business::user_database::node_tag::dao::insert(&connection, "s-node-2", "100%_tag")
+            .unwrap();
+        let results = search_by_keywords(&connection, &["100%_tag".to_string()]).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "s-node-2");
+        let results = search_by_keywords(&connection, &["100%".to_string()]).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().any(|n| n.id == "s-node-2"));
+        assert!(results.iter().any(|n| n.id == "s-node-percent"));
+
+        // 影子节点即使带标签也不参与全局搜索。
+        crate::business::user_database::node_tag::dao::insert(
+            &connection,
+            "shadow-searchable",
+            "shadow-tag-only",
+        )
+        .unwrap();
+        let results = search_by_keywords(&connection, &["shadow-tag-only".to_string()]).unwrap();
+        assert!(results.is_empty());
+
+        // ===== select_bookmarked =====
+        // 两个画布中的收藏节点：结果按画布名称、节点标题排序，且带出 bookmarked = true。
+        let mut bk1 = node("bk-1", "s-canvas-1");
+        bk1.title = "Bookmark Alpha".to_string();
+        bk1.bookmarked = true;
+        insert(&connection, &bk1).unwrap();
+        let mut bk2 = node("bk-2", "s-canvas-2");
+        bk2.title = "Bookmark Beta".to_string();
+        bk2.bookmarked = true;
+        insert(&connection, &bk2).unwrap();
+        // 未收藏节点不出现。
+        insert(&connection, &node("bk-3", "s-canvas-1")).unwrap();
+        // 已逻辑删除的收藏节点不出现。
+        let mut bk4 = node("bk-4", "s-canvas-1");
+        bk4.bookmarked = true;
+        bk4.deleted = true;
+        insert(&connection, &bk4).unwrap();
+        // 位于已逻辑删除画布中的收藏节点不出现（s-canvas-3 在上文已逻辑删除）。
+        let mut bk5 = node("bk-5", "s-canvas-3");
+        bk5.bookmarked = true;
+        insert(&connection, &bk5).unwrap();
+        // 影子节点不出现。
+        let mut bk6 = node("bk-6", "canvas-shadow-1");
+        bk6.bookmarked = true;
+        bk6.shadow_producing_edge_id = Some("shadow-bookmark-origin".to_string());
+        insert(&connection, &bk6).unwrap();
+
+        let bookmarked = select_bookmarked(&connection).unwrap();
+        assert_eq!(bookmarked.len(), 2);
+        assert_eq!(bookmarked[0].id, "bk-1");
+        assert_eq!(bookmarked[0].canvas_name, "Alpha Canvas");
+        assert!(bookmarked[0].bookmarked);
+        assert!(bookmarked[0].tags.is_empty());
+        assert_eq!(bookmarked[1].id, "bk-2");
+        assert_eq!(bookmarked[1].canvas_name, "Beta Canvas");
+        assert!(bookmarked[1].bookmarked);
+
+        // 收藏状态出现在 search_by_keywords 的结果中（bookmarked 字段统一带出）。
+        let results = search_by_keywords(&connection, &["Bookmark".to_string()]).unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, "bk-1");
+        assert!(results[0].bookmarked);
+        assert_eq!(results[1].id, "bk-2");
+        assert!(results[1].bookmarked);
+
+        // ===== select_by_tag =====
+        // 同一标签命中多个节点时按画布名称、节点标题排序。
+        crate::business::user_database::node_tag::dao::insert(&connection, "bk-1", "bk-tag")
+            .unwrap();
+        crate::business::user_database::node_tag::dao::insert(&connection, "bk-2", "bk-tag")
+            .unwrap();
+        // 已逻辑删除节点的标签行不出现。
+        crate::business::user_database::node_tag::dao::insert(&connection, "bk-4", "bk-tag")
+            .unwrap();
+        // 影子节点的标签行不出现。
+        crate::business::user_database::node_tag::dao::insert(&connection, "bk-6", "bk-tag")
+            .unwrap();
+        let tagged = select_by_tag(&connection, "bk-tag").unwrap();
+        assert_eq!(tagged.len(), 2);
+        assert_eq!(tagged[0].id, "bk-1");
+        assert_eq!(tagged[0].tags, vec!["bk-tag".to_string()]);
+        assert_eq!(tagged[1].id, "bk-2");
+        assert_eq!(tagged[1].tags, vec!["bk-tag".to_string()]);
+
+        // select_by_tag 未命中：不存在的标签返回空列表。
+        assert!(select_by_tag(&connection, "no-such-tag").unwrap().is_empty());
+
+        // select_by_tag 注入防护：标签内容含 SQL 片段时按参数绑定为字面值，不作为 SQL 执行。
+        crate::business::user_database::node_tag::dao::insert(&connection, "bk-1", "x'; DROP TABLE node; --")
+            .unwrap();
+        let injected = select_by_tag(&connection, "x'; DROP TABLE node; --").unwrap();
+        assert_eq!(injected.len(), 1);
+        assert_eq!(injected[0].id, "bk-1");
+        // 结果附带节点全部标签并按名称升序。
+        assert_eq!(
+            injected[0].tags,
+            vec!["bk-tag".to_string(), "x'; DROP TABLE node; --".to_string()]
+        );
+        // node 表仍然存在（注入未生效）。
+        assert!(select_by_id(&connection, "bk-1").unwrap().is_some());
     }
 
     /// STRICT 生效验证：向 TEXT 列（title）插入 BLOB 值时被数据库拒绝（非 STRICT 表会静默接受）。

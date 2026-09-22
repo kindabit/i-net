@@ -53,6 +53,16 @@
         "name": "编辑节点字段",
         "detail": "编辑了节点\u201c{node_title}\u201d的字段"
       },
+      "NodeTagsModify": {
+        "name": "修改节点标签",
+        "detail": "修改节点\u201c{node_title}\u201d的标签：新增 {added}；移除 {removed}"
+      },
+      "NodeBookmarkModify": {
+        "name": "修改节点书签",
+        "detail": "将节点\u201c{node_title}\u201d的书签状态修改为\u201c{bookmarked}\u201d",
+        "detail-added": "将节点\u201c{node_title}\u201d加入书签",
+        "detail-removed": "取消节点\u201c{node_title}\u201d的书签"
+      },
       "AttachmentCreate": {
         "name": "创建附件",
         "detail": "在节点“{node_title}”中创建了附件“{file_name}”"

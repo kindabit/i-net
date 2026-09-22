@@ -2,7 +2,7 @@
   数据节点 / 画布数据节点组件。
 
   在画布中将一个敏感数据节点或子画布数据节点渲染为 vue-flow 节点。
-  显示节点标题和副标题，canvasRefId 非 null 时显示画布图标；双击数据节点打开编辑对话框，双击画布数据节点进入子画布。
+  显示节点标题和副标题，canvasRefId 非 null 时显示画布图标；非影子节点且已加入书签时，在标题旁显示书签图标；双击数据节点打开编辑对话框，双击画布数据节点进入子画布。
   四个方向均为出口（source）。
   节点为固定宽高（尺寸常量见 node-size.ts，为吸附网格 20px 的整数倍），标题/副标题过长时显示省略号。
   hover 时在节点顶部外侧显示操作按钮排（毛玻璃风格）；数据节点包含编辑、复制、附件、自定义颜色与逻辑删除五个按钮，
@@ -280,6 +280,22 @@ async function onShadowVirtualEdgeClick() {
     <div v-if="data.canvasRefId" class="data-node-title-row">
       <VIcon icon="mdi-vector-square" size="18" class="data-node-icon" :style="{ color: colors.icon }" />
       <div class="data-node-title">{{ data.title }}</div>
+      <VIcon
+        v-if="!data.shadowOriginId && data.bookmarked"
+        icon="mdi-bookmark"
+        size="x-small"
+        class="data-node-bookmark"
+        :style="{ color: colors.icon }"
+      />
+    </div>
+    <div v-else-if="!data.shadowOriginId && data.bookmarked" class="data-node-title-row">
+      <div class="data-node-title">{{ data.title }}</div>
+      <VIcon
+        icon="mdi-bookmark"
+        size="x-small"
+        class="data-node-bookmark"
+        :style="{ color: colors.icon }"
+      />
     </div>
     <div v-else class="data-node-title">{{ data.title }}</div>
     <div v-if="data.subtitle" class="data-node-subtitle" :style="{ color: colors.subtitle }">{{ data.subtitle }}</div>
@@ -377,6 +393,13 @@ async function onShadowVirtualEdgeClick() {
   white-space: nowrap;
   max-width: 100%;
   min-width: 0;
+}
+
+/** 书签图标：inline 在标题行内，不改变节点布局高度 */
+.data-node-bookmark {
+  flex-shrink: 0;
+  color: rgb(var(--v-theme-primary));
+  opacity: 0.85;
 }
 
 .data-node-subtitle {

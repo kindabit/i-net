@@ -71,6 +71,8 @@ export interface Node {
   deleted: boolean;
   /** 序列化自定义颜色，空串 = 默认 */
   color: string;
+  /** 是否已加入书签 */
+  bookmarked: boolean;
   /** 产生该影子节点的边 id；null 表示数据节点（影子的产生边为其存在依据，与其同生共死） */
   shadow_producing_edge_id: string | null;
 }
@@ -239,6 +241,14 @@ export interface Dictionary {
 /** 连接桩（上下左右各一个） */
 export type Handle = "top" | "right" | "bottom" | "left";
 
+/** 标签值对象（对应后端 NodeTagVO），用于标签云与编辑对话框的标签候选。 */
+export interface NodeTagVO {
+  /** 标签名 */
+  name: string;
+  /** 使用该标签的节点数量 */
+  node_count: number;
+}
+
 /** 节点全局搜索结果项（对应后端 NodeSearchResponse） */
 export interface NodeSearchResponse {
   /** 节点 id（uuid） */
@@ -253,10 +263,16 @@ export interface NodeSearchResponse {
   title: string;
   /** 节点副标题 */
   subtitle: string;
+  /** 是否已加入书签 */
+  bookmarked: boolean;
   /** 节点引用的子画布 id，仅画布数据节点有值 */
   canvas_ref_id: string | null;
   /** 节点所在画布的名称 */
   canvas_name: string;
+  /** 节点所在画布是否为根画布（为 true 时界面显示本地化的根画布名称而非 canvas_name） */
+  canvas_is_root: boolean;
+  /** 节点携带的全部标签名称（按标签名称升序） */
+  tags: string[];
 }
 
 /** 带自定义颜色的数据节点条目（data_node_color_list 的返回项） */

@@ -82,9 +82,14 @@
       "delete-shadow-node": "Delete shadow node (equivalent to deleting the edge that produced it)",
       "copy-node": "Copy node",
       "edit-node": "Edit node",
+      "bookmarks": "Bookmarks",
+      "tag-cloud": "Tag Cloud",
       "edit-node-title-label": "Title",
       "edit-node-title-required": "Title is required",
       "edit-node-subtitle-label": "Subtitle",
+      "edit-node-tags-label": "Tags",
+      "edit-node-bookmark-add": "Bookmark",
+      "edit-node-bookmark-remove": "Remove bookmark",
       "edit-node-save-as-template": "Save as Template",
       "save-as-template-title": "Save as Template",
       "template-name-label": "Template Name",
@@ -171,6 +176,15 @@
       "relocate-has-shadow": "The selection contains a shadow node; shadow nodes cannot be relocated across canvases",
       "relocate-has-canvas": "The selection contains a canvas data node; canvas data nodes cannot be relocated across canvases",
       "relocate-has-external": "The selection has edges to unselected nodes; select them together to relocate"
+    },
+    "tag-cloud": {
+      "dialog-title": "Tag: {tag}",
+      "empty": "No tags"
+    },
+    "node-group": {
+      "empty-bookmarked": "No bookmarked nodes",
+      "empty-tag": "No nodes with this tag",
+      "go-to-node": "Go to node"
     },
     "search": {
       "open": "Search",

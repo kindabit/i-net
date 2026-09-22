@@ -2,7 +2,7 @@
 
 本台账对账范围：`src\api.ts` 的后端命令与前端功能面（页面、对话框、画布交互），逐项标注对应测试用例或未覆盖原因。
 
-说明：原 85 条命令中的 `user_database_canvas_create` 已于 2026-09-21 随收尾整理从代码中删除（前端无 UI 调用入口），现行命令 84 条；下表保留该行以说明去向。
+说明：原 85 条命令中的 `user_database_canvas_create` 已于 2026-09-21 随收尾整理从代码中删除（前端无 UI 调用入口）；2026-09-22 节点标签与书签功能新增 6 条命令（#86–#91），现行命令 90 条。下表保留已删除命令行以说明去向。
 
 ## 一、后端命令覆盖表
 
@@ -40,7 +40,7 @@
 | 30 | `user_database_node_restore` | 004 | 回收站恢复节点 |
 | 31 | `user_database_node_physical_delete` | 004 | 永久删除节点（含确认框取消） |
 | 32 | `user_database_node_list` | 002、003、004、005、006、007、008、009、010、011、015 | 各画布加载、回收站、影子合并展示 |
-| 33 | `user_database_node_search` | 010 | 全局搜索（防抖、候选、无匹配） |
+| 33 | `user_database_node_search` | 010、017 | 全局搜索（防抖、候选、无匹配）；017 覆盖节点标签的 OR 匹配维度与结果副标题的根画布本地化显示 |
 | 34 | `user_database_data_node_set_color` | 004 | 数据节点自定义颜色 |
 | 35 | `user_database_data_node_color_list` | 004 | 配色对话框历史颜色 |
 | 36 | `user_database_edge_create` | 006、007 | 新建、同向更新、反向替换（含断连确认） |
@@ -93,8 +93,14 @@
 | 83 | `file_system_roots` | 008、009、011、012 | FilePickerDialog 驱动器列表 |
 | 84 | `file_system_path_exists` | 008、009、011、012 | save 模式覆盖检查 |
 | 85 | `app_info_get` | 014 | 关于对话框信息 |
+| 86 | `user_database_node_set_bookmarked` | 017 | 编辑对话框书签切换（收藏/取消）；取消后书签列表重载为空态；无变化不写日志由 017 的日志计数间接覆盖 |
+| 87 | `user_database_node_list_bookmarked` | 017 | 书签列表加载（按画布分组、根画布本地化组名）、取消书签后空态、跨画布跳转入口 |
+| 88 | `user_database_node_tag_list` | 017 | 标签云数据源与字号分档（node_count 比例分 5 档） |
+| 89 | `user_database_node_tag_list_for_node` | 017 | 编辑对话框标签 chip 回填（保存后重开） |
+| 90 | `user_database_node_tag_list_nodes` | 017 | 「标签：{tag}」分组列表加载（含根画布分组名） |
+| 91 | `user_database_node_tag_set_for_node` | 017 | 标签保存（trim/去空/去重、全量覆盖、无变化不写日志由日志计数间接覆盖） |
 
-**命令覆盖结论**：现行 84 条中，83 条由至少一个用例覆盖；其中 `reclaim_*` 无独立入口（由 case_012 还原流程覆盖）、`metadata_save` / `user_database_lifecycle_save` 为 fire-and-forget（以持久化结果间接覆盖）；`fatal_exit` 不可覆盖（原因见上）。原 `user_database_canvas_create` 已于 2026-09-21 从代码中删除。
+**命令覆盖结论**：现行 90 条中，89 条由至少一个用例覆盖；其中 `reclaim_*` 无独立入口（由 case_012 还原流程覆盖）、`metadata_save` / `user_database_lifecycle_save` 为 fire-and-forget（以持久化结果间接覆盖）；`fatal_exit` 不可覆盖（原因见上）。原 `user_database_canvas_create` 已于 2026-09-21 从代码中删除；2026-09-22 新增的 6 条标签与书签命令（#86–#91）均由 case_017 覆盖。
 
 ## 二、前端功能面覆盖表
 
@@ -105,7 +111,7 @@
 | Home.vue：名称步/密码步、新建与解锁、候选下拉、归档/备份/还原入口 | 001、002、012、013、014、015 |
 | DatabaseView.vue：工具菜单、日志/保存并退出、Ctrl+S、关闭拦截、场景路由 | 003–011、015 |
 | CanvasUniverseView.vue：画布节点、自动布局、画布回收站、宇宙视口 | 003、007 |
-| CanvasView.vue：模板面板、节点/边/附件/字典/导出/搜索等画布操作 | 004–011、015 |
+| CanvasView.vue：模板面板、节点/边/附件/字典/导出/搜索等画布操作、书签与标签云入口 | 004–011、015、017 |
 | App.vue：右上角语言/设置/主题/关于、Snackbar 队列、剪贴板倒计时条 | 005、014（Snackbar 由各 case 断言） |
 
 ### 对话框与组件
@@ -121,12 +127,13 @@
 | components：AutoCompleteField / PasswordField | 001、002、011 |
 | components：NodeField / TemplateField / TreeSelect | 005、009 |
 | field-editors：StringSingleLineEditor / StringPasswordEditor / PasswordGeneratorDialog / StringEmailEditor | 005 |
-| DatabaseComponents：EditNodeDialog / RecycleBinPanel | 004、005、009 |
+| DatabaseComponents：EditNodeDialog / RecycleBinPanel | 004、005、009、017（017：书签切换按钮与标签 combobox） |
 | DatabaseComponents：DictionaryManagerDialog | 005 |
+| DatabaseComponents：NodeGroupListDialog / TagCloudPanel | 017 |
 | DatabaseComponents：NodeTemplatePanel / TemplateManagerDialog | 004、006、007、009 |
 | DatabaseComponents：EdgeContextMenu / EditEdgeDialog / CustomEdge | 006、007 |
-| DatabaseComponents：DataNode / CanvasNode / CanvasBreadcrumb / CanvasRecycleBinPanel | 003、004、006、007、015 |
-| DatabaseComponents：ExportDialog / GlobalSearch / LogDialog / LogActionContent / Topbar | 010、011 |
+| DatabaseComponents：DataNode / CanvasNode / CanvasBreadcrumb / CanvasRecycleBinPanel | 003、004、006、007、015、017（017：卡片书签图标） |
+| DatabaseComponents：ExportDialog / GlobalSearch / LogDialog / LogActionContent / Topbar | 010、011、017（017：搜索标签匹配、标签与书签日志详情） |
 | DatabaseComponents\attachment：AttachmentDialog / AttachmentPreviewDialog / AttachmentViewerText | 008 |
 | node-colors：EditDataNodeColorDialog / EditCanvasNodeColorDialog | 004、003 |
 | migration：KeePass2Import | 011 |
@@ -140,6 +147,8 @@
 | 节点双击进入子画布 / 编辑、面包屑钻入钻出与折叠 | 003、007 |
 | 节点拖动、框选批量移动、20px 网格吸附 | 004 |
 | 节点复制、逻辑删除/恢复/永久删除、配色 | 004 |
+| 节点标签输入与书签切换（编辑对话框 combobox 自由输入、trim/去空/去重、仅变更项保存、取消不写库；卡片书签图标） | 017 |
+| 书签列表与标签云（按画布分组、行内编辑后整表重载、跨画布跳转居中、空态；标签字号分档、面板互斥、分组列表关闭后重载） | 017 |
 | 快捷键 Ctrl/Cmd+C 复制选中数据节点、Ctrl/Cmd+V 在鼠标位置粘贴（含生效门控：对话框 / 模板面板 / 回收站面板 / 边右键菜单 / 输入框焦点；跨画布粘贴归属当前画布；源节点逻辑删除或物理删除后跳过） | 016 |
 | 连接桩拖拽建边、同向更新、反向替换 | 006、007 |
 | 边右键菜单、编辑、删除与断连确认 | 006、007 |
@@ -167,10 +176,17 @@
 | 日志「AttachmentUpdate」行为类型筛选 | i18n 缺少该 key，筛选下拉中无此项（已知缺陷，无法选择） |
 | 快捷键复制对影子节点的过滤（`data.shadowOriginId` 分支） | 需要构造跨画布边产生影子节点（case_006/007 主题），构造成本高；该过滤与画布数据节点分支共用同一表达式（`!data.shadowOriginId && !data.canvasRefId`），case_016 已覆盖画布数据节点分支 |
 | 快捷键粘贴在「鼠标不在画布容器内」时回退视口中心 | 画布容器 `.canvas-view` 宽高 100%，指针恒在容器内，该分支不可经 UI 触达；case_016 以「副本中心落在鼠标落点附近且远离视口中心」的落点断言覆盖指针语义 |
+| 节点标签的移除路径（NodeTagsModify 的 removed 非空） | 删除已有标签 chip 需点击 chip 的关闭图标，该图标位于 action-leaf combobox 内部、UI 树不展开，无法稳定定位；case_017 仅覆盖新增路径（removed 为空显示「—」），后端 `set_for_node` 的 added/removed 差集计算已有单元测试覆盖 |
+| GlobalSearch 搜索结果中的节点标签 chips 展示（命中关键词的标签优先、其余字典序、单行右对齐、最多 3 个加省略号 chip） | 2026-09-22 新增的展示行为，当日经一次性调试自动化验证通过（含排序、截断、对齐断言），尚未补入正式用例；建议后续并入 case_017 S6 |
+| 影子节点只读对话框中的书签按钮禁用与标签 combobox 只读 | 构造影子节点需要跨画布边（case_006/007 主题），构造成本高；后端 `NodeIsShadow` 已有单元测试覆盖 |
+| 编辑对话框「取消」分支不写库的直接观测 | 取消没有可观测的副作用（后端无变化时也不写日志），case_017 由「标签云状态保持」「书签列表状态保持」「日志计数」间接佐证 |
 
 ## 三、覆盖结论
 
-1. 后端命令：现行 84 条均有归属说明（另有 1 条已于 2026-09-21 删除）；83 条有 UI 可达的覆盖路径，`fatal_exit` 为唯一不可覆盖项（原因：受控崩溃仅由数据损坏触发）。
+1. 后端命令：现行 90 条均有归属说明（另有 1 条已于 2026-09-21 删除）；89 条有 UI 可达的覆盖路径，`fatal_exit` 为唯一不可覆盖项（原因：受控崩溃仅由数据损坏触发）。
 2. 前端功能面：4 个页面、全部面向用户的主要对话框与画布交互均已分配用例；未覆盖项均为「等价入口」「复杂交互扩展」或「不可构造/不可触达」，已逐条列明原因。
-3. 失败路径：全部 16 份计划均含成功路径与失败路径（含前端校验、后端错误码、确认对话框取消分支）。
+3. 失败路径：全部 17 份计划均含成功路径与失败路径（含前端校验、后端错误码、确认对话框取消分支）。
 4. 已知偏差（与任务书描述的差异）已在各计划「备注与风险」中记录，主要为：fixture `lastScene` 非空（002）、画布/节点无右键菜单（003、004）、模板拖拽不吸附网格（004）、删除数据库名称不匹配无文案（013）、「关于」仓库链接无 href 且禁止点击（014）、无顶栏保存按钮且保存并退出位于右下角（015）。
+5. 测试工程维护（2026-09-22 节点标签与书签功能接入）：
+   - fixture `base` 因用户数据库新增 `node.bookmarked` 列与 `node_tag` 表而按 `_fixtures\README.md` 用 `_fixtures\build.js` 重建（旧 fixture 打开后节点列表查询失败、画布无节点）；
+   - case_010 的全局搜索副标题断言按「根画布显示本地化名称」升级为「根画布」，其第二个搜索素材落点与日志分页按钮判据按当前窗口尺寸/DPI 修正（原固定坐标在新环境下分别落入底部工具栏与判据阈值之外）。

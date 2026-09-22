@@ -2,7 +2,8 @@
   全局搜索组件。
 
   收起态为搜索图标按钮，点击后展开为输入框；输入关键词防抖搜索所有画布中的节点，
-  下拉展示结果，支持键盘导航与鼠标点击，选中后跳转到对应画布并居中目标节点。
+  下拉展示结果（结果项左侧为标题与副标题，右侧为节点标签），支持键盘导航与鼠标点击，
+  选中后跳转到对应画布并居中目标节点。
 -->
 <script setup lang="ts">
 import { ref, nextTick, onUnmounted } from "vue";
@@ -35,6 +36,12 @@ const dropdownRef = ref<{ $el: HTMLElement } | undefined>();
 /** 请求序号，用于竞态丢弃过期结果 */
 let requestSeq = 0;
 
+/** 单个搜索结果最多显示的标签数量；超出时追加一个省略号 chip */
+const MAX_VISIBLE_TAGS = 3;
+
+/** 当前结果集对应的查询关键词列表（小写），用于把命中的标签排在前面 */
+const searchedKeywords = ref<string[]>([]);
+
 /**
  * 执行搜索请求（防抖后调用）。
  * 输入：无。
@@ -45,6 +52,7 @@ async function doSearch() {
   const q = keyword.value.trim();
   if (q === "") {
     results.value = [];
+    searchedKeywords.value = [];
     dropdownOpen.value = false;
     return;
   }
@@ -52,6 +60,7 @@ async function doSearch() {
     const data = await userDatabaseNodeSearch(q);
     if (seq !== requestSeq) return;
     results.value = data;
+    searchedKeywords.value = splitKeywords(q);
     highlightedIndex.value = 0;
     // 无论是否有结果都打开下拉：无结果时展示 no-results 占位，向用户反馈搜索已完成
     dropdownOpen.value = true;
@@ -86,6 +95,7 @@ function onInput() {
   if (q === "") {
     debouncedSearch.cancel();
     results.value = [];
+    searchedKeywords.value = [];
     dropdownOpen.value = false;
     return;
   }
@@ -103,6 +113,68 @@ async function scrollToHighlighted() {
   if (!dropdownEl) return;
   const highlightedEl = dropdownEl.querySelector(".search-highlighted") as HTMLElement | null;
   highlightedEl?.scrollIntoView({ block: "nearest" });
+}
+
+/**
+ * 返回搜索结果所在画布的展示名称：根画布显示本地化文案，其余画布显示原名。
+ * 输入：item 搜索结果项。
+ * 返回：画布展示名称。
+ */
+function canvasDisplayName(item: NodeSearchResponse): string {
+  return item.canvas_is_root ? t("database.canvas.root-canvas") : item.canvas_name;
+}
+
+/**
+ * 把原始查询串拆分为关键词列表，与后端拆分规则保持一致：
+ * 以空白字符以及 `,` `，` `、` `。` `.` `;` `；` 为分隔符，每段非空才保留。
+ * @param query 原始查询串。
+ * @returns 小写化的关键词列表。
+ */
+function splitKeywords(query: string): string[] {
+  return query
+    .split(/[\s,，、。.;；]+/u)
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part !== "");
+}
+
+/**
+ * 组合搜索结果的副标题行文本：节点副标题与画布展示名以间隔点连接，无节点副标题时仅显示画布名。
+ * @param item 搜索结果项。
+ * @returns 副标题行文本。
+ */
+function subtitleText(item: NodeSearchResponse): string {
+  return item.subtitle ? `${item.subtitle} · ${canvasDisplayName(item)}` : canvasDisplayName(item);
+}
+
+/**
+ * 计算搜索结果项的标签展示顺序：命中任一查询关键词的标签排在前面，其余标签在后，
+ * 两组内部均保持后端返回的标签名称升序；无关键词时等同于全部按字典序排列。
+ * @param item 搜索结果项。
+ * @returns 排序后的标签列表。
+ */
+function orderedTags(item: NodeSearchResponse): string[] {
+  const keywords = searchedKeywords.value;
+  if (keywords.length === 0) return item.tags;
+  const matched: string[] = [];
+  const unmatched: string[] = [];
+  for (const tag of item.tags) {
+    const lower = tag.toLowerCase();
+    if (keywords.some((keyword) => lower.includes(keyword))) {
+      matched.push(tag);
+    } else {
+      unmatched.push(tag);
+    }
+  }
+  return [...matched, ...unmatched];
+}
+
+/**
+ * 返回搜索结果项实际展示的标签列表：取展示顺序中的前 MAX_VISIBLE_TAGS 个。
+ * @param item 搜索结果项。
+ * @returns 展示用标签列表。
+ */
+function visibleTags(item: NodeSearchResponse): string[] {
+  return orderedTags(item).slice(0, MAX_VISIBLE_TAGS);
 }
 
 /**
@@ -148,6 +220,7 @@ function onKeydown(e: KeyboardEvent) {
 function select(item: NodeSearchResponse) {
   keyword.value = "";
   results.value = [];
+  searchedKeywords.value = [];
   dropdownOpen.value = false;
   void router.push({
     name: "canvas",
@@ -161,6 +234,7 @@ function select(item: NodeSearchResponse) {
 function collapse() {
   keyword.value = "";
   results.value = [];
+  searchedKeywords.value = [];
   dropdownOpen.value = false;
   expanded.value = false;
 }
@@ -207,12 +281,30 @@ onUnmounted(() => {
           <VListItem
             v-for="(item, i) in results"
             :key="item.id"
-            :title="item.title"
-            :subtitle="item.subtitle ? `${item.subtitle} · ${item.canvas_name}` : item.canvas_name"
             :active="i === highlightedIndex"
             :class="{ 'search-highlighted': i === highlightedIndex }"
             @mousedown.prevent="select(item)"
-          />
+          >
+            <!-- 结果项为左右两列：左列标题与副标题（左对齐），右列标签（垂直居中、右对齐） -->
+            <div class="search-item-body">
+              <div class="search-item-main">
+                <VListItemTitle>{{ item.title }}</VListItemTitle>
+                <VListItemSubtitle>{{ subtitleText(item) }}</VListItemSubtitle>
+              </div>
+              <!-- 标签列：单行右对齐；命中的标签靠前，最多 MAX_VISIBLE_TAGS 个，超出以省略号 chip 表示 -->
+              <div v-if="item.tags.length > 0" class="search-item-tags">
+                <VChip
+                  v-for="tag in visibleTags(item)"
+                  :key="tag"
+                  size="x-small"
+                  class="search-item-tag"
+                >
+                  {{ tag }}
+                </VChip>
+                <VChip v-if="item.tags.length > MAX_VISIBLE_TAGS" size="x-small" class="search-item-tag">…</VChip>
+              </div>
+            </div>
+          </VListItem>
         </VList>
         <div v-else class="text-body-2 text-disabled pa-3 text-center">
           {{ t("database.search.no-results") }}
@@ -270,6 +362,34 @@ onUnmounted(() => {
   max-height: 15rem;
   overflow-y: auto;
   transform-origin: top center;
+}
+
+/* 结果项主体：左列标题与副标题，右列标签 */
+.search-item-body {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 左列可收缩，标题与副标题超宽时省略号收尾 */
+.search-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 标签列：单行右对齐（与左对齐的标题、副标题形成对照），超宽时裁剪而非换行 */
+.search-item-tags {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.search-item-tag {
+  flex-shrink: 0;
 }
 
 .dropdown-enter-active,

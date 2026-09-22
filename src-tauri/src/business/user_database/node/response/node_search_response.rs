@@ -19,4 +19,10 @@ pub struct NodeSearchResponse {
     pub canvas_ref_id: Option<String>,
     /// 节点所在画布的名称
     pub canvas_name: String,
+    /// 节点所在画布是否为根画布（前端据此举行本地化名称展示）
+    pub canvas_is_root: bool,
+    /// 节点是否被用户收藏（书签）
+    pub bookmarked: bool,
+    /// 节点携带的全部标签名称，按标签名称升序
+    pub tags: Vec<String>,
 }

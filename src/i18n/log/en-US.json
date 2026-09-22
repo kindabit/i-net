@@ -53,6 +53,16 @@
         "name": "Edit Node Fields",
         "detail": "Edited fields of node \"{node_title}\""
       },
+      "NodeTagsModify": {
+        "name": "Modify Node Tags",
+        "detail": "Modified tags of node \"{node_title}\": added {added}; removed {removed}"
+      },
+      "NodeBookmarkModify": {
+        "name": "Modify Node Bookmark",
+        "detail": "Changed the bookmark state of node \"{node_title}\" to \"{bookmarked}\"",
+        "detail-added": "Bookmarked node \"{node_title}\"",
+        "detail-removed": "Removed bookmark from node \"{node_title}\""
+      },
       "AttachmentCreate": {
         "name": "Create attachment",
         "detail": "Created attachment “{file_name}” on node “{node_title}”"

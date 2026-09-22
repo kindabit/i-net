@@ -190,6 +190,7 @@ mod tests {
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         }
     }
 

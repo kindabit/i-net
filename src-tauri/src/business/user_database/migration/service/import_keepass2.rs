@@ -111,6 +111,7 @@ pub fn import_keepass2(
         deleted: false,
         color: String::new(),
         shadow_producing_edge_id: None,
+        bookmarked: false,
     };
     node::dao::insert(&connection, &canvas_node)?;
 
@@ -130,6 +131,7 @@ pub fn import_keepass2(
             deleted: false,
             color: String::new(),
             shadow_producing_edge_id: None,
+            bookmarked: false,
         };
         node::dao::insert(&connection, &node)?;
         node_ids.push(node.id.clone());

@@ -55,6 +55,8 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import EditNodeDialog from "./DatabaseComponents/EditNodeDialog.vue";
 import EditDataNodeColorDialog from "@/node-colors/EditDataNodeColorDialog.vue";
 import NodeTemplatePanel from "./DatabaseComponents/NodeTemplatePanel.vue";
+import TagCloudPanel from "./DatabaseComponents/TagCloudPanel.vue";
+import NodeGroupListDialog from "./DatabaseComponents/NodeGroupListDialog.vue";
 import TemplateManagerDialog from "./DatabaseComponents/TemplateManagerDialog.vue";
 import DictionaryManagerDialog from "./DatabaseComponents/DictionaryManagerDialog.vue";
 import AttachmentDialog from "./DatabaseComponents/attachment/AttachmentDialog.vue";
@@ -73,6 +75,8 @@ const editNodeDialogRef = ref<InstanceType<typeof EditNodeDialog>>();
 const nodeColorDialogRef = ref<InstanceType<typeof EditDataNodeColorDialog>>();
 const editEdgeDialogRef = ref<InstanceType<typeof EditEdgeDialog>>();
 const templatePanelRef = ref<InstanceType<typeof NodeTemplatePanel>>();
+const tagCloudPanelRef = ref<InstanceType<typeof TagCloudPanel>>();
+const nodeGroupListDialogRef = ref<InstanceType<typeof NodeGroupListDialog>>();
 const templateManagerDialogRef = ref<InstanceType<typeof TemplateManagerDialog>>();
 const dictionaryManagerDialogRef = ref<InstanceType<typeof DictionaryManagerDialog>>();
 const attachmentDialogRef = ref<InstanceType<typeof AttachmentDialog>>();
@@ -119,6 +123,7 @@ setupNodeCopyPaste({
     !hasActiveDialogOrMenu() &&
     templatePanelRef.value?.visible !== true &&
     recycleBinPanelRef.value?.visible !== true &&
+    tagCloudPanelRef.value?.visible !== true &&
     document.querySelector(".edge-context-menu") === null,
 });
 
@@ -202,7 +207,7 @@ function onFlowInit(instance: VueFlowStore) {
  *
  * 数据节点以编辑模式打开；影子节点（data.shadowOriginId 非 null）以只读模式打开本体节点的对话框，
  * 字段数据通过传入的本体节点 id 从 userDatabaseNodeFieldGet 加载。只读模式不会
- * resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
+ * resolve 出非 null 值，因此影子节点不会走到下方的标题与书签回写。
  * @param id 节点 id（影子节点是画布中的虚拟节点 id，本体节点 id 通过 data.shadowOriginId 获取）
  * @returns 无返回值
  */
@@ -210,15 +215,34 @@ async function onNodeEdit(id: string) {
   const node = nodes.value.find((n) => n.id === id);
   if (!node) return;
   // 影子节点以只读形式打开本体节点的编辑对话框：传入本体节点 id，字段从本体节点加载；
-  // 只读模式不会 resolve 出非 null 值，因此影子节点不会走到下方的标题回写。
+  // 只读模式不会 resolve 出非 null 值，因此影子节点不会走到下方的标题与书签回写。
   const shadowOriginId = node.data.shadowOriginId as string | null;
   const result = await editNodeDialogRef.value?.open(
-    { id: shadowOriginId ?? id, title: node.data.title, subtitle: node.data.subtitle },
+    { id: shadowOriginId ?? id, title: node.data.title, subtitle: node.data.subtitle, bookmarked: node.data.bookmarked },
     { readonly: !!shadowOriginId },
   );
   if (!result) return;
   node.data.title = result.title;
   node.data.subtitle = result.subtitle;
+  node.data.bookmarked = result.bookmarked;
+}
+
+/**
+ * 同步书签/标签对话框内编辑保存后的节点数据到当前画布。
+ *
+ * 书签对话框与标签对话框内的编辑直接写库，画布本地节点数据不会自动更新；
+ * 此处按节点 id 同步标题、副标题与书签状态，本体节点的影子（展示数据合并自本体）一并同步。
+ * @param payload 被编辑节点的 id 与最新标题、副标题、书签状态
+ * @returns 无返回值
+ */
+function onExternalNodeUpdated(payload: { id: string; title: string; subtitle: string; bookmarked: boolean }): void {
+  for (const node of nodes.value) {
+    if (node.id === payload.id || node.data.shadowOriginId === payload.id) {
+      node.data.title = payload.title;
+      node.data.subtitle = payload.subtitle;
+      node.data.bookmarked = payload.bookmarked;
+    }
+  }
 }
 
 /**
@@ -335,25 +359,50 @@ async function onNodeColor(id: string): Promise<void> {
 }
 
 /**
- * 切换模板面板显示状态，并在面板打开时关闭回收站面板（两面板互斥）。
+ * 切换模板面板显示状态，并在面板打开时关闭回收站与标签云面板（三面板互斥）。
  * 无输入参数，无返回值。
  */
 function onTemplatePanelToggle(): void {
   templatePanelRef.value?.toggle();
   if (templatePanelRef.value?.visible) {
     recycleBinPanelRef.value?.close();
+    tagCloudPanelRef.value?.close();
   }
 }
 
 /**
- * 切换回收站面板显示状态，并在面板打开时关闭模板面板（两面板互斥）。
+ * 切换回收站面板显示状态，并在面板打开时关闭模板与标签云面板（三面板互斥）。
  * 无输入参数，无返回值。
  */
 function onRecycleBinToggle(): void {
   recycleBinPanelRef.value?.toggle();
   if (recycleBinPanelRef.value?.visible) {
     templatePanelRef.value?.close();
+    tagCloudPanelRef.value?.close();
   }
+}
+
+/**
+ * 切换标签云面板显示状态，并在面板打开时关闭模板与回收站面板（三面板互斥）。
+ * 无输入参数，无返回值。
+ */
+function onTagCloudToggle(): void {
+  tagCloudPanelRef.value?.toggle();
+  if (tagCloudPanelRef.value?.visible) {
+    templatePanelRef.value?.close();
+    recycleBinPanelRef.value?.close();
+  }
+}
+
+/**
+ * 打开书签节点列表对话框（展示当前数据库的全部书签节点）。
+ * 无输入参数，无返回值。
+ */
+function onBookmarksClick(): void {
+  nodeGroupListDialogRef.value?.open({
+    title: t("database.canvas.bookmarks"),
+    source: "bookmarked",
+  });
 }
 
 // 回收站
@@ -810,6 +859,20 @@ async function onNodePhysicalDelete(node: Node): Promise<void> {
         :disabled="isLayouting"
         @click="applyAutoLayout"
       />
+      <VBtn
+        icon="mdi-bookmark-outline"
+        size="small"
+        variant="text"
+        :title="t('database.canvas.bookmarks')"
+        @click="onBookmarksClick"
+      />
+      <VBtn
+        icon="mdi-tag-multiple-outline"
+        size="small"
+        variant="text"
+        :title="t('database.canvas.tag-cloud')"
+        @click="onTagCloudToggle"
+      />
     </div>
     <div v-if="!loaded" class="canvas-view-loading">
       <VProgressCircular indeterminate color="primary" />
@@ -852,9 +915,11 @@ async function onNodePhysicalDelete(node: Node): Promise<void> {
     <EdgeContextMenu ref="edgeContextMenuRef" @edit="onEdgeEdit" />
     <EditEdgeDialog ref="editEdgeDialogRef" />
     <EditNodeDialog ref="editNodeDialogRef" />
+    <NodeGroupListDialog ref="nodeGroupListDialogRef" @node-updated="onExternalNodeUpdated" />
         <EditDataNodeColorDialog ref="nodeColorDialogRef" />
     <AttachmentDialog ref="attachmentDialogRef" />
     <NodeTemplatePanel ref="templatePanelRef" @open-template-manager="templateManagerDialogRef?.open()" />
+    <TagCloudPanel ref="tagCloudPanelRef" @node-updated="onExternalNodeUpdated" />
     <TemplateManagerDialog ref="templateManagerDialogRef" />
     <DictionaryManagerDialog ref="dictionaryManagerDialogRef" />
     <RecycleBinPanel

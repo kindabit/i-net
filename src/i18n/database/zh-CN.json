@@ -82,9 +82,14 @@
       "delete-shadow-node": "删除影子节点（等同于删除产生它的边）",
       "copy-node": "复制节点",
       "edit-node": "编辑节点",
+      "bookmarks": "书签",
+      "tag-cloud": "标签云",
       "edit-node-title-label": "标题",
       "edit-node-title-required": "标题不能为空",
       "edit-node-subtitle-label": "副标题",
+      "edit-node-tags-label": "标签",
+      "edit-node-bookmark-add": "加入书签",
+      "edit-node-bookmark-remove": "取消书签",
       "edit-node-save-as-template": "保存为模板",
       "save-as-template-title": "保存为模板",
       "template-name-label": "模板名称",
@@ -171,6 +176,15 @@
       "relocate-has-shadow": "选中的节点包含影子节点，影子节点不能跨画布迁移",
       "relocate-has-canvas": "选中的节点包含画布数据节点，画布数据节点不能跨画布迁移",
       "relocate-has-external": "选中的节点与未选中的节点存在连线，无法迁移；如需迁移请将相关节点一并选中"
+    },
+    "tag-cloud": {
+      "dialog-title": "标签：{tag}",
+      "empty": "暂无标签"
+    },
+    "node-group": {
+      "empty-bookmarked": "暂无书签节点",
+      "empty-tag": "暂无使用该标签的节点",
+      "go-to-node": "跳转到节点"
     },
     "search": {
       "open": "搜索",

@@ -25,4 +25,6 @@ pub struct Node {
     /// 影子节点只有位置和 shadow_producing_edge_id 有意义，展示数据（标题、副标题、颜色等）沿产生边链从本体节点拉取。
     /// 影子的生命周期由产生边控制：边被物理删除时，影子经该外键级联删除，下游级联随之自然坍塌。
     pub shadow_producing_edge_id: Option<String>,
+    /// 是否被用户收藏（书签）。
+    pub bookmarked: bool,
 }

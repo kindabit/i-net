@@ -144,6 +144,7 @@ pub fn import_keepass2_canvases(canvases: &[ImportedCanvasVO]) -> Result<String,
                 deleted: false,
                 color: String::new(),
                 shadow_producing_edge_id: None,
+                bookmarked: false,
             };
             node::dao::insert(&connection, &node)?;
             node_count += 1;
@@ -178,6 +179,7 @@ pub fn import_keepass2_canvases(canvases: &[ImportedCanvasVO]) -> Result<String,
                 deleted: false,
                 color: String::new(),
                 shadow_producing_edge_id: None,
+                bookmarked: false,
             };
             node::dao::insert(&connection, &node)?;
         }

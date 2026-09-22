@@ -47,8 +47,8 @@ const DATA_DIR = path.join(OUTPUT_DIR, "data");
 const DB_NAME = "zz-e2e-base";
 const DB_PASSWORD = "e2e-password";
 
-/** fixture 根画布的库内名称（面包屑将其显示为「根画布」） */
-const ROOT_CANVAS_NAME = "root";
+/** fixture 根画布在搜索结果副标题中的展示名称（根画布显示本地化文案） */
+const ROOT_CANVAS_NAME = "根画布";
 
 /** 准备阶段：账号 A 新增的密码字段名与值 */
 const SECRET_FIELD_NAME = "登录密码";
@@ -223,7 +223,7 @@ function parseLogTime(text) {
  */
 function logPageButtons(tree) {
   return flattenNodes(tree)
-    .filter((n) => n.role === "button" && /^\d+$/.test((n.text ?? "").trim()) && n.bounds.top > 900)
+    .filter((n) => n.role === "button" && /^\d+$/.test((n.text ?? "").trim()) && n.bounds.top > 850)
     .sort((a, b) => Number(a.text) - Number(b.text));
 }
 
@@ -810,7 +810,7 @@ async function main() {
     report.check(textNodes(tree, "新节点").length === 0, "准备 2 新节点标题已被替换");
   }
   await openTemplatePanel();
-  await dragBlankRowTo({ x: 1130, y: 940 });
+  await dragBlankRowTo({ x: 1130, y: 850 });
   await waitForCondition(async () => textNodes(await api.uiTree(), "新节点").length > 0, {
     timeout: 8000,
     interval: 250,
