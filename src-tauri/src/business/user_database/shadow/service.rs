@@ -99,7 +99,7 @@ mod tests {
             Err(ErrorCode::NodeIsShadow)
         ));
         assert!(matches!(
-            node::service::copy(&shadow_x.id, 0.0, 0.0),
+            node::service::copy(&shadow_x.id, &canvas_b, 0.0, 0.0),
             Err(ErrorCode::NodeIsShadow)
         ));
         assert!(matches!(

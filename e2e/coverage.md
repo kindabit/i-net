@@ -32,7 +32,7 @@
 | 22 | `user_database_viewport_get` | 003、004、007 | 宇宙/画布视口加载；迁移目标视口中心换算 |
 | 23 | `user_database_viewport_set` | 003、004 | 视口缩放/平移防抖写入（500ms） |
 | 24 | `user_database_node_create` | 003、004、006、007、009、010、011、015 | 拖拽创建（含模板、画布数据节点） |
-| 25 | `user_database_node_copy` | 004 | 复制节点（视口中央、20px 取整） |
+| 25 | `user_database_node_copy` | 004、016 | 悬浮按钮复制（副本到当前画布视口中央、20px 取整）；快捷键 Ctrl+C/V 复制粘贴（副本到指定目标画布 canvas_id、落点为鼠标位置、20px 取整）；004 覆盖按钮入口，016 覆盖快捷键入口与跨画布 / 源节点已删除路径 |
 | 26 | `user_database_node_move_nodes` | 004、007、010 | 框选批量移动、非法迁移回退、日志准备拖动 |
 | 27 | `user_database_node_relocate_nodes` | 007 | Alt 跨画布迁移（合法双路径 + 非法三提示） |
 | 28 | `user_database_node_modify` | 004、006、007、009、010、015 | 标题/副标题/画布名修改 |
@@ -130,7 +130,7 @@
 | DatabaseComponents\attachment：AttachmentDialog / AttachmentPreviewDialog / AttachmentViewerText | 008 |
 | node-colors：EditDataNodeColorDialog / EditCanvasNodeColorDialog | 004、003 |
 | migration：KeePass2Import | 011 |
-| composables：use-viewport / use-auto-layout / use-canvas-recycle-bin / use-recycle-bin / use-edge-delete / use-node-move-and-relocate / use-relocate-animation / use-clipboard-clear / use-backup-progress | 003、004、005、006、007、012（随 UI 操作覆盖） |
+| composables：use-viewport / use-auto-layout / use-canvas-recycle-bin / use-recycle-bin / use-edge-delete / use-node-move-and-relocate / use-relocate-animation / use-clipboard-clear / use-backup-progress / use-node-copy-paste / use-overlay-open | 003、004、005、006、007、012、016（随 UI 操作覆盖） |
 
 ### 画布交互
 
@@ -140,6 +140,7 @@
 | 节点双击进入子画布 / 编辑、面包屑钻入钻出与折叠 | 003、007 |
 | 节点拖动、框选批量移动、20px 网格吸附 | 004 |
 | 节点复制、逻辑删除/恢复/永久删除、配色 | 004 |
+| 快捷键 Ctrl/Cmd+C 复制选中数据节点、Ctrl/Cmd+V 在鼠标位置粘贴（含生效门控：对话框 / 模板面板 / 回收站面板 / 边右键菜单 / 输入框焦点；跨画布粘贴归属当前画布；源节点逻辑删除或物理删除后跳过） | 016 |
 | 连接桩拖拽建边、同向更新、反向替换 | 006、007 |
 | 边右键菜单、编辑、删除与断连确认 | 006、007 |
 | 影子节点产生、影子虚拟边点击跳转（入向/出向）、影子删除 | 006、007 |
@@ -164,10 +165,12 @@
 | NodeDebugOverlay / ViewportDebugOverlay | `#if [DEBUG]` 条件编译的调试浮层，非用户功能；e2e 使用预构建 exe（生产前端构建）时不存在，不属于测试目标 |
 | FatalErrorDialog + 受控崩溃链路 | 仅 `DataCorruption*` 错误触发，正常 UI 不可达；安全红线行为，不构造 |
 | 日志「AttachmentUpdate」行为类型筛选 | i18n 缺少该 key，筛选下拉中无此项（已知缺陷，无法选择） |
+| 快捷键复制对影子节点的过滤（`data.shadowOriginId` 分支） | 需要构造跨画布边产生影子节点（case_006/007 主题），构造成本高；该过滤与画布数据节点分支共用同一表达式（`!data.shadowOriginId && !data.canvasRefId`），case_016 已覆盖画布数据节点分支 |
+| 快捷键粘贴在「鼠标不在画布容器内」时回退视口中心 | 画布容器 `.canvas-view` 宽高 100%，指针恒在容器内，该分支不可经 UI 触达；case_016 以「副本中心落在鼠标落点附近且远离视口中心」的落点断言覆盖指针语义 |
 
 ## 三、覆盖结论
 
 1. 后端命令：现行 84 条均有归属说明（另有 1 条已于 2026-09-21 删除）；83 条有 UI 可达的覆盖路径，`fatal_exit` 为唯一不可覆盖项（原因：受控崩溃仅由数据损坏触发）。
 2. 前端功能面：4 个页面、全部面向用户的主要对话框与画布交互均已分配用例；未覆盖项均为「等价入口」「复杂交互扩展」或「不可构造/不可触达」，已逐条列明原因。
-3. 失败路径：全部 14 份计划均含成功路径与失败路径（含前端校验、后端错误码、确认对话框取消分支）。
+3. 失败路径：全部 16 份计划均含成功路径与失败路径（含前端校验、后端错误码、确认对话框取消分支）。
 4. 已知偏差（与任务书描述的差异）已在各计划「备注与风险」中记录，主要为：fixture `lastScene` 非空（002）、画布/节点无右键菜单（003、004）、模板拖拽不吸附网格（004）、删除数据库名称不匹配无文案（013）、「关于」仓库链接无 href 且禁止点击（014）、无顶栏保存按钮且保存并退出位于右下角（015）。

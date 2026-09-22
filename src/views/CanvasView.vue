@@ -6,6 +6,7 @@
    路由携带 edgeId 时居中到目标边，携带 nodeId 时视角居中到目标节点。
    集成节点编辑、逻辑删除与回收站功能；影子节点的删除等价于删除产生它的边。
    支持自动布局（罗盘锚定分层）。
+   支持 Ctrl/Cmd+C 复制选中节点、Ctrl/Cmd+V 在鼠标位置粘贴（仅在无对话框与面板打开时生效）。
     集成节点移动和迁移系统：按住 Alt 拖拽节点到画布数据节点、影子节点或面包屑祖先片段可跨画布迁移，
     并在落点处显示允许/禁止高亮；非法迁移尝试（落点有效但节点集不可迁移）弹出针对性错误提示；
     迁移成功后节点与内部边失焦淡出消失；Alt 按下时禁止画布边缘自动滚动以免误触迁移。
@@ -38,6 +39,8 @@ import { isErrorCode } from "@/error-code";
 import { useViewportPersistence } from "@/composables/use-viewport";
 import { useAutoLayout } from "@/composables/use-auto-layout";
 import { setupNeighborHighlight } from "@/composables/use-neighbor-highlight";
+import { setupNodeCopyPaste } from "@/composables/use-node-copy-paste";
+import { hasActiveDialogOrMenu } from "@/composables/use-overlay-open";
 import nodeMoveAndRelocate, { type Mode, type RelocatingLegality, type RelocatingTarget } from "@/composables/use-node-move-and-relocate.ts";
 import { blurOutRelocated } from "@/composables/use-relocate-animation";
 import { useRecycleBin } from "@/composables/use-recycle-bin";
@@ -106,6 +109,18 @@ const recycleBin = useRecycleBin(canvasId);
 const loaded = ref(false);
 // 邻居高亮：同步 vue-flow 选中状态到模块级，驱动 DataNode/CustomEdge 的高亮样式
 setupNeighborHighlight(edges);
+// 节点复制粘贴快捷键：仅在无任何对话框/菜单/面板打开时生效
+setupNodeCopyPaste({
+  canvasId,
+  nodes,
+  containerRef,
+  snapGrid,
+  isShortcutEnabled: () =>
+    !hasActiveDialogOrMenu() &&
+    templatePanelRef.value?.visible !== true &&
+    recycleBinPanelRef.value?.visible !== true &&
+    document.querySelector(".edge-context-menu") === null,
+});
 
 // 加载和卸载
 onMounted(async () => {
@@ -286,7 +301,7 @@ function onNodeCopy(id: string): void {
   });
   const x = Math.round(center.x / snapGrid[0]) * snapGrid[0];
   const y = Math.round(center.y / snapGrid[1]) * snapGrid[1];
-  userDatabaseNodeCopy(id, x, y)
+  userDatabaseNodeCopy(id, canvasId, x, y)
     .then((created) => {
       nodes.value.push(toVFNode(created));
     })

@@ -2312,7 +2312,7 @@ fn test_user_database_service_all_functions() {
 
     // == node::copy 失败路径：源节点不存在 → NoNodeWithSuchId ==
     assert!(matches!(
-        node::service::copy(&uuid::Uuid::new_v4().to_string(), 0.0, 0.0),
+        node::service::copy(&uuid::Uuid::new_v4().to_string(), root_id, 0.0, 0.0),
         Err(ErrorCode::NoNodeWithSuchId { .. })
     ));
 
@@ -2327,7 +2327,7 @@ fn test_user_database_service_all_functions() {
         true,
     ).unwrap();
     assert!(matches!(
-        node::service::copy(&copy_canvas_node.id, 0.0, 0.0),
+        node::service::copy(&copy_canvas_node.id, root_id, 0.0, 0.0),
         Err(ErrorCode::NodeIsCanvasDataNode)
     ));
 
@@ -2364,7 +2364,7 @@ fn test_user_database_service_all_functions() {
         ],
     ).unwrap();
 
-    let copied = node::service::copy(&copy_source.id, 300.0, 400.0).unwrap();
+    let copied = node::service::copy(&copy_source.id, root_id, 300.0, 400.0).unwrap();
     assert_ne!(copied.id, copy_source.id);
     assert_eq!(copied.canvas_id, *root_id);
     assert_eq!((copied.x, copied.y), (300.0, 400.0));
@@ -2390,6 +2390,63 @@ fn test_user_database_service_all_functions() {
         source_fields[0].value,
         Some("secret".to_string())
     );
+
+    // == node::copy 失败路径：目标画布不存在 → NoCanvasWithSuchId ==
+    assert!(matches!(
+        node::service::copy(
+            &copy_source.id,
+            &uuid::Uuid::new_v4().to_string(),
+            0.0,
+            0.0
+        ),
+        Err(ErrorCode::NoCanvasWithSuchId { .. })
+    ));
+
+    // == node::copy 成功路径：跨画布复制，副本落入指定子画布，
+    //    继承源节点属性与字段结构，源节点仍留在根画布且不受影响 ==
+    let cross_target =
+        canvas::service::create(root_id, "copy-cross-target".to_string()).unwrap();
+    let cross_copied =
+        node::service::copy(&copy_source.id, &cross_target.id, 500.0, 600.0).unwrap();
+    assert_ne!(cross_copied.id, copy_source.id);
+    assert_eq!(cross_copied.canvas_id, cross_target.id);
+    assert_eq!((cross_copied.x, cross_copied.y), (500.0, 600.0));
+    assert_eq!(cross_copied.title, "copy-source");
+    assert_eq!(cross_copied.subtitle, "copy-sub");
+    assert_eq!(cross_copied.color, "{\"fill\":\"#aabbcc\"}");
+    assert!(!cross_copied.deleted);
+    assert!(cross_copied.canvas_ref_id.is_none());
+    assert!(cross_copied.shadow_producing_edge_id.is_none());
+
+    // 字段结构复制且 value 为 None。
+    let cross_copied_fields = node_field::service::get(&cross_copied.id).unwrap();
+    assert_eq!(cross_copied_fields.len(), 2);
+    assert_eq!(cross_copied_fields[0].name, "文本");
+    assert_eq!(cross_copied_fields[0].value, None);
+    assert_eq!(cross_copied_fields[1].name, "日期");
+    assert_eq!(cross_copied_fields[1].value, None);
+
+    // 源节点仍在根画布，且坐标未被复制操作改动。
+    let root_nodes = node::service::list(root_id, false).unwrap();
+    let source_in_root = root_nodes.iter().find(|n| n.id == copy_source.id).unwrap();
+    assert_eq!(source_in_root.canvas_id, *root_id);
+    assert_eq!((source_in_root.x, source_in_root.y), (10.0, 20.0));
+
+    // == node::copy 失败路径：源节点已逻辑删除 → NoNodeWithSuchId ==
+    let deleted_source = node::service::create(
+        root_id,
+        "copy-deleted-source".to_string(),
+        String::new(),
+        0.0,
+        0.0,
+        None,
+        false,
+    ).unwrap();
+    node::service::logical_delete(&deleted_source.id).unwrap();
+    assert!(matches!(
+        node::service::copy(&deleted_source.id, root_id, 0.0, 0.0),
+        Err(ErrorCode::NoNodeWithSuchId { .. })
+    ));
 
     // == canvas::color_list 成功路径：根画布已带色；另建无色画布与已删除带色画布，验证只返回未删除带色画布 ==
     let plain_canvas = canvas::service::create(root_id, "plain-canvas".to_string()).unwrap();

@@ -303,16 +303,18 @@ export async function userDatabaseNodeCreate(
  * 副本继承源节点的标题、副标题、颜色和字段结构（不含字段值），不复制附件和边；
  * 影子节点与画布数据节点不允许复制。
  * @param id 被复制的节点 id
+ * @param canvasId 副本归属的目标画布 id
  * @param x 副本节点的 x 坐标
  * @param y 副本节点的 y 坐标
  * @returns 新建的副本节点
  */
 export async function userDatabaseNodeCopy(
   id: string,
+  canvasId: string,
   x: number,
   y: number,
 ): Promise<Node> {
-  return invoke<Node>("user_database_node_copy", { id, x, y });
+  return invoke<Node>("user_database_node_copy", { id, canvasId, x, y });
 }
 
 /**

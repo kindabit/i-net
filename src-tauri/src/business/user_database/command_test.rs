@@ -324,14 +324,15 @@ fn test_user_database_command_all_functions() {
 
     // node::command::copy::preprocess 失败路径：id 非法时报 InvalidNodeId。
     assert!(matches!(
-        node::command::copy::preprocess("no-such-id".to_string(), 0.0, 0.0),
+        node::command::copy::preprocess("no-such-id".to_string(), child.id.clone(), 0.0, 0.0),
         Err(ErrorCode::InvalidNodeId { .. })
     ));
 
-    // node::command::copy::preprocess 成功路径：副本继承标题与副标题，id 全新、坐标取入参。
+    // node::command::copy::preprocess 成功路径：副本继承标题与副标题，id 全新、坐标取入参、归属指定画布。
     let copied_node_2 =
-        node::command::copy::preprocess(node_2.id.clone(), 500.0, 600.0).unwrap();
+        node::command::copy::preprocess(node_2.id.clone(), child.id.clone(), 500.0, 600.0).unwrap();
     assert_ne!(copied_node_2.id, node_2.id);
+    assert_eq!(copied_node_2.canvas_id, child.id);
     assert_eq!(copied_node_2.title, "title-2");
     assert_eq!(copied_node_2.subtitle, "sub-2");
     assert_eq!((copied_node_2.x, copied_node_2.y), (500.0, 600.0));
