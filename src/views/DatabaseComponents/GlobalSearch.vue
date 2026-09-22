@@ -3,7 +3,7 @@
 
   收起态为搜索图标按钮，点击后展开为输入框；输入关键词防抖搜索所有画布中的节点，
   下拉展示结果（结果项左侧为标题与副标题，右侧为节点标签），支持键盘导航与鼠标点击，
-  选中后跳转到对应画布并居中目标节点。
+  选中后跳转到对应画布并居中目标节点。点击组件外部时整个搜索收起（等同点击关闭按钮）。
 -->
 <script setup lang="ts">
 import { ref, nextTick, onUnmounted } from "vue";
@@ -239,13 +239,27 @@ function collapse() {
   expanded.value = false;
 }
 
+/**
+ * 点击组件外部处理：仅在展开状态下收起搜索，收起状态下忽略外部点击。
+ * 输入：无。
+ * 返回：无返回值。
+ */
+function onClickOutside() {
+  if (!expanded.value) return;
+  collapse();
+}
+
 onUnmounted(() => {
   debouncedSearch.cancel();
 });
 </script>
 
 <template>
-  <div class="global-search" :class="{ 'global-search--expanded': expanded }">
+  <div
+    v-click-outside="onClickOutside"
+    class="global-search"
+    :class="{ 'global-search--expanded': expanded }"
+  >
     <!-- 图标按钮：常驻。收起时点击展开；展开时点击聚焦输入框 -->
     <VBtn icon="mdi-magnify" size="small" variant="text" :title="t('database.search.open')" @click="onIconClick" />
 
