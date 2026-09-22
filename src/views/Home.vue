@@ -81,7 +81,12 @@ const restoreSuccessDialogRef = useTemplateRef<
 >("restoreSuccessDialogRef");
 
 onMounted(async () => {
-  void refreshMetadatas();
+  await refreshMetadatas();
+  // 自动填入最后打开的未归档数据库名称;列表为空时保持空串
+  const last = metadatas.value[0];
+  if (last) {
+    dbName.value = last.name;
+  }
   // 空闲时预加载用户数据库页面组件，加快进入数据库的速度
   const preloadDatabaseView = () => void import("@/views/DatabaseView.vue");
   if ("requestIdleCallback" in window) {
