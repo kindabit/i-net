@@ -210,7 +210,7 @@ async function doClose() {
 
       <div class="bottom-actions">
       <div class="frosted-btns frosted-glass">
-        <VMenu location="top">
+        <VMenu location="top" offset="12">
           <template #activator="{ props: menuProps }">
             <VBtn variant="text" v-bind="menuProps">
               <VIcon icon="mdi-wrench" class="mr-1" />

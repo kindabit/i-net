@@ -611,8 +611,8 @@ async function ensureChineseUi() {
  * @returns {Promise<void>} 无返回值。
  */
 async function unlock() {
-  await ui.clickEditable("数据库名称");
-  await api.postInput([api.typeText(DB_NAME)]);
+  // 首页挂载时会自动填入最后打开的数据库名称，故先 Ctrl+A 覆盖已有内容再输入。
+  await ui.typeIntoEditable("数据库名称", DB_NAME);
   await ui.waitForTextStable(DB_NAME, { timeout: 8000 });
   await api.postInput([api.keyClick(["Enter"])]);
   await ui.clickButton("确认");
@@ -768,6 +768,31 @@ async function main() {
       "步骤 1 工具菜单展开并含菜单项「KeePass 2.0数据导入」",
     );
     report.check(textNodes(tree, "导出数据库").length === 1, "步骤 1 工具菜单含菜单项「导出数据库」");
+    // 检查意图：工具菜单面板与右下角磨砂按钮条不重叠并保持视觉间距。
+    // 「工具」按钮按 openToolMenu 的定位方式取 bounds.top 最大者；菜单容器取包含
+    // 「导出数据库」菜单项的 role=list 节点（实测容器 role 为 list，无 menu 节点）。
+    // ui-tree 的 bounds 为主窗口物理像素（见 .agents\调试期自动化.md），本机显示缩放
+    // 150%，VMenu offset=12 CSS px 对应物理 18 px，故按实测 18±2 锁定断言。
+    const layoutTree = await api.uiTree();
+    const toolButton =
+      flattenNodes(layoutTree)
+        .filter((node) => node.role === "button" && ui.subtreeText(node).includes("工具"))
+        .sort((a, b) => b.bounds.top - a.bounds.top)[0] ?? null;
+    const menuPanel =
+      flattenNodes(layoutTree).find(
+        (node) =>
+          (node.role === "menu" || node.role === "list") &&
+          ui.findByText([node], "导出数据库", { exact: true }) !== null,
+      ) ?? null;
+    const menuGap =
+      toolButton && menuPanel
+        ? toolButton.bounds.top - (menuPanel.bounds.top + menuPanel.bounds.height)
+        : Number.NaN;
+    report.check(
+      menuGap >= 16 && menuGap <= 20,
+      "步骤 1 工具菜单面板与右下角按钮条保持间距、不重叠",
+      `gap=${menuGap}px; button.top=${toolButton?.bounds.top}; panel.bottom=${menuPanel ? menuPanel.bounds.top + menuPanel.bounds.height : "n/a"}`,
+    );
     await snap("s2-tool-menu");
   }
   await api.postInput([api.keyClick(["Escape"])]);
